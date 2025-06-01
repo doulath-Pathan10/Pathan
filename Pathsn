@@ -1,636 +1,242 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import OnboardingBeforeStart from '../onboarding-before-start';
-import * as preApprovalServices from '../../services/preApprovalServices';
-import * as commonService from '../../../../services/common-service';
-import * as changeUtils from '../../../../utils/common/change.utils';
-import { CONSTANTS } from '../../../../utils/common/constants';
-
-// Mock all external dependencies
-jest.mock('../../../../shared/components/pdf/pdf', () => {
-  return function MockPdf({ fileName }) {
-    return <div data-testid="pdf-component">PDF: {fileName}</div>;
-  };
-});
-
-jest.mock('../../../../shared/components/spinner/spinner', () => {
-  return function MockSpinner() {
-    return <div data-testid="spinner">Loading...</div>;
-  };
-});
-
-jest.mock('../../services/preApprovalServices');
-jest.mock('../../../../services/common-service');
-jest.mock('../../../../utils/common/change.utils');
-
-// Mock PDF imports
-jest.mock('../../../../assets/pdf-file/PIL/hk-personal-loan-terms-pil-aug09.pdf', () => 'mock-pil-pdf-1');
-jest.mock('../../../../assets/pdf-file/PIL/hk-gn175.pdf', () => 'mock-pil-pdf-2');
-jest.mock('../../../../assets/pdf-file/PIL/hk-loans-personal-instalment-loan-eng.pdf', () => 'mock-pil-pdf-3');
-jest.mock('../../../../assets/pdf-file/CC/hk-gn175.pdf', () => 'mock-cc-pdf-1');
-jest.mock('../../../../assets/pdf-file/CC/hk-gn177.pdf', () => 'mock-cc-pdf-2');
-jest.mock('../../../../assets/pdf-file/CC/hk-cc-tncs-downloadnow.pdf', () => 'mock-cc-pdf-3');
-jest.mock('../../../../assets/pdf-file/CC/e-statement-en.pdf', () => 'mock-cc-pdf-4');
-jest.mock('../../../../assets/pdf-file/CC/hk-rewards-tncs-en.pdf', () => 'mock-cc-pdf-5');
-jest.mock('../../../../assets/pdf-file/CC/hk-tnc-credit-card-instalment-plan-en.pdf', () => 'mock-cc-pdf-6');
-
-// Mock environment variables
-process.env.REACT_APP_KFS_DOC_URL = 'https://test-kfs-url.com';
-process.env.REACT_APP_KFS_DOC_URL_Chinees = 'https://test-kfs-url-chinese.com';
-
-describe('OnboardingBeforeStart Component', () => {
-  let store;
-  let mockProps;
-  let mockGetData;
-  let mockGetPDFData;
-  let mockDispatchLoader;
-  let mockGetUrl;
-
-  const mockStageData = {
-    stages: [{
-      stageInfo: {
-        products: [{
-          campaign: 'HKPIL23PLSTP10',
-          product_type: '1313'
-        }]
-      }
-    }]
-  };
-
-  const mockFormConfigData = {
-    products: [{
-      campaign: 'HKPIL23PLSTP10'
-    }]
-  };
-
-  const mockApiResponse = {
-    data: {
-      products: {
-        'HKPIL23PLSTP10': [{
-          pdfURL: 'https://pt.sc.com/test-pdf.pdf'
-        }]
-      },
-      productsMob: {
-        'HKPIL23PLSTP10': [{
-          pdfURL: 'https://pt.sc.com/test-pdf-mobile.pdf'
-        }]
-      },
-      CampaignTnC: {
-        'HKPIL23PLSTP10': [{
-          pdfURL: 'https://pt.sc.com/test-tnc.pdf'
-        }]
-      },
-      CampaignTnCMob: {
-        'HKPIL23PLSTP10': [{
-          pdfURL: 'https://pt.sc.com/test-tnc-mobile.pdf'
-        }]
-      },
-      tncLinkCampaignCode: {
-        'HKPIL23PLSTP10': [{
-          pdfLinks: [
-            { Title: 'II. Personal Loan Terms', url: 'https://test-url-1.com' },
-            { Title: 'III. Client Terms', url: 'https://test-url-2.com' },
-            { Title: 'Welcome Offers', url: 'https://test-url-3.com' }
-          ]
-        }]
-      }
-    }
-  };
-
-  beforeEach(() => {
-    // Reset all mocks
-    jest.clearAllMocks();
-    
-    // Create mock store
-    store = configureStore({
-      reducer: {
-        stages: (state = { stages: mockStageData.stages }, action) => state,
-        preApproval: (state = { formConfigmetaData: mockFormConfigData }, action) => {
-          switch (action.type) {
-            case 'preApproval/setKfsDocumentPdf':
-            case 'preApproval/setTandCDocumentPdf':
-            case 'preApproval/setDownloadPDFData':
-              return state;
-            default:
-              return state;
-          }
-        }
-      }
-    });
-
-    // Setup default props
-    mockProps = {
-      isVisible: true,
-      onScrollEnd: jest.fn(),
-      stageID: 0,
-      nextPage: jest.fn()
-    };
-
-    // Setup service mocks
-    mockGetData = jest.spyOn(preApprovalServices, 'getData');
-    mockGetPDFData = jest.spyOn(preApprovalServices, 'getPDFData');
-    mockDispatchLoader = jest.spyOn(commonService, 'dispatchLoader');
-    mockGetUrl = changeUtils.getUrl;
-
-    // Setup default mock implementations
-    mockGetData.mockResolvedValue(mockApiResponse);
-    mockGetPDFData.mockResolvedValue('mock-pdf-blob-data');
-    mockDispatchLoader.mockReturnValue({ type: 'DISPATCH_LOADER' });
-    
-    mockGetUrl.getParameterByName = jest.fn().mockReturnValue('premium123');
-    mockGetUrl.getLanguageInfo = jest.fn().mockReturnValue('en');
-
-    // Mock DOM methods
-    global.URL = jest.fn().mockImplementation((url) => ({
-      pathname: '/test-pdf.pdf'
-    }));
-
-    // Mock window location
-    Object.defineProperty(window, 'location', {
-      value: {
-        host: 'localhost:3000'
-      },
-      writable: true
-    });
-
-    // Mock history
-    Object.defineProperty(window, 'history', {
-      value: {
-        replaceState: jest.fn()
-      },
-      writable: true
-    });
-
-    // Mock navigator
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (Windows NT 10.0) Chrome/91.0',
-      writable: true
-    });
-
-    // Mock document methods
-    const mockLink = {
-      href: '',
-      download: '',
-      click: jest.fn()
-    };
-    document.createElement = jest.fn().mockReturnValue(mockLink);
-    document.body.appendChild = jest.fn();
-    document.body.removeChild = jest.fn();
-  });
-
-  describe('Component Rendering', () => {
-    test('should render spinner initially', async () => {
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-
-    test('should render PDF component after loading for stageID 0', async () => {
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      expect(screen.getByTestId('pdf-component')).toBeInTheDocument();
-      expect(screen.getByText(/PDF: http:\/\/localhost:3000/)).toBeInTheDocument();
-    });
-
-    test('should render download button', async () => {
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      expect(screen.getByText(CONSTANTS.DownloadBtn)).toBeInTheDocument();
-    });
-
-    test('should render PDF links table for stageID 1', async () => {
-      const propsStage1 = { ...mockProps, stageID: 1 };
-      
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...propsStage1} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      expect(screen.getByText('II. Personal Loan Terms')).toBeInTheDocument();
-      expect(screen.getByText('III. Client Terms')).toBeInTheDocument();
-      expect(screen.getByText('Welcome Offers')).toBeInTheDocument();
-    });
-  });
-
-  describe('Language Support', () => {
-    test('should display Chinese content when language is zh', async () => {
-      mockGetUrl.getLanguageInfo.mockReturnValue('zh');
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(mockGetData).toHaveBeenCalledWith('https://test-kfs-url-chinese.com');
-      });
-    });
-
-    test('should display English content by default', async () => {
-      mockGetUrl.getLanguageInfo.mockReturnValue('en');
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(mockGetData).toHaveBeenCalledWith('https://test-kfs-url.com');
-      });
-    });
-  });
-
-  describe('PDF Download Functionality', () => {
-    test('should download PDF when download button is clicked', async () => {
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const downloadButton = screen.getByText(CONSTANTS.DownloadBtn);
-      fireEvent.click(downloadButton);
-
-      expect(document.createElement).toHaveBeenCalledWith('a');
-    });
-
-    test('should handle Safari browser download', async () => {
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'Safari/537.36',
-        writable: true
-      });
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const downloadButton = screen.getByText(CONSTANTS.DownloadBtn);
-      fireEvent.click(downloadButton);
-
-      expect(document.createElement).toHaveBeenCalledWith('a');
-    });
-  });
-
-  describe('Mobile Device Detection', () => {
-    test('should use mobile PDF URLs for mobile devices', async () => {
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'iPhone',
-        writable: true
-      });
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(mockGetPDFData).toHaveBeenCalledWith(
-          expect.stringContaining('localhost:3000')
-        );
-      });
-    });
-
-    test('should apply correct CSS class for iPhone Safari', () => {
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'iPhone Safari Version/14.0',
-        writable: true
-      });
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      // Component should render without errors
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-
-    test('should apply correct CSS class for Android', () => {
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'Android',
-        writable: true
-      });
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      // Component should render without errors
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-  });
-
-  describe('Campaign-specific PDF Downloads', () => {
-    test('should download correct PIL PDF for Personal Loan Terms', async () => {
-      const propsStage1 = { ...mockProps, stageID: 1 };
-      
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...propsStage1} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const downloadSpan = screen.getAllByText(CONSTANTS.DownloadBtn)[1]; // First one in table
-      fireEvent.click(downloadSpan);
-
-      expect(document.createElement).toHaveBeenCalledWith('a');
-    });
-
-    test('should handle credit card campaigns', async () => {
-      // Update store with CC campaign
-      const ccStore = configureStore({
-        reducer: {
-          stages: (state = { 
-            stages: [{
-              stageInfo: {
-                products: [{
-                  campaign: 'HKSOG20VAWV000',
-                  product_type: '1313'
-                }]
-              }
-            }]
-          }, action) => state,
-          preApproval: (state = { 
-            formConfigmetaData: {
-              products: [{
-                campaign: 'HKSOG20VAWV000'
-              }]
-            }
-          }, action) => state
-        }
-      });
-
-      const ccApiResponse = {
-        ...mockApiResponse,
-        data: {
-          ...mockApiResponse.data,
-          tncLinkCampaignCode: {
-            'HKSOG20VAWV000': [{
-              pdfLinks: [
-                { Title: 'III. Client Terms', url: 'https://test-url-1.com' },
-                { Title: 'III. Credit Card Terms', url: 'https://test-url-2.com' }
-              ]
-            }]
-          }
-        }
-      };
-
-      mockGetData.mockResolvedValue(ccApiResponse);
-
-      const propsStage1 = { ...mockProps, stageID: 1 };
-      
-      render(
-        <Provider store={ccStore}>
-          <OnboardingBeforeStart {...propsStage1} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      expect(screen.getByText('III. Client Terms')).toBeInTheDocument();
-    });
-  });
-
-  describe('Scroll Functionality', () => {
-    test('should handle scroll to bottom', async () => {
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      // Mock scroll properties
-      const pdfElement = screen.getByTestId('pdf-component').closest('div');
-      Object.defineProperty(pdfElement, 'scrollTop', { value: 800, writable: true });
-      Object.defineProperty(pdfElement, 'scrollHeight', { value: 1000, writable: true });
-      Object.defineProperty(pdfElement, 'clientHeight', { value: 200, writable: true });
-
-      // Trigger scroll event
-      fireEvent.scroll(pdfElement);
-
-      expect(mockProps.onScrollEnd).toHaveBeenCalled();
-    });
-
-    test('should handle footer button scroll', async () => {
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const scrollButton = screen.getByRole('contentinfo');
-      fireEvent.click(scrollButton);
-
-      // Should not throw error
-      expect(scrollButton).toBeInTheDocument();
-    });
-  });
-
-  describe('Error Handling', () => {
-    test('should handle API error gracefully', async () => {
-      mockGetData.mockRejectedValue(new Error('API Error'));
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      // Should still render spinner initially
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-
-    test('should handle PDF data fetch error', async () => {
-      mockGetPDFData.mockRejectedValue(new Error('PDF Error'));
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-  });
-
-  describe('Button Interactions', () => {
-    test('should call nextPage when accept button is clicked', async () => {
-      const props = { ...mockProps, isVisible: false };
-      
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...props} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const acceptButton = screen.getByText(CONSTANTS.acceptButton);
-      fireEvent.click(acceptButton);
-
-      expect(mockProps.nextPage).toHaveBeenCalled();
-    });
-  });
-
-  describe('Environment Handling', () => {
-    test('should handle non-localhost environment', async () => {
-      Object.defineProperty(window, 'location', {
-        value: {
-          host: 'production.com'
-        },
-        writable: true
-      });
-
-      render(
-        <Provider store={store}>
-          <OnboardingBeforeStart {...mockProps} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(mockGetPDFData).toHaveBeenCalledWith('https://pt.sc.com/test-pdf.pdf');
-      });
-    });
-  });
-
-  describe('Premium Code Handling', () => {
-    test('should append premium code for specific campaigns', async () => {
-      mockGetUrl.getParameterByName.mockReturnValue('001');
-      
-      // Update store with premium campaign
-      const premiumStore = configureStore({
-        reducer: {
-          stages: (state = { 
-            stages: [{
-              stageInfo: {
-                products: [{
-                  campaign: 'HKSOG20VAWV000',
-                  product_type: '1313'
-                }]
-              }
-            }]
-          }, action) => state,
-          preApproval: (state = { 
-            formConfigmetaData: {
-              products: [{
-                campaign: 'HKSOG20VAWV000'
-              }]
-            }
-          }, action) => state
-        }
-      });
-
-      const propsStage1 = { ...mockProps, stageID: 1 };
-      
-      render(
-        <Provider store={premiumStore}>
-          <OnboardingBeforeStart {...propsStage1} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(mockGetData).toHaveBeenCalled();
-      });
-    });
-  });
-});
-
-// Additional integration tests
-describe('OnboardingBeforeStart Integration Tests', () => {
-  test('should complete full flow for stageID 0', async () => {
-    const store = configureStore({
-      reducer: {
-        stages: (state = { stages: mockStageData.stages }, action) => state,
-        preApproval: (state = { formConfigmetaData: mockFormConfigData }, action) => state
-      }
-    });
-
-    const mockProps = {
-      isVisible: true,
-      onScrollEnd: jest.fn(),
-      stageID: 0,
-      nextPage: jest.fn()
-    };
-
-    mockGetData.mockResolvedValue(mockApiResponse);
-    mockGetPDFData.mockResolvedValue('mock-pdf-data');
-
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart {...mockProps} />
-      </Provider>
+import { useState, useEffect, useRef } from "react";
+import Pdf from "../../../../shared/components/pdf/pdf";
+import { getData, getPDFData } from "../../services/preApprovalServices";
+import { CATEGORIES, KFS_DOC_URL, KFS_DOC_URL_Chinees } from "../../services/constants";
+import { useDispatch, useSelector } from "react-redux";
+import { StoreModel } from "../../../../utils/model/common-model";
+import Spinner from "../../../../shared/components/spinner/spinner";
+import { preApprovalAction } from "../../store/preApproval-slice";
+import { dispatchLoader, lovRequests } from "../../../../services/common-service";
+import './casaTNC.scss';
+import CASATNCTerms from "../../../../assets/pdf-file/HK_Integrated_deposit.pdf";
+import CASATNCCHINESE from "../../../../assets/pdf-file/hk-cx-important-info-n-ht-chi-03-2023s.pdf"
+import './casaTNC.scss';
+import { stagesAction } from "../../../../utils/store/stages-slice";
+import { CONSTANTS } from "../../../../utils/common/constants";
+import { getUrl } from "../../../../utils/common/change.utils";
+const language = getUrl.getLanguageInfo("lang")
+
+const CasaTNC: React.FC<any> = ({
+    stageID,
+    // nextPage
+}) => {
+
+    const listInnerRef = useRef<HTMLDivElement>(null);
+    const [pdfLinkTerms, setPdfLinkTerms] = useState<any | null>(null);
+    const [, setkfsDocPDF] = useState("");
+    const [, setkfsDocPDFDownload] = useState("");
+    const [pdfName, setPdfName] = useState('');
+    const [visibleButton, setVisibleButton] = useState(false);
+    const [showSpinner, setShowSpinner] = useState(true);
+    const [, setTitle] = useState("Before you start your application:");
+    const [, setTnCBannerNotes] = useState("Please READ the following Terms & Conditions by tapping on the button or using the scroll bar to read till the bottom of the screen to proceed");
+    const formConfigmetaData = useSelector(
+        (state: StoreModel) => state?.preApproval?.formConfigmetaData
     );
+    const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+    const dispatch = useDispatch();
 
-    // Initial state
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    useEffect(() => {
+        setShowSpinner(true);
+        dispatch(dispatchLoader(true));
+        setTitle('Before you start your application:');
+        setTnCBannerNotes("Please READ the following Terms & Conditions by tapping on the button or using the scroll bar to read till the bottom of the screen to proceed");
+        const url = language === 'zh' ? KFS_DOC_URL_Chinees : KFS_DOC_URL;
+        getData(url)?.then((response: any) => {
+            const campaignID = formConfigmetaData?.products[0].campaign;
+            let pdfURLNew = "";
+            /*istanbul ignore else*/
+            if (stageID === undefined) {
+                const userAgent = navigator.userAgent.toLowerCase();
+                const isMobile = /andriod|iphone|ipad|mobile/i.test(userAgent) || navigator.maxTouchPoints > 0;
+                const pdfURL = isMobile ? response.data.productsMob[campaignID] : response.data.products[campaignID];
+                const pdfMap = pdfURL?.map((item: any) => item.pdfURL)
+                const getPDFName: any = new URL(pdfMap).pathname.split('/').pop();
+                /*istanbul ignore else*/ 
+                if (window.location.host === "localhost:3000") {
+                    if (pdfURL.length > 0 && typeof pdfURL[0] === 'object') {
+                        pdfURLNew = pdfURL[0]?.pdfURL?.replace(
+                            "https://pt.sc.com/",
+                            "http://localhost:3000/"
 
-    // Wait for loading to complete
-    await waitFor(() => {
-      expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-    }, { timeout: 3000 });
+                        );
+                        setPdfName(getPDFName);
+                    }
+                } else {
+                    pdfURLNew = pdfURL[0].pdfURL;
+                }
+                setkfsDocPDF(pdfURLNew);
+                getPDFData(pdfURLNew).then((response: any) => {
+                    const pdfurl: any = {};
+                    pdfurl.pdf = response;
+                    pdfurl.pdfurl = pdfURLNew;
+                    setkfsDocPDFDownload(response);
+                    dispatch(preApprovalAction.setKfsDocumentPdf(pdfurl.pdf));
+                    // onScrollEnd(false); 
+                    setShowSpinner(false);
+                    dispatch(dispatchLoader(false));
+                });
+                const allPDFLinks = response?.data?.tncLinkCampaignCode.isCasa[0].pdfLinks;
+                setPdfLinkTerms(allPDFLinks)
+            }
+        })
+    }, []);
 
-    // Verify final state
-    expect(screen.getByTestId('pdf-component')).toBeInTheDocument();
-    expect(screen.getByText(CONSTANTS.DownloadBtn)).toBeInTheDocument();
-    expect(mockProps.onScrollEnd).toHaveBeenCalledWith(true);
-  });
-});
+    useEffect(() => {
+        const listInnerElement = listInnerRef.current;
+        /* istanbul ignore else */
+        if (listInnerElement) {
+            listInnerElement.addEventListener("scroll", scrollToBottom);
+            // Clean-up
+            return () => {
+                listInnerElement.removeEventListener("scroll", scrollToBottom);
+            };
+        }
+        // window.history.replaceState("", "", "/hk/before-start")
+    });
+
+
+    const downloadPDFPreApproval = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e?.preventDefault()
+        const lin = document.createElement('a');
+        lin.href = CASATNCTerms;
+        const isSafari = /^((?!chrome|andriod).)*safari/i.test(navigator.userAgent);
+        if (isSafari) {
+            lin.download = pdfName.endsWith('.pdf') ? pdfName : `${pdfName}.pdf`;
+            document.body.appendChild(lin);
+            lin.click();
+            document.body.removeChild(lin);
+        } else {
+            lin.download = 'hk-cx-important-info-n-ht-eng-03-2023s';
+            document.body.appendChild(lin);
+            lin.click();
+            document.body.removeChild(lin);
+        };
+    }
+    const btnClickScroll = () => {
+        /*istanbul ignore else*/
+        if (!listInnerRef.current) return;
+        const container = listInnerRef.current;
+        let height = stageID === 0 ? 200 : 0;
+        const scrollStep =( container.scrollHeight / 4) - height ;
+        listInnerRef.current?.scrollBy({ top: scrollStep, behavior: "smooth" });
+    };
+
+    const scrollToBottom = () => {
+        /*istanbul ignore else*/
+        if (listInnerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = listInnerRef.current;
+            const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50;
+/*istanbul ignore else*/
+            if (isNearBottom) {
+                setVisibleButton(true);
+            }
+        }
+    };
+    useEffect(() => {
+        const listInnerElement = listInnerRef.current;
+        setVisibleButton(false);
+        /*istanbul ignore else*/
+        if (listInnerElement) {
+            listInnerElement.addEventListener("scroll", scrollToBottom);
+            return () => {
+                listInnerElement.removeEventListener("scroll", scrollToBottom);
+            };
+        }
+    }, []);
+
+    const nextPages = () => {
+        dispatch(lovRequests(stageSelector[0].stageInfo, CONSTANTS.STAGE_NAMES.AD_1));
+        dispatch(preApprovalAction.setCurrentStage(CONSTANTS.STAGE_NAMES.AD_1));
+        dispatch(stagesAction.updateStageId(CONSTANTS.STAGE_NAMES.AD_1));
+    }
+    return (
+        <div>
+            {showSpinner === true ? (
+                <Spinner></Spinner>
+            ) : (
+                <>
+                    <div>
+                        <div className="hk-banner-set">
+                            <div className="card-title">{language === CONSTANTS.LANG_EN ? CONSTANTS.beforeYouStartYourApplication : language === CONSTANTS.LANG_CN ? CONSTANTS.beforeYouStartYourApplication_CN : CONSTANTS.beforeYouStartYourApplication_HK}</div>
+                            <section className='banner_notes'>
+                                <p>{language === CONSTANTS.LANG_EN ? CONSTANTS.pleaseReadTheFollowingTermsConditions : language === CONSTANTS.LANG_CN ? CONSTANTS.pleaseReadTheFollowingTermsConditions_CN : CONSTANTS.pleaseReadTheFollowingTermsConditions_HK}</p>
+                            </section>
+                        </div>
+                        <button
+                            onClick={(evt: React.MouseEvent<HTMLButtonElement>) => downloadPDFPreApproval(evt)}
+                            className="view-pdf"
+                        >
+                            {language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadBtn_CN : CONSTANTS.DownloadBtn_HK}
+                        </button>
+                    </div>
+                    <div className="pdf-view">
+                        <div className="react-pdf__Page__canvas1" ref={listInnerRef}>
+                            {language === 'zh' ? (
+                                <Pdf fileName={CASATNCCHINESE} />
+                            ) : (
+                                <Pdf fileName={CASATNCTerms} />
+                            )}
+                        </div>
+                    </div>
+
+                    {stageID == undefined && (
+                        <div className="pdf-table">
+                            <div className="download-section">
+                                <span className="download-header">{`${language === CONSTANTS.LANG_EN ? CONSTANTS.tapBelow : language === CONSTANTS.LANG_CN? CONSTANTS.tapBelow_CN : CONSTANTS.tapBelow_HK}`}</span>
+                                <span className="images"></span>
+                            </div>
+
+                            <div className="tc-container">
+                                {pdfLinkTerms?.map((item: any) => {
+                                    return (
+                                        <div className="link_title">
+                                            <a
+                                                href={item.url}
+                                                download
+                                                target="_blank"
+                                                className="href_title"
+                                            >
+                                                {item.Title}
+                                            </a>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    <div
+                        className="col-xs-4 col-sm-4 col-md-4 col-lg-4"
+                        id="footer-content"
+                    >
+                        {!visibleButton ? (
+                            <>
+                                <div className="pre-approval-accept confirm-btn1" aria-describedby="submitButton">
+                                    <footer className="pre-approval-confirm-btn1" onClick={btnClickScroll}>
+                                        {language === CONSTANTS.LANG_EN ? CONSTANTS.tapScroll : language === CONSTANTS.LANG_CN ? CONSTANTS.tapScroll_CN : CONSTANTS.tapScroll_HK}
+                                    </footer>
+                                </div>
+                            </>
+                        )
+                            :
+                            <div
+                                className="pre-approval-accept confirm-btn1"
+                                id="navigationBtn"
+                            >
+                                <button
+                                    id="pre-approval-confirm-btn1"
+                                    className="pre-approval-confirm-btn1"
+                                    onClick={ nextPages}
+                                >
+                                    {language === CONSTANTS.LANG_EN ? CONSTANTS.iAccept : language === CONSTANTS.LANG_CN ? CONSTANTS.iAccept_CN : CONSTANTS.tapScroll_HK}
+                                </button>
+
+                            </div>
+                        }
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
+export default CasaTNC;
