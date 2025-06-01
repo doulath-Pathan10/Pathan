@@ -1,543 +1,342 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import CasaTNC from '../CasaTNC';
+import "./onboarding-before-start.scss";
+import { useState, useEffect, useRef } from "react";
+import Pdf from "../../../../shared/components/pdf/pdf";
+import { getData, getPDFData } from "../../services/preApprovalServices";
+import { CATEGORIES, KFS_DOC_URL, KFS_DOC_URL_Chinees } from "../../services/constants";
+import { useDispatch, useSelector } from "react-redux";
+import { StoreModel } from "../../../../utils/model/common-model";
+import Spinner from "../../../../shared/components/spinner/spinner";
+import { preApprovalAction } from "../../store/preApproval-slice";
+import { dispatchLoader } from "../../../../services/common-service";
+import { getUrl } from "../../../../utils/common/change.utils";
+import { CONSTANTS } from "../../../../utils/common/constants";
+import PILPdfUrl1 from "../../../../assets/pdf-file/PIL/hk-personal-loan-terms-pil-aug09.pdf";
+import PILPdfUrl2 from "../../../../assets/pdf-file/PIL/hk-gn175.pdf";
+import PILPdfUrl3 from "../../../../assets/pdf-file/PIL/hk-loans-personal-instalment-loan-eng.pdf";
+import CCPdfUrl1 from "../../../../assets/pdf-file/CC/hk-gn175.pdf";
+import CCPdfUrl2 from "../../../../assets/pdf-file/CC/hk-gn177.pdf";
+import CCPdfUrl3 from "../../../../assets/pdf-file/CC/hk-cc-tncs-downloadnow.pdf";
+import CCPdfUrl4 from "../../../../assets/pdf-file/CC/e-statement-en.pdf";
+import CCPdfUrl5 from "../../../../assets/pdf-file/CC/hk-rewards-tncs-en.pdf";
+import CCPdfUrl6 from "../../../../assets/pdf-file/CC/hk-tnc-credit-card-instalment-plan-en.pdf";
 
-// Create mock store
-const mockStore = configureStore([]);
+const OnboardingBeforeStart: React.FC<any> = ({
+  isVisible,
+  onScrollEnd,
+  stageID,
+  nextPage
+}) => {
+  const listInnerRef = useRef<HTMLDivElement>(null);
+  const pdfLinksRef = useRef<HTMLDivElement>(null);
+  const [pdfLinkTerms, setPdfLinkTerms] = useState<any | null>(null);
+  const [kfsDocPDF, setkfsDocPDF] = useState("");
+  const [kfsDocPDFDownload, setkfsDocPDFDownload] = useState("");
+  const [pdfHeight, setPdfHeight] = useState(0);
+  const [pdfName, setPdfName] = useState('')
+  const [showSpinner, setShowSpinner] = useState(true); 
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const campaignId = stageSelector[0]?.stageInfo?.products[0]?.campaign;
+  const premiumCode = getUrl.getParameterByName("premium");
+  const productType = stageSelector[0]?.stageInfo?.products[0]?.product_type;
+  const formConfigmetaData = useSelector(
+    (state: StoreModel) => state?.preApproval.formConfigmetaData
+  );
+  // const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const dispatch = useDispatch();
+  const language = getUrl.getLanguageInfo("lang");
+  useEffect(() => {
+    setShowSpinner(true);
+    dispatch(dispatchLoader(true));
+    let KFS;
+    if (language === 'zh') {
+      KFS = process.env.REACT_APP_KFS_DOC_URL_Chinees
+    } else {
+      KFS = process.env.REACT_APP_KFS_DOC_URL
+    }
 
-// Mock all external modules
-jest.mock('../../../../shared/components/pdf/pdf', () => {
-  return function Pdf({ fileName }) {
-    return <div data-testid="pdf-viewer">{fileName}</div>;
-  };
-});
+    getData(KFS)?.then((response: any) => {
+      let campaignID = formConfigmetaData?.products[0].campaign;
+      let pdfURLNew = "";
+      /*istanbul ignore else*/
+      if (stageID === 0) {
+        const pdfURL = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? response.data.productsMob[campaignID] : response.data.products[campaignID];
+        const pdfMap = pdfURL.map((item: any) => item.pdfURL)
+        const getPDFName: any = new URL(pdfMap).pathname.split('/').pop();
+        let localHost= window.location.host === "localhost:3000" || window.location.host === "localhost:3001" ? true : false;
+        if(localHost) {
+          pdfURLNew = pdfURL[0].pdfURL.replace("https://pt.sc.com/","http://"+window.location.host+"/");
+        }
+        else {
+          pdfURLNew = pdfURL[0].pdfURL;
+        }
+        setPdfName(getPDFName);
+        setkfsDocPDF(pdfURLNew);
+        getPDFData(pdfURLNew).then((response: any) => {
+          const pdfurl: any = {};
+          pdfurl.pdf = response;
+          pdfurl.pdfurl = pdfURLNew;
+          setkfsDocPDFDownload(response);
+          dispatch(preApprovalAction.setKfsDocumentPdf(pdfurl.pdf));
+          onScrollEnd(true);
+          setShowSpinner(false);
+          dispatch(dispatchLoader(false));
+        });
+        const allPDFLinks = response?.data?.tncLinkCampaignCode[campaignID][0].pdfLinks;
+        setPdfLinkTerms(allPDFLinks);
+      }
+      else if (stageID === 1) {
+        if(campaignID === "HKSOG20VAWV000") {
+          campaignID = "HKSOG20VAWV000" + premiumCode;
+        }
+        const pdfURLCheck = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? response.data.CampaignTnCMob[campaignID] : response.data.CampaignTnC[campaignID];
+        const pdfMap = pdfURLCheck.map((item: any) => item.pdfURL)
+        const getPDFName: any = new URL(pdfMap).pathname.split('/').pop();
+        let localHost= window.location.host === "localhost:3000" || window.location.host === "localhost:3001" ? true : false;
+        if(localHost) {
+          pdfURLNew = pdfURLCheck[0]?.pdfURL.replace("https://pt.sc.com/","http://"+window.location.host+"/");
+        }
+        else {
+          pdfURLNew = pdfURLCheck[0]?.pdfURL;
+        }
+        setPdfName(getPDFName);
+        setkfsDocPDF(pdfURLNew);
+        getPDFData(pdfURLNew).then((response: any) => {
+          setkfsDocPDFDownload(response);
+          dispatch(preApprovalAction.setTandCDocumentPdf(pdfURLNew));
+          dispatch(preApprovalAction.setDownloadPDFData(response));
+          onScrollEnd(true);
+          setShowSpinner(false);
+          dispatch(dispatchLoader(false));
+        });
+        /*istanbul ignore else*/
+        if(productType === "1313" && campaignID === "HKSOZ00MCWB000") {
+          campaignID= campaignID+premiumCode
+        }
+        const allPDFLinks = response?.data?.tncLinkCampaignCode[campaignID][0].pdfLinks;
+        setPdfLinkTerms(allPDFLinks);
+      }
+    });
+  }, [stageID]);
 
-jest.mock('../../../../shared/components/spinner/spinner', () => {
-  return function Spinner() {
-    return <div data-testid="spinner">Loading...</div>;
-  };
-});
+  useEffect(() => {
+    const listInnerElement = listInnerRef.current;
+    const pdfListElement = pdfLinksRef.current;
+    /* istanbul ignore else */
+    if (pdfListElement) {
+      let container = pdfLinksRef.current;
+      let scrollHeight = container ? container.scrollHeight : 0;
+      setPdfHeight(scrollHeight * 2.5)
+    }
+    /* istanbul ignore else */
+    if (listInnerElement) {
+      listInnerElement.addEventListener("scroll", scrollToBottom);
+      // Clean-up
+      return () => {
+        listInnerElement.removeEventListener("scroll", scrollToBottom);
+      };
+    }
+    window.history.replaceState("", "", "/hk/before-start")
+  });
 
-jest.mock('../../services/preApprovalServices');
-jest.mock('../../../../services/common-service');
-jest.mock('../../../../utils/common/change.utils');
-jest.mock('./casaTNC.scss', () => ({}));
-
-// Mock PDF imports
-jest.mock('../../../../assets/pdf-file/HK_Integrated_deposit.pdf', () => 'casa-terms.pdf');
-jest.mock('../../../../assets/pdf-file/hk-cx-important-info-n-ht-chi-03-2023s.pdf', () => 'casa-chinese.pdf');
-
-// Import mocked services after mocking
-const { getData, getPDFData } = require('../../services/preApprovalServices');
-const { dispatchLoader, lovRequests } = require('../../../../services/common-service');
-const { getUrl } = require('../../../../utils/common/change.utils');
-
-// Mock constants
-jest.mock('../../services/constants', () => ({
-  KFS_DOC_URL: 'https://test-url.com',
-  KFS_DOC_URL_Chinees: 'https://test-url-chinese.com'
-}));
-
-jest.mock('../../../../utils/common/constants', () => ({
-  CONSTANTS: {
-    LANG_EN: 'en',
-    LANG_CN: 'cn',
-    STAGE_NAMES: { AD_1: 'AD_1' },
-    beforeYouStartYourApplication: 'Before you start your application:',
-    beforeYouStartYourApplication_CN: '开始申请前：',
-    beforeYouStartYourApplication_HK: '開始申請前：',
-    pleaseReadTheFollowingTermsConditions: 'Please READ the following Terms & Conditions',
-    pleaseReadTheFollowingTermsConditions_CN: '请阅读条款',
-    pleaseReadTheFollowingTermsConditions_HK: '請閱讀條款',
-    DownloadBtn: 'Download',
-    DownloadBtn_CN: '下载',
-    DownloadBtn_HK: '下載',
-    tapBelow: 'Tap below',
-    tapBelow_CN: '点击下方',
-    tapBelow_HK: '點擊下方',
-    tapScroll: 'Tap to Scroll',
-    tapScroll_CN: '点击滚动',
-    tapScroll_HK: '點擊滾動',
-    iAccept: 'I Accept',
-    iAccept_CN: '我接受',
-    iAccept_HK: '我接受'
+  //Added for mock pdf
+  const downloadPdf = (title: any) => {
+    const lin = document.createElement('a');
+    if (campaignId === "HKPIL23PLSTP10" || campaignId === "HKBDC23PESTP10") {
+      if (title === "II. Personal Loan Terms") {
+        lin.href = PILPdfUrl1;
+      } else if (title === "III. Client Terms") {
+        lin.href = PILPdfUrl2;
+      } else if (title === "Welcome Offers") {
+        lin.href = PILPdfUrl3;
+      }
+    } else if (campaignId === "HKSOG20VAWV000" || campaignId === "HKSPG17VAWV000" || campaignId === "HKSPB17VAWV000" || campaignId === "HKSOA16VAWP000" || campaignId === "HKSOA16MCWP000" || campaignId === "HKSOZ00MCWB000" || campaignId === "HKSOZ01MCWB000" || campaignId === "HKSOZ02MCWB000") {
+      if (title === "III. Client Terms" || title === "III.Client Terms ") {
+        lin.href = CCPdfUrl1;
+      } else if (title === "III. Credit Card Terms") {
+        lin.href = CCPdfUrl2;
+      } else if (title === "VI. Welcome Offers" || title === "IV. Welcome Offers" || title === 'VI. Welcome Offers ') {
+        lin.href = CCPdfUrl3;
+      } else if (title === "IX.  E-Statement Service" || title === "IX. E-Statement Service" || title === "IX.E-Statement Service" || title === "IX.E-Statement Service ") {
+        lin.href = CCPdfUrl4;
+      } else if (title === "X. Points Redemption") {
+        lin.href = CCPdfUrl5;
+      } else if (title === "XI. Credit Card Instalment Plan" || title === "X.Credit Card Installment Plan " || title === "X.Credit Card Installment Plan") {
+        lin.href = CCPdfUrl6;
+      }
+    }
+    const urlParts = lin.href.split("/");
+    const extractedPDFName = urlParts[urlParts.length - 1].split(".")[0];
+    lin.download = extractedPDFName;
+    document.body.appendChild(lin);
+    lin.click();
+    document.body.removeChild(lin);
   }
-}));
 
-describe('CasaTNC Component', () => {
-  let store;
-  let mockDispatch;
-
-  const mockStoreState = {
-    preApproval: {
-      formConfigmetaData: {
-        products: [{ campaign: 'test-campaign' }]
-      }
-    },
-    stages: {
-      stages: [{ stageInfo: 'test-stage' }]
+  const downloadPDFPreApproval = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    const lin = document.createElement('a');
+    lin.href = kfsDocPDFDownload;
+    const isSafari = /^((?!chrome|andriod).)*safari/i.test(navigator.userAgent);
+    if (isSafari) {
+      lin.download = pdfName.endsWith('.pdf') ? pdfName : `${pdfName}.pdf`;
+      document.body.appendChild(lin);
+      lin.click();
+      document.body.removeChild(lin);
+    } else {
+      lin.download = pdfName;
+      document.body.appendChild(lin);
+      lin.click();
+      document.body.removeChild(lin);
     }
   };
 
-  const mockApiResponse = {
-    data: {
-      products: {
-        'test-campaign': [{
-          pdfURL: 'https://example.com/test.pdf'
-        }]
-      },
-      productsMob: {
-        'test-campaign': [{
-          pdfURL: 'https://example.com/mobile.pdf'
-        }]
-      },
-      tncLinkCampaignCode: {
-        isCasa: [{
-          pdfLinks: [
-            { Title: 'Terms & Conditions', url: 'https://example.com/tnc.pdf' },
-            { Title: 'Privacy Policy', url: 'https://example.com/privacy.pdf' }
-          ]
-        }]
+  const btnClickScroll = () => {
+    /*istanbul ignore else*/
+    if (!listInnerRef.current) return;
+    const container = listInnerRef.current;
+    let height = stageID === 0 ? 200 : 0;
+    const scrollStep = (container.scrollHeight / 4) - height;
+    listInnerRef.current?.scrollBy({ top: scrollStep, behavior: "smooth" });
+  };
+
+  const scrollToBottom = () => {
+    /* istanbul ignore else */
+    if (listInnerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = listInnerRef.current;
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50;
+      /* istanbul ignore else */
+      if (isNearBottom) {
+        onScrollEnd(false);
       }
     }
   };
-
-  beforeEach(() => {
-    store = mockStore(mockStoreState);
-    mockDispatch = jest.fn();
-    store.dispatch = mockDispatch;
-
-    // Reset all mocks
-    jest.clearAllMocks();
-
-    // Setup default mock returns
-    getUrl.getLanguageInfo = jest.fn().mockReturnValue('en');
-    getData.mockResolvedValue(mockApiResponse);
-    getPDFData.mockResolvedValue('mock-pdf-data');
-    dispatchLoader.mockImplementation(() => ({ type: 'DISPATCH_LOADER' }));
-    lovRequests.mockImplementation(() => ({ type: 'LOV_REQUESTS' }));
-
-    // Mock navigator
-    Object.defineProperty(navigator, 'userAgent', {
-      writable: true,
-      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    });
-
-    Object.defineProperty(navigator, 'maxTouchPoints', {
-      writable: true,
-      value: 0
-    });
-
-    // Mock window.location
-    delete window.location;
-    window.location = { host: 'example.com' };
-
-    // Mock document methods
-    const mockLink = {
-      href: '',
-      download: '',
-      click: jest.fn()
-    };
-    document.createElement = jest.fn().mockReturnValue(mockLink);
-    document.body.appendChild = jest.fn();
-    document.body.removeChild = jest.fn();
-  });
-
-  describe('Initial Rendering', () => {
-    test('should render spinner on initial load', () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-
-    test('should render main content after loading', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      }, { timeout: 3000 });
-
-      expect(screen.getByText('Download')).toBeInTheDocument();
-    });
-  });
-
-  describe('Language Support', () => {
-    test('should use English URL when language is en', async () => {
-      getUrl.getLanguageInfo.mockReturnValue('en');
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getData).toHaveBeenCalledWith('https://test-url.com');
-      });
-    });
-
-    test('should use Chinese URL when language is zh', async () => {
-      getUrl.getLanguageInfo.mockReturnValue('zh');
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getData).toHaveBeenCalledWith('https://test-url-chinese.com');
-      });
-    });
-
-    test('should render Chinese PDF when language is zh', async () => {
-      getUrl.getLanguageInfo.mockReturnValue('zh');
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('pdf-viewer')).toHaveTextContent('casa-chinese.pdf');
-      });
-    });
-
-    test('should render English PDF when language is not zh', async () => {
-      getUrl.getLanguageInfo.mockReturnValue('en');
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByTestId('pdf-viewer')).toHaveTextContent('casa-terms.pdf');
-      });
-    });
-  });
-
-  describe('API Integration', () => {
-    test('should call getData on component mount', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getData).toHaveBeenCalled();
-      });
-    });
-
-    test('should call getPDFData after getData resolves', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getPDFData).toHaveBeenCalledWith('https://example.com/test.pdf');
-      });
-    });
-
-    test('should dispatch loader actions', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      expect(mockDispatch).toHaveBeenCalledWith({ type: 'DISPATCH_LOADER' });
-    });
-
-    test('should handle API errors gracefully', async () => {
-      getData.mockRejectedValue(new Error('API Error'));
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      // Should not crash
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-  });
-
-  describe('Mobile Detection', () => {
-    test('should use mobile PDF URL for mobile devices', async () => {
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)'
-      });
-      Object.defineProperty(navigator, 'maxTouchPoints', {
-        value: 5
-      });
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getPDFData).toHaveBeenCalledWith('https://example.com/mobile.pdf');
-      });
-    });
-
-    test('should use desktop PDF URL for desktop devices', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getPDFData).toHaveBeenCalledWith('https://example.com/test.pdf');
-      });
-    });
-  });
-
-  describe('Download Functionality', () => {
-    test('should handle download button click', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const downloadBtn = screen.getByText('Download');
-      fireEvent.click(downloadBtn);
-
-      expect(document.createElement).toHaveBeenCalledWith('a');
-    });
-
-    test('should handle Safari browser download', async () => {
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Safari/605.1.15'
-      });
-
-      const mockLink = {
-        href: '',
-        download: '',
-        click: jest.fn()
-      };
-      document.createElement.mockReturnValue(mockLink);
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const downloadBtn = screen.getByText('Download');
-      fireEvent.click(downloadBtn);
-
-      expect(mockLink.download).toContain('.pdf');
-    });
-  });
-
-  describe('PDF Links Rendering', () => {
-    test('should render PDF links when stageID is undefined', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Terms & Conditions')).toBeInTheDocument();
-        expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
-      });
-    });
-
-    test('should not render PDF links when stageID is defined', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={1} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByText('Terms & Conditions')).not.toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Scroll and Navigation', () => {
-    test('should render scroll button initially', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Tap to Scroll')).toBeInTheDocument();
-      });
-    });
-
-    test('should handle scroll button click', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const scrollBtn = screen.getByText('Tap to Scroll');
-      fireEvent.click(scrollBtn);
-
-      // Should not crash
-      expect(scrollBtn).toBeInTheDocument();
-    });
-  });
-
-  describe('Localhost Environment', () => {
-    test('should handle localhost environment', async () => {
-      window.location.host = 'localhost:3000';
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(getPDFData).toHaveBeenCalledWith('http://localhost:3000/test.pdf');
-      });
-    });
-  });
-
-  describe('Language Content Display', () => {
-    test('should display Chinese download button text', async () => {
-      getUrl.getLanguageInfo.mockReturnValue('cn');
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('下载')).toBeInTheDocument();
-      });
-    });
-
-    test('should display Hong Kong download button text', async () => {
-      getUrl.getLanguageInfo.mockReturnValue('hk');
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('下載')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Component Cleanup', () => {
-    test('should unmount without errors', () => {
-      const { unmount } = render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      expect(() => unmount()).not.toThrow();
-    });
-  });
-
-  describe('Edge Cases', () => {
-    test('should handle empty PDF links array', async () => {
-      const emptyLinksResponse = {
-        ...mockApiResponse,
-        data: {
-          ...mockApiResponse.data,
-          tncLinkCampaignCode: {
-            isCasa: [{ pdfLinks: [] }]
-          }
-        }
-      };
-      
-      getData.mockResolvedValue(emptyLinksResponse);
-
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      expect(screen.queryByText('Terms & Conditions')).not.toBeInTheDocument();
-    });
-
-    test('should handle missing campaign in store', async () => {
-      const storeWithoutCampaign = mockStore({
-        preApproval: {
-          formConfigmetaData: {
-            products: [{}]
-          }
-        },
-        stages: {
-          stages: [{ stageInfo: 'test-stage' }]
-        }
-      });
-
-      render(
-        <Provider store={storeWithoutCampaign}>
-          <CasaTNC stageID={undefined} />
-        </Provider>
-      );
-
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-
-    test('should handle stageID of 0', async () => {
-      render(
-        <Provider store={store}>
-          <CasaTNC stageID={0} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-      });
-
-      const scrollBtn = screen.getByText('Tap to Scroll');
-      fireEvent.click(scrollBtn);
-
-      expect(scrollBtn).toBeInTheDocument();
-    });
-  });
-});
+  var className = "";
+  var isIPHONE = (navigator.userAgent.match('iPad') != null || navigator.userAgent.match('iPhone') != null || navigator.userAgent.match('iPod') != null);
+  var isANDROID = (navigator.userAgent.match('Android') != null);
+  if (isIPHONE) {
+    var isSafari = !!navigator.userAgent.match(/Version\/[\d\.]+.*Safari/);
+    if (isSafari) {
+      // $('body').addClass("iphoneDeviceSafari"); 
+      className = "iphoneDeviceSafari"
+    }
+    else {
+      // $('body').addClass("iphoneDevice"); 
+      className = "iphoneDevice"
+    }
+  } else if (isANDROID) {
+    // $('body').addClass("andriodDevice");
+    className = "andriodDevice"
+  } else {
+    // $rootScope.DesktopDevice = true;
+    // $('body').addClass("desktopDevice");
+    className = "desktopDevice"
+  }
+  return (
+    <div>
+      {showSpinner === true ?
+        (
+          <Spinner></Spinner>
+        )
+        :
+        (
+          <>
+            <div>
+              <button
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  downloadPDFPreApproval(e);
+                }}
+                className="view-pdf"
+              // ng-if="source_sys == 'sc.com' || source_sys == 'asiamiles'" //for future reference
+              >
+                {language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadBtn_CN : CONSTANTS.DownloadBtn_HK}
+              </button>
+            </div>
+            <div className="pdf-view">
+              <div
+                style={{ maxHeight: stageID === 1 ? `calc(100vh - ${pdfHeight}px)` : "" }}
+                id="pdf-view"
+                className={stageID == 0 ? "react-pdf__Page__canvas pdf__kfs__page" : "react-pdf__Page__canvas pdf__tnc__page"}
+                ref={listInnerRef}
+              >
+                <Pdf fileName={kfsDocPDF} />
+              </div>
+            </div>
+
+            {stageID == 1 && (
+              <div className="pdf-table" ref={pdfLinksRef}>
+                <div className="download-section">
+                  <span className="download-header">{language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadHeader : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadHeader_CN : CONSTANTS.DownloadHeader_HK}</span>
+                  <span className="images"></span>
+                </div>
+
+                <div className="tc-container">
+                  <table className="tcTable" border={1}>
+                    <tbody>
+                      {pdfLinkTerms?.map((item: any, index: any) => {
+                        return (
+                          <tr key={index}>
+                            <td className="tcTable__title">{item.Title}</td>
+                            <td className="tcTable__read">
+                              <a
+                                href={item.url}
+                                download
+                                target="_blank"
+                              >
+                                {language === CONSTANTS.LANG_EN ? CONSTANTS.ReadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.ReadBtn_CN : CONSTANTS.ReadBtn_HK}
+                              </a>
+                              <span> / </span>
+                              <span className="tcTable__download"
+                                onClick={() => {
+                                  downloadPdf(item.Title);
+                                }}
+                              >
+
+                                {language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadBtn_CN : CONSTANTS.DownloadBtn_HK}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="remarks-section">
+                  <span className="remarks-section__span">
+                    {" "}
+                    {language === CONSTANTS.LANG_EN ? CONSTANTS.Remarks : language === CONSTANTS.LANG_CN ? CONSTANTS.Remarks_CN : CONSTANTS.Remarks_HK}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="footer-button-list app__footer">
+              {isVisible ?
+                (
+                  <>
+                    <div className="next-arrow" aria-describedby="submitButton">
+                      <footer
+                        // className={`${stageSelector[0].stageId!=='ad-9a'? 'footer-next1 enabled' : 'footer-next enabled'}`}
+                        className="footer-next enabled"
+                        onClick={btnClickScroll}
+                      >
+                        <i className="next-btn"></i>
+                      </footer>
+                    </div>
+                  </>
+                )
+                :
+                <button
+                  className="pre-approval-accept-button"
+                  onClick={nextPage}
+                >
+                  {language === CONSTANTS.LANG_EN ? CONSTANTS.acceptButton : language === CONSTANTS.LANG_CN ? CONSTANTS.acceptButton_CN : CONSTANTS.acceptButton_HK}
+                </button>
+              }
+            </div>
+          </>
+        )
+      }
+    </div>
+  );
+};
+
+export default OnboardingBeforeStart;
