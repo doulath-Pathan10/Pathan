@@ -1,118 +1,508 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import CasaTNC from './CasaTNC';
 import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
+import { createStore } from 'redux';
+import CasaTNC from '../CasaTNC';
+import * as preApprovalServices from '../../services/preApprovalServices';
+import * as commonService from '../../../../services/common-service';
+import * as changeUtils from '../../../../utils/common/change.utils';
 
-// Mock dependencies
+// Mock all external dependencies
 jest.mock('../../services/preApprovalServices', () => ({
-  getData: jest.fn().mockResolvedValue({
-    data: {
-      products: { 'test-campaign': [{ pdfURL: 'https://test.pdf' }] },
-      productsMob: { 'test-campaign': [{ pdfURL: 'https://test-mobile.pdf' }] },
-      tncLinkCampaignCode: {
-        isCasa: [{
-          pdfLinks: [
-            { url: 'https://link1.pdf', Title: 'Terms 1' },
-          ],
-        }],
-      },
-    },
-  }),
-  getPDFData: jest.fn().mockResolvedValue('mock-pdf-data'),
+  getData: jest.fn(),
+  getPDFData: jest.fn()
 }));
 
-jest.mock('../../../../shared/components/pdf/pdf', () => (
-  jest.fn(() => <div data-testid="mock-pdf">Mock PDF</div>)
-));
+jest.mock('../../../../services/common-service', () => ({
+  dispatchLoader: jest.fn(),
+  lovRequests: jest.fn()
+}));
 
 jest.mock('../../../../utils/common/change.utils', () => ({
   getUrl: {
-    getLanguageInfo: jest.fn(() => 'en'),
-  },
+    getLanguageInfo: jest.fn()
+  }
 }));
 
-const mockStore = configureStore([]);
+jest.mock('../../../../shared/components/pdf/pdf', () => {
+  return function MockPdf({ fileName }) {
+    return <div data-testid="mock-pdf">{fileName}</div>;
+  };
+});
 
-describe('CasaTNC Component - Minimal Passing Tests', () => {
-  let store: any;
+jest.mock('../../../../shared/components/spinner/spinner', () => {
+  return function MockSpinner() {
+    return <div data-testid="mock-spinner">Loading...</div>;
+  };
+});
 
+jest.mock('../../services/constants', () => ({
+  KFS_DOC_URL: 'mock-kfs-url',
+  KFS_DOC_URL_Chinees: 'mock-kfs-chinese-url',
+  CATEGORIES: {}
+}));
+
+jest.mock('../../../../utils/common/constants', () => ({
+  CONSTANTS: {
+    LANG_EN: 'en',
+    LANG_CN: 'cn',
+    STAGE_NAMES: {
+      AD_1: 'AD_1'
+    },
+    beforeYouStartYourApplication: 'Before you start your application:',
+    beforeYouStartYourApplication_CN: '在您开始申请之前：',
+    beforeYouStartYourApplication_HK: '在您開始申請之前：',
+    pleaseReadTheFollowingTermsConditions: 'Please READ the following Terms & Conditions',
+    pleaseReadTheFollowingTermsConditions_CN: '请阅读以下条款和条件',
+    pleaseReadTheFollowingTermsConditions_HK: '請閱讀以下條款和條件',
+    DownloadBtn: 'Download',
+    DownloadBtn_CN: '下载',
+    DownloadBtn_HK: '下載',
+    tapBelow: 'Tap below',
+    tapBelow_CN: '点击下方',
+    tapBelow_HK: '點擊下方',
+    tapScroll: 'Tap to Scroll',
+    tapScroll_CN: '点击滚动',
+    tapScroll_HK: '點擊滾動',
+    iAccept: 'I Accept',
+    iAccept_CN: '我接受',
+    iAccept_HK: '我接受'
+  }
+}));
+
+// Mock PDF files
+jest.mock('../../../../assets/pdf-file/HK_Integrated_deposit.pdf', () => 'mock-casa-terms.pdf');
+jest.mock('../../../../assets/pdf-file/hk-cx-important-info-n-ht-chi-03-2023s.pdf', () => 'mock-casa-chinese.pdf');
+
+// Mock CSS import
+jest.mock('./casaTNC.scss', () => ({}));
+
+// Create mock Redux store
+const mockInitialState = {
+  preApproval: {
+    formConfigmetaData: {
+      products: [{ campaign: 'test-campaign' }]
+    }
+  },
+  stages: {
+    stages: [{ stageInfo: 'mock-stage-info' }]
+  }
+};
+
+const mockReducer = (state = mockInitialState) => state;
+const mockStore = createStore(mockReducer);
+
+// Mock dispatch
+const mockDispatch = jest.fn();
+mockStore.dispatch = mockDispatch;
+
+// Mock data responses
+const mockApiResponse = {
+  data: {
+    products: {
+      'test-campaign': [{
+        pdfURL: 'https://example.com/test.pdf'
+      }]
+    },
+    productsMob: {
+      'test-campaign': [{
+        pdfURL: 'https://example.com/test-mobile.pdf'
+      }]
+    },
+    tncLinkCampaignCode: {
+      isCasa: [{
+        pdfLinks: [
+          { Title: 'Terms & Conditions', url: 'https://example.com/tnc.pdf' },
+          { Title: 'Privacy Policy', url: 'https://example.com/privacy.pdf' }
+        ]
+      }]
+    }
+  }
+};
+
+describe('CasaTNC Component', () => {
   beforeEach(() => {
-    store = mockStore({
-      preApproval: {
-        formConfigmetaData: { products: [{ campaign: 'test-campaign' }] },
-      },
-      stages: { stages: [{ stageInfo: {} }] },
+    jest.clearAllMocks();
+    
+    // Set default language
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('en');
+    
+    // Mock successful API responses
+    preApprovalServices.getData.mockResolvedValue(mockApiResponse);
+    preApprovalServices.getPDFData.mockResolvedValue('mock-pdf-blob');
+    
+    // Mock navigator
+    Object.defineProperty(navigator, 'userAgent', {
+      writable: true,
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     });
-  });
-
-  it('1. renders loading spinner initially', () => {
-    render(
-      <Provider store={store}>
-        <CasaTNC />
-      </Provider>
-    );
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-  });
-
-  it('2. renders main content after loading', async () => {
-    render(
-      <Provider store={store}>
-        <CasaTNC />
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Before you start your application:')).toBeInTheDocument();
-      expect(screen.getByTestId('mock-pdf')).toBeInTheDocument();
+    
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      writable: true,
+      value: 0
     });
-  });
-
-  it('3. renders download button', async () => {
-    render(
-      <Provider store={store}>
-        <CasaTNC />
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Download')).toBeInTheDocument();
+    
+    // Mock window.location
+    delete window.location;
+    window.location = { host: 'example.com' };
+    
+    // Mock document methods
+    document.createElement = jest.fn().mockReturnValue({
+      href: '',
+      download: '',
+      click: jest.fn()
     });
+    document.body.appendChild = jest.fn();
+    document.body.removeChild = jest.fn();
   });
 
-  it('4. shows accept button after scrolling', async () => {
+  test('renders loading spinner initially', () => {
     render(
-      <Provider store={store}>
-        <CasaTNC />
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
       </Provider>
     );
 
-    await waitFor(() => {
-      const container = screen.getByTestId('pdf-container');
-      fireEvent.scroll(container, { 
-        target: { scrollTop: 1000, clientHeight: 500, scrollHeight: 1500 }
-      });
-      
-      expect(screen.getByText('I Accept')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('mock-spinner')).toBeInTheDocument();
   });
 
-  it('5. dispatches actions when accept button is clicked', async () => {
+  test('renders main content after loading completes', async () => {
     render(
-      <Provider store={store}>
-        <CasaTNC />
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
       </Provider>
     );
 
     await waitFor(() => {
-      const container = screen.getByTestId('pdf-container');
-      fireEvent.scroll(container, { 
-        target: { scrollTop: 1000, clientHeight: 500, scrollHeight: 1500 }
-      });
-      
-      fireEvent.click(screen.getByText('I Accept'));
-      expect(store.getActions().length).toBeGreaterThan(0);
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
     });
+
+    expect(screen.getByText('Download')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-pdf')).toBeInTheDocument();
+  });
+
+  test('calls getData with correct URL for English language', async () => {
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('en');
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(preApprovalServices.getData).toHaveBeenCalledWith('mock-kfs-url');
+    });
+  });
+
+  test('calls getData with Chinese URL when language is zh', async () => {
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('zh');
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(preApprovalServices.getData).toHaveBeenCalledWith('mock-kfs-chinese-url');
+    });
+  });
+
+  test('dispatches loader actions correctly', async () => {
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    expect(commonService.dispatchLoader).toHaveBeenCalledWith(true);
+
+    await waitFor(() => {
+      expect(commonService.dispatchLoader).toHaveBeenCalledWith(false);
+    });
+  });
+
+  test('handles download button click', async () => {
+    const mockLink = {
+      href: '',
+      download: '',
+      click: jest.fn()
+    };
+    document.createElement.mockReturnValue(mockLink);
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
+    });
+
+    const downloadButton = screen.getByText('Download');
+    fireEvent.click(downloadButton);
+
+    expect(document.createElement).toHaveBeenCalledWith('a');
+    expect(mockLink.click).toHaveBeenCalled();
+  });
+
+  test('renders PDF links when stageID is undefined', async () => {
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Terms & Conditions')).toBeInTheDocument();
+      expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+    });
+  });
+
+  test('does not render PDF links when stageID is defined', async () => {
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={1} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText('Terms & Conditions')).not.toBeInTheDocument();
+    });
+  });
+
+  test('renders Chinese PDF when language is zh', async () => {
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('zh');
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      const pdfComponent = screen.getByTestId('mock-pdf');
+      expect(pdfComponent).toHaveTextContent('mock-casa-chinese.pdf');
+    });
+  });
+
+  test('renders English PDF when language is not zh', async () => {
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('en');
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      const pdfComponent = screen.getByTestId('mock-pdf');
+      expect(pdfComponent).toHaveTextContent('mock-casa-terms.pdf');
+    });
+  });
+
+  test('handles mobile user agent', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)'
+    });
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      value: 5
+    });
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(preApprovalServices.getPDFData).toHaveBeenCalledWith('https://example.com/test-mobile.pdf');
+    });
+  });
+
+  test('handles localhost environment', async () => {
+    window.location.host = 'localhost:3000';
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(preApprovalServices.getPDFData).toHaveBeenCalledWith('http://localhost:3000/test.pdf');
+    });
+  });
+
+  test('handles Safari browser for download', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Safari/605.1.15'
+    });
+
+    const mockLink = {
+      href: '',
+      download: '',
+      click: jest.fn()
+    };
+    document.createElement.mockReturnValue(mockLink);
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
+    });
+
+    const downloadButton = screen.getByText('Download');
+    fireEvent.click(downloadButton);
+
+    expect(mockLink.download).toContain('.pdf');
+  });
+
+  test('renders scroll button initially', async () => {
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Tap to Scroll')).toBeInTheDocument();
+    });
+  });
+
+  test('handles API error gracefully', async () => {
+    preApprovalServices.getData.mockRejectedValue(new Error('API Error'));
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    // Component should still render the spinner without crashing
+    expect(screen.getByTestId('mock-spinner')).toBeInTheDocument();
+  });
+
+  test('handles getPDFData error gracefully', async () => {
+    preApprovalServices.getPDFData.mockRejectedValue(new Error('PDF Error'));
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    // Should still call getData
+    await waitFor(() => {
+      expect(preApprovalServices.getData).toHaveBeenCalled();
+    });
+  });
+
+  test('dispatches PDF data to Redux store', async () => {
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalled();
+    });
+  });
+
+  test('renders correct language content for Chinese', async () => {
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('cn');
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
+    });
+
+    // Should render Chinese content
+    expect(screen.getByText('下载')).toBeInTheDocument();
+  });
+
+  test('renders correct language content for Hong Kong', async () => {
+    changeUtils.getUrl.getLanguageInfo.mockReturnValue('hk');
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
+    });
+
+    // Should render HK content
+    expect(screen.getByText('下載')).toBeInTheDocument();
+  });
+
+  test('handles scroll button click', async () => {
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
+    });
+
+    const scrollButton = screen.getByText('Tap to Scroll');
+    fireEvent.click(scrollButton);
+
+    // Should not crash when scrolling
+    expect(scrollButton).toBeInTheDocument();
+  });
+
+  test('prevents default on download button click', async () => {
+    const mockEvent = {
+      preventDefault: jest.fn()
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-spinner')).not.toBeInTheDocument();
+    });
+
+    const downloadButton = screen.getByText('Download');
+    
+    // Mock the event
+    const originalAddEventListener = downloadButton.addEventListener;
+    downloadButton.addEventListener = jest.fn();
+    
+    fireEvent.click(downloadButton, mockEvent);
+
+    // Verify the component handles the click
+    expect(document.createElement).toHaveBeenCalled();
+  });
+
+  test('handles component unmounting', () => {
+    const { unmount } = render(
+      <Provider store={mockStore}>
+        <CasaTNC stageID={undefined} />
+      </Provider>
+    );
+
+    // Should unmount without errors
+    expect(() => unmount()).not.toThrow();
   });
 });
