@@ -1,1 +1,643 @@
-# Pathan
+import React from 'react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import CasaTNC from '../CasaTNC';
+import { getData, getPDFData } from '../../services/preApprovalServices';
+import { dispatchLoader, lovRequests } from '../../../../services/common-service';
+import { getUrl } from '../../../../utils/common/change.utils';
+import { CONSTANTS } from '../../../../utils/common/constants';
+
+// Mock all external dependencies
+jest.mock('../../services/preApprovalServices');
+jest.mock('../../../../services/common-service');
+jest.mock('../../../../utils/common/change.utils');
+jest.mock('../../../../shared/components/pdf/pdf', () => {
+  return function MockPdf({ fileName }) {
+    return <div data-testid="pdf-component">{fileName}</div>;
+  };
+});
+jest.mock('../../../../shared/components/spinner/spinner', () => {
+  return function MockSpinner() {
+    return <div data-testid="spinner">Loading...</div>;
+  };
+});
+
+// Mock PDF imports
+jest.mock('../../../../assets/pdf-file/HK_Integrated_deposit.pdf', () => 'mock-casa-tnc-terms.pdf');
+jest.mock('../../../../assets/pdf-file/hk-cx-important-info-n-ht-chi-03-2023s.pdf', () => 'mock-casa-tnc-chinese.pdf');
+
+// Mock constants
+jest.mock('../../services/constants', () => ({
+  KFS_DOC_URL: 'https://mock-kfs-url.com',
+  KFS_DOC_URL_Chinees: 'https://mock-kfs-url-chinese.com',
+  CATEGORIES: {}
+}));
+
+// Mock navigator properties
+Object.defineProperty(navigator, 'userAgent', {
+  writable: true,
+  value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+});
+
+Object.defineProperty(navigator, 'maxTouchPoints', {
+  writable: true,
+  value: 0
+});
+
+// Mock window.location
+delete window.location;
+window.location = { host: 'example.com' };
+
+// Mock document methods
+const mockCreateElement = jest.fn();
+const mockAppendChild = jest.fn();
+const mockRemoveChild = jest.fn();
+const mockClick = jest.fn();
+
+document.createElement = mockCreateElement;
+document.body.appendChild = mockAppendChild;
+document.body.removeChild = mockRemoveChild;
+
+// Create mock store
+const createMockStore = (initialState = {}) => {
+  return configureStore({
+    reducer: {
+      preApproval: (state = {
+        formConfigmetaData: {
+          products: [{ campaign: 'test-campaign' }]
+        }
+      }) => state,
+      stages: (state = {
+        stages: [{ stageInfo: 'test-stage-info' }]
+      }) => state
+    },
+    preloadedState: initialState
+  });
+};
+
+// Mock implementations
+const mockGetData = getData as jest.MockedFunction<typeof getData>;
+const mockGetPDFData = getPDFData as jest.MockedFunction<typeof getPDFData>;
+const mockDispatchLoader = dispatchLoader as jest.MockedFunction<typeof dispatchLoader>;
+const mockLovRequests = lovRequests as jest.MockedFunction<typeof lovRequests>;
+const mockGetUrl = {
+  getLanguageInfo: jest.fn()
+};
+(getUrl as any).getLanguageInfo = mockGetUrl.getLanguageInfo;
+
+describe('CasaTNC Component', () => {
+  let store;
+  let mockDispatch;
+
+  beforeEach(() => {
+    store = createMockStore();
+    mockDispatch = jest.fn();
+    store.dispatch = mockDispatch;
+    
+    // Reset all mocks
+    jest.clearAllMocks();
+    
+    // Default mock implementations
+    mockGetUrl.getLanguageInfo.mockReturnValue('en');
+    mockGetData.mockResolvedValue({
+      data: {
+        products: {
+          'test-campaign': [{
+            pdfURL: 'https://pt.sc.com/test.pdf'
+          }]
+        },
+        productsMob: {
+          'test-campaign': [{
+            pdfURL: 'https://pt.sc.com/test-mobile.pdf'
+          }]
+        },
+        tncLinkCampaignCode: {
+          isCasa: [{
+            pdfLinks: [
+              { Title: 'Terms & Conditions', url: 'https://example.com/tnc.pdf' },
+              { Title: 'Privacy Policy', url: 'https://example.com/privacy.pdf' }
+            ]
+          }]
+        }
+      }
+    });
+    mockGetPDFData.mockResolvedValue('mock-pdf-data');
+    
+    // Mock DOM element
+    const mockElement = {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      scrollBy: jest.fn(),
+      scrollTop: 0,
+      scrollHeight: 1000,
+      clientHeight: 500
+    };
+    
+    jest.spyOn(React, 'useRef').mockReturnValue({ current: mockElement });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  describe('Component Rendering', () => {
+    test('renders spinner initially', () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+      
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    });
+
+    test('renders main content after loading', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Download')).toBeInTheDocument();
+      expect(screen.getByTestId('pdf-component')).toBeInTheDocument();
+    });
+  });
+
+  describe('Language Support', () => {
+    test('renders English content by default', async () => {
+      mockGetUrl.getLanguageInfo.mockReturnValue('en');
+      
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(mockGetData).toHaveBeenCalledWith('https://mock-kfs-url.com');
+    });
+
+    test('renders Chinese content when language is zh', async () => {
+      mockGetUrl.getLanguageInfo.mockReturnValue('zh');
+      
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(mockGetData).toHaveBeenCalledWith('https://mock-kfs-url-chinese.com');
+    });
+  });
+
+  describe('PDF Loading and Display', () => {
+    test('loads PDF data on component mount', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(mockGetData).toHaveBeenCalled();
+        expect(mockGetPDFData).toHaveBeenCalledWith('https://pt.sc.com/test.pdf');
+      });
+    });
+
+    test('handles mobile user agent', async () => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15'
+      });
+      Object.defineProperty(navigator, 'maxTouchPoints', {
+        value: 5
+      });
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(mockGetPDFData).toHaveBeenCalledWith('https://pt.sc.com/test-mobile.pdf');
+      });
+    });
+
+    test('handles localhost environment', async () => {
+      window.location.host = 'localhost:3000';
+      
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(mockGetPDFData).toHaveBeenCalledWith('http://localhost:3000/test.pdf');
+      });
+    });
+  });
+
+  describe('Download Functionality', () => {
+    test('downloads PDF when download button is clicked', async () => {
+      const mockLink = {
+        href: '',
+        download: '',
+        click: mockClick
+      };
+      mockCreateElement.mockReturnValue(mockLink);
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByText('Download');
+      fireEvent.click(downloadButton);
+
+      expect(mockCreateElement).toHaveBeenCalledWith('a');
+      expect(mockAppendChild).toHaveBeenCalledWith(mockLink);
+      expect(mockClick).toHaveBeenCalled();
+      expect(mockRemoveChild).toHaveBeenCalledWith(mockLink);
+    });
+
+    test('handles Safari browser download', async () => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Safari/605.1.15'
+      });
+
+      const mockLink = {
+        href: '',
+        download: '',
+        click: mockClick
+      };
+      mockCreateElement.mockReturnValue(mockLink);
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByText('Download');
+      fireEvent.click(downloadButton);
+
+      expect(mockLink.download).toContain('test.pdf');
+    });
+  });
+
+  describe('Scroll Functionality', () => {
+    let mockElement;
+
+    beforeEach(() => {
+      mockElement = {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        scrollBy: jest.fn(),
+        scrollTop: 0,
+        scrollHeight: 1000,
+        clientHeight: 500
+      };
+      
+      jest.spyOn(React, 'useRef').mockReturnValue({ current: mockElement });
+    });
+
+    test('handles scroll to continue button click', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const scrollButton = screen.getByText(/tap/i);
+      fireEvent.click(scrollButton);
+
+      expect(mockElement.scrollBy).toHaveBeenCalledWith({
+        top: 250,
+        behavior: 'smooth'
+      });
+    });
+
+    test('shows accept button when scrolled to bottom', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      // Simulate scroll to bottom
+      mockElement.scrollTop = 450;
+      const scrollHandler = mockElement.addEventListener.mock.calls.find(
+        call => call[0] === 'scroll'
+      )[1];
+
+      act(() => {
+        scrollHandler();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/accept/i)).toBeInTheDocument();
+      });
+    });
+
+    test('handles scroll calculation for stageID 0', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={0} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const scrollButton = screen.getByText(/tap/i);
+      fireEvent.click(scrollButton);
+
+      expect(mockElement.scrollBy).toHaveBeenCalledWith({
+        top: 50, // (1000/4) - 200
+        behavior: 'smooth'
+      });
+    });
+  });
+
+  describe('Navigation', () => {
+    test('navigates to next page when accept button is clicked', async () => {
+      const mockElement = {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        scrollBy: jest.fn(),
+        scrollTop: 450,
+        scrollHeight: 1000,
+        clientHeight: 500
+      };
+      
+      jest.spyOn(React, 'useRef').mockReturnValue({ current: mockElement });
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      // Trigger scroll to show accept button
+      const scrollHandler = mockElement.addEventListener.mock.calls.find(
+        call => call[0] === 'scroll'
+      )[1];
+
+      act(() => {
+        scrollHandler();
+      });
+
+      await waitFor(() => {
+        const acceptButton = screen.getByText(/accept/i);
+        fireEvent.click(acceptButton);
+      });
+
+      expect(mockLovRequests).toHaveBeenCalledWith('test-stage-info', CONSTANTS.STAGE_NAMES.AD_1);
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: expect.stringContaining('setCurrentStage')
+        })
+      );
+    });
+  });
+
+  describe('Terms and Conditions Links', () => {
+    test('renders PDF links when stageID is undefined', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Terms & Conditions')).toBeInTheDocument();
+      expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+    });
+
+    test('does not render PDF links when stageID is defined', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={1} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Terms & Conditions')).not.toBeInTheDocument();
+      expect(screen.queryByText('Privacy Policy')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('handles getData API failure', async () => {
+      mockGetData.mockRejectedValue(new Error('API Error'));
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      // Component should still render without crashing
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    });
+
+    test('handles getPDFData API failure', async () => {
+      mockGetPDFData.mockRejectedValue(new Error('PDF Load Error'));
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      // Component should still render without crashing
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    });
+
+    test('handles missing listInnerRef', async () => {
+      jest.spyOn(React, 'useRef').mockReturnValue({ current: null });
+
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const scrollButton = screen.getByText(/tap/i);
+      fireEvent.click(scrollButton);
+
+      // Should not crash when ref is null
+      expect(scrollButton).toBeInTheDocument();
+    });
+  });
+
+  describe('Event Listeners', () => {
+    test('adds and removes scroll event listeners', async () => {
+      const mockElement = {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        scrollBy: jest.fn(),
+        scrollTop: 0,
+        scrollHeight: 1000,
+        clientHeight: 500
+      };
+      
+      const { unmount } = render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(mockElement.addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+      });
+
+      unmount();
+
+      expect(mockElement.removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    });
+  });
+
+  describe('Redux Integration', () => {
+    test('dispatches loader actions correctly', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      expect(mockDispatchLoader).toHaveBeenCalledWith(true);
+
+      await waitFor(() => {
+        expect(mockDispatchLoader).toHaveBeenCalledWith(false);
+      });
+    });
+
+    test('dispatches PDF data to store', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: expect.stringContaining('setKfsDocumentPdf')
+          })
+        );
+      });
+    });
+  });
+
+  describe('Component Props', () => {
+    test('handles undefined stageID prop', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Terms & Conditions')).toBeInTheDocument();
+    });
+
+    test('handles defined stageID prop', async () => {
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={1} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Terms & Conditions')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Constants Integration', () => {
+    test('uses correct language constants for English', async () => {
+      mockGetUrl.getLanguageInfo.mockReturnValue(CONSTANTS.LANG_EN);
+      
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      // Should use English constants
+      expect(screen.getByText('Download')).toBeInTheDocument();
+    });
+
+    test('uses correct language constants for Chinese', async () => {
+      mockGetUrl.getLanguageInfo.mockReturnValue(CONSTANTS.LANG_CN);
+      
+      render(
+        <Provider store={store}>
+          <CasaTNC stageID={undefined} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      // Should use Chinese constants
+      expect(screen.getByText('Download')).toBeInTheDocument();
+    });
+  });
+});
