@@ -1,327 +1,343 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import Text from './Text';
-import { StoreModel } from '../../../utils/model/common-model';
-import { CONSTANTS } from '../../../utils/common/constants';
+import "./onboarding-before-start.scss";
+import { useState, useEffect, useRef } from "react";
+import Pdf from "../../../../shared/components/pdf/pdf";
+import { getData, getPDFData } from "../../services/preApprovalServices";
+import { CATEGORIES, KFS_DOC_URL, KFS_DOC_URL_Chinees } from "../../services/constants";
+import { useDispatch, useSelector } from "react-redux";
+import { StoreModel } from "../../../../utils/model/common-model";
+import Spinner from "../../../../shared/components/spinner/spinner";
+import { preApprovalAction } from "../../store/preApproval-slice";
+import { dispatchLoader } from "../../../../services/common-service";
+import { getUrl } from "../../../../utils/common/change.utils";
+import { CONSTANTS } from "../../../../utils/common/constants";
+import PILPdfUrl1 from "../../../../assets/pdf-file/PIL/hk-personal-loan-terms-pil-aug09.pdf";
+import PILPdfUrl2 from "../../../../assets/pdf-file/PIL/hk-gn175.pdf";
+import PILPdfUrl3 from "../../../../assets/pdf-file/PIL/hk-loans-personal-instalment-loan-eng.pdf";
+import CCPdfUrl1 from "../../../../assets/pdf-file/CC/hk-gn175.pdf";
+import CCPdfUrl2 from "../../../../assets/pdf-file/CC/hk-gn177.pdf";
+import CCPdfUrl3 from "../../../../assets/pdf-file/CC/hk-cc-tncs-downloadnow.pdf";
+import CCPdfUrl4 from "../../../../assets/pdf-file/CC/e-statement-en.pdf";
+import CCPdfUrl5 from "../../../../assets/pdf-file/CC/hk-rewards-tncs-en.pdf";
+import CCPdfUrl6 from "../../../../assets/pdf-file/CC/hk-tnc-credit-card-instalment-plan-en.pdf";
 
-// Mock Redux store
-const mockStore = configureStore({
-  reducer: {
-    stages: () => ({
-      stages: [{ stageId: 'bd-1', stageInfo: { applicants: [{}] } }],
-      userInput: { applicants: [{}] },
-      pinyinToggle: false
-    }),
-    fielderror: () => ({ error: [] }),
-    preApproval: () => ({ resumeAllowed: "N" }),
-    lastAccessed: () => ({}),
-    continueValidation: () => ({}),
-    model: () => ({}),
-    error: () => ({}),
-    ibnk: () => ({})
-  }
-});
+const OnboardingBeforeStart: React.FC<any> = ({
+  isVisible,
+  onScrollEnd,
+  stageID,
+  nextPage
+}) => {
+  const listInnerRef = useRef<HTMLDivElement>(null);
+  const pdfLinksRef = useRef<HTMLDivElement>(null);
+  const [pdfLinkTerms, setPdfLinkTerms] = useState<any | null>(null);
+  const [kfsDocPDF, setkfsDocPDF] = useState("");
+  const [kfsDocPDFDownload, setkfsDocPDFDownload] = useState("");
+  const [pdfHeight, setPdfHeight] = useState(0);
+  const [pdfName, setPdfName] = useState('')
+  const [showSpinner, setShowSpinner] = useState(true); 
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const campaignId = stageSelector[0]?.stageInfo?.products[0]?.campaign;
+  const premiumCode = getUrl.getParameterByName("premium");
+  const productType = stageSelector[0]?.stageInfo?.products[0]?.product_type;
+  const formConfigmetaData = useSelector(
+    (state: StoreModel) => state?.preApproval.formConfigmetaData
+  );
+  // const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const dispatch = useDispatch();
+  const language = getUrl.getLanguageInfo("lang");
+  useEffect(() => {
+    setShowSpinner(true);
+    dispatch(dispatchLoader(true));
+    let KFS;
+    if (language === 'zh') {
+      KFS = process.env.REACT_APP_KFS_DOC_URL_Chinees
+    } else {
+      KFS = process.env.REACT_APP_KFS_DOC_URL
+    }
 
-// Mock props
-const mockProps = {
-  data: {
-    logical_field_name: 'test_field',
-    rwb_label_name: 'Test Field',
-    component_type: 'text',
-    type: 'text',
-    min_length: 2,
-    length: 10,
-    mandatory: 'Yes',
-    ui_defaulted_value: '',
-    regex: '',
-    editable: false,
-    info_tooltips: '',
-    details: ''
-  },
-  handleCallback: jest.fn(),
-  handleFieldDispatch: jest.fn()
-};
-
-describe('Text Component', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('renders without crashing', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-    expect(screen.getByLabelText('Test Field')).toBeInTheDocument();
-  });
-
-  test('displays label correctly', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-    expect(screen.getByText('Test Field')).toBeInTheDocument();
-  });
-
-  test('handles input change', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'test value' } });
-    
-    expect(input).toHaveValue('test value');
-    expect(mockProps.handleCallback).toHaveBeenCalled();
-  });
-
-  test('shows error for required field when empty', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.blur(input);
-    
-    expect(screen.getByText('Test Field required')).toBeInTheDocument();
-  });
-
-  test('shows error for min length validation', () => {
-    const minLengthProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        min_length: 5
+    getData(KFS)?.then((response: any) => {
+      let campaignID = formConfigmetaData?.products[0].campaign;
+      let pdfURLNew = "";
+      /*istanbul ignore else*/
+      if (stageID === 0) {
+        const pdfURL = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? response.data.productsMob[campaignID] : response.data.products[campaignID];
+        const pdfMap = pdfURL.map((item: any) => item.pdfURL)
+        const getPDFName: any = new URL(pdfMap).pathname.split('/').pop();
+        let localHost= window.location.host === "localhost:3000" || window.location.host === "localhost:3001" ? true : false;
+        if(localHost) {
+          pdfURLNew = pdfURL[0].pdfURL.replace("https://pt.sc.com/","http://"+window.location.host+"/");
+        }
+        else {
+          pdfURLNew = pdfURL[0].pdfURL;
+        }
+        setPdfName(getPDFName);
+        setkfsDocPDF(pdfURLNew);
+        getPDFData(pdfURLNew).then((response: any) => {
+          const pdfurl: any = {};
+          pdfurl.pdf = response;
+          pdfurl.pdfurl = pdfURLNew;
+          setkfsDocPDFDownload(response);
+          dispatch(preApprovalAction.setKfsDocumentPdf(pdfurl.pdf));
+          onScrollEnd(true);
+          setShowSpinner(false);
+          dispatch(dispatchLoader(false));
+        });
+        const allPDFLinks = response?.data?.tncLinkCampaignCode[campaignID][0].pdfLinks;
+        setPdfLinkTerms(allPDFLinks);
       }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...minLengthProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'abc' } });
-    fireEvent.blur(input);
-    
-    expect(screen.getByText(/minimum length is 5 characters/i)).toBeInTheDocument();
-  });
-
-  test('shows error for pattern validation', () => {
-    const regexProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        regex: '^[A-Za-z]+$'
-      }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...regexProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '123' } });
-    fireEvent.blur(input);
-    
-    expect(screen.getByText(/invalid pattern for Test Field/i)).toBeInTheDocument();
-  });
-
-  test('disables input when textDisabled is true', () => {
-    const disabledProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'tin_hkid',
-        editable: true
-      }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...disabledProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    expect(input).toBeDisabled();
-  });
-
-  test('shows tick mark when valid input is provided', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'valid' } });
-    
-    expect(document.querySelector('.tick-class')).toBeInTheDocument();
-  });
-
-  test('handles email validation correctly', () => {
-    const emailProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'email',
-        type: 'email'
-      }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...emailProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid email
-    fireEvent.change(input, { target: { value: 'invalid' } });
-    fireEvent.blur(input);
-    expect(screen.getByText(/invalid pattern for Test Field/i)).toBeInTheDocument();
-    
-    // Test valid email
-    fireEvent.change(input, { target: { value: 'valid@example.com' } });
-    fireEvent.blur(input);
-    expect(screen.queryByText(/invalid pattern/i)).not.toBeInTheDocument();
-  });
-
-  test('handles China ID number validation', () => {
-    const chinaIdProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'china_id_number',
-        regex: '^[0-9]{17}[0-9a-zA-Z]{1}$'
-      }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...chinaIdProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid China ID
-    fireEvent.change(input, { target: { value: '123' } });
-    fireEvent.blur(input);
-    expect(screen.getByText(/invalid pattern for Test Field/i)).toBeInTheDocument();
-    
-    // Test valid China ID (mock)
-    fireEvent.change(input, { target: { value: '12345678901234567X' } });
-    fireEvent.blur(input);
-    expect(screen.queryByText(/invalid pattern/i)).not.toBeInTheDocument();
-  });
-
-  test('handles address field validation', () => {
-    const addressProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'address_res_1'
-      }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...addressProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid address characters
-    fireEvent.change(input, { target: { value: 'Invalid@Address' } });
-    fireEvent.blur(input);
-    expect(screen.getByText(/invalid pattern for Test Field/i)).toBeInTheDocument();
-    
-    // Test valid address
-    fireEvent.change(input, { target: { value: '123 Main St' } });
-    fireEvent.blur(input);
-    expect(screen.queryByText(/invalid pattern/i)).not.toBeInTheDocument();
-  });
-
-  test('handles tax ID validation for Hong Kong', () => {
-    const taxIdProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'tax_id_no'
-      }
-    };
-    
-    // Mock store with Hong Kong tax residence
-    const hkStore = configureStore({
-      reducer: {
-        stages: () => ({
-          stages: [{ stageId: 'ad-1', stageInfo: { applicants: [{}] }],
-          userInput: { applicants: [{ country_of_tax_residence: 'HK' }] },
-          pinyinToggle: false
-        }),
-        // ...other reducers
+      else if (stageID === 1) {
+        if(campaignID === "HKSOG20VAWV000") {
+          campaignID = "HKSOG20VAWV000" + premiumCode;
+        }
+        const pdfURLCheck = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? response.data.CampaignTnCMob[campaignID] : response.data.CampaignTnC[campaignID];
+        const pdfMap = pdfURLCheck.map((item: any) => item.pdfURL)
+        const getPDFName: any = new URL(pdfMap).pathname.split('/').pop();
+        let localHost= window.location.host === "localhost:3000" || window.location.host === "localhost:3001" ? true : false;
+        if(localHost) {
+          pdfURLNew = pdfURLCheck[0]?.pdfURL.replace("https://pt.sc.com/","http://"+window.location.host+"/");
+        }
+        else {
+          pdfURLNew = pdfURLCheck[0]?.pdfURL;
+        }
+        setPdfName(getPDFName);
+        setkfsDocPDF(pdfURLNew);
+        getPDFData(pdfURLNew).then((response: any) => {
+          setkfsDocPDFDownload(response);
+          dispatch(preApprovalAction.setTandCDocumentPdf(pdfURLNew));
+          dispatch(preApprovalAction.setDownloadPDFData(response));
+          onScrollEnd(true);
+          setShowSpinner(false);
+          dispatch(dispatchLoader(false));
+        });
+        /*istanbul ignore else*/
+        if(productType === "1313" && campaignID === "HKSOZ00MCWB000") {
+          campaignID= campaignID+premiumCode
+        }
+        const allPDFLinks = response?.data?.tncLinkCampaignCode[campaignID][0].pdfLinks;
+        setPdfLinkTerms(allPDFLinks);
       }
     });
-    
-    render(
-      <Provider store={hkStore}>
-        <Text {...taxIdProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid HK tax ID
-    fireEvent.change(input, { target: { value: '123' } });
-    fireEvent.blur(input);
-    expect(screen.getByText(/invalid pattern for Test Field/i)).toBeInTheDocument();
-    
-    // Test valid HK tax ID (mock format)
-    fireEvent.change(input, { target: { value: 'A1234567' } });
-    fireEvent.blur(input);
-    expect(screen.queryByText(/invalid pattern/i)).not.toBeInTheDocument();
+  }, [stageID]);
+
+  useEffect(() => {
+    const listInnerElement = listInnerRef.current;
+    const pdfListElement = pdfLinksRef.current;
+    /* istanbul ignore else */
+    if (pdfListElement) {
+      let container = pdfLinksRef.current;
+      let scrollHeight = container ? container.scrollHeight : 0;
+      setPdfHeight(scrollHeight * 2.5)
+    }
+    /* istanbul ignore else */
+    if (listInnerElement) {
+      listInnerElement.addEventListener("scroll", scrollToBottom);
+      // Clean-up
+      return () => {
+        listInnerElement.removeEventListener("scroll", scrollToBottom);
+      };
+    }
+    window.history.replaceState("", "", "/hk/before-start")
   });
 
-  test('handles promo code validation', () => {
-    const promoProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'mgm_referral_code'
+  //Added for mock pdf
+  const downloadPdf = (title: any) => {
+    const lin = document.createElement('a');
+    if (campaignId === "HKPIL23PLSTP10" || campaignId === "HKBDC23PESTP10") {
+      if (title === "II. Personal Loan Terms") {
+        lin.href = PILPdfUrl1;
+      } else if (title === "III. Client Terms") {
+        lin.href = PILPdfUrl2;
+      } else if (title === "Welcome Offers") {
+        lin.href = PILPdfUrl3;
       }
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <Text {...promoProps} />
-      </Provider>
-    );
-    
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid promo code
-    fireEvent.change(input, { target: { value: 'INVALID' } });
-    fireEvent.blur(input);
-    expect(screen.getByText(/invalid promo code/i)).toBeInTheDocument();
-    
-    // Test valid promo code (mock format)
-    fireEvent.change(input, { target: { value: 'SCB12345' } });
-    fireEvent.blur(input);
-    expect(screen.queryByText(/invalid promo code/i)).not.toBeInTheDocument();
-  });
-});
+    } else if (campaignId === "HKSOG20VAWV000" || campaignId === "HKSPG17VAWV000" || campaignId === "HKSPB17VAWV000" || campaignId === "HKSOA16VAWP000" || campaignId === "HKSOA16MCWP000" || campaignId === "HKSOZ00MCWB000" || campaignId === "HKSOZ01MCWB000" || campaignId === "HKSOZ02MCWB000") {
+      if (title === "III. Client Terms" || title === "III.Client Terms ") {
+        lin.href = CCPdfUrl1;
+      } else if (title === "III. Credit Card Terms") {
+        lin.href = CCPdfUrl2;
+      } else if (title === "VI. Welcome Offers" || title === "IV. Welcome Offers" || title === 'VI. Welcome Offers ') {
+        lin.href = CCPdfUrl3;
+      } else if (title === "IX.  E-Statement Service" || title === "IX. E-Statement Service" || title === "IX.E-Statement Service" || title === "IX.E-Statement Service ") {
+        lin.href = CCPdfUrl4;
+      } else if (title === "X. Points Redemption") {
+        lin.href = CCPdfUrl5;
+      } else if (title === "XI. Credit Card Instalment Plan" || title === "X.Credit Card Installment Plan " || title === "X.Credit Card Installment Plan") {
+        lin.href = CCPdfUrl6;
+      }
+    }
+    const urlParts = lin.href.split("/");
+    const extractedPDFName = urlParts[urlParts.length - 1].split(".")[0];
+    lin.download = extractedPDFName;
+    document.body.appendChild(lin);
+    lin.click();
+    document.body.removeChild(lin);
+  }
+
+  const downloadPDFPreApproval = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    const lin = document.createElement('a');
+    lin.href = kfsDocPDFDownload;
+    const isSafari = /^((?!chrome|andriod).)*safari/i.test(navigator.userAgent);
+    if (isSafari) {
+      lin.download = pdfName.endsWith('.pdf') ? pdfName : `${pdfName}.pdf`;
+      document.body.appendChild(lin);
+      lin.click();
+      document.body.removeChild(lin);
+    } else {
+      lin.download = pdfName;
+      document.body.appendChild(lin);
+      lin.click();
+      document.body.removeChild(lin);
+    }
+  };
+
+  const btnClickScroll = () => {
+    /*istanbul ignore else*/
+    if (!listInnerRef.current) return;
+    const container = listInnerRef.current;
+    let height = stageID === 0 ? 200 : 0;
+    const scrollStep = (container.scrollHeight / 4) - height;
+    listInnerRef.current?.scrollBy({ top: scrollStep, behavior: "smooth" });
+  };
+
+  const scrollToBottom = () => {
+    /* istanbul ignore else */
+    if (listInnerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = listInnerRef.current;
+      const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50;
+      /* istanbul ignore else */
+      if (isNearBottom) {
+        onScrollEnd(false);
+      }
+    }
+  };
+  var className = "";
+  var isIPHONE = (navigator.userAgent.match('iPad') != null || navigator.userAgent.match('iPhone') != null || navigator.userAgent.match('iPod') != null);
+  var isANDROID = (navigator.userAgent.match('Android') != null);
+  if (isIPHONE) {
+    var isSafari = !!navigator.userAgent.match(/Version\/[\d\.]+.*Safari/);
+    if (isSafari) {
+      // $('body').addClass("iphoneDeviceSafari"); 
+      className = "iphoneDeviceSafari"
+    }
+    else {
+      // $('body').addClass("iphoneDevice"); 
+      className = "iphoneDevice"
+    }
+  } else if (isANDROID) {
+    // $('body').addClass("andriodDevice");
+    className = "andriodDevice"
+  } else {
+    // $rootScope.DesktopDevice = true;
+    // $('body').addClass("desktopDevice");
+    className = "desktopDevice"
+  }
+  return (
+    <div>
+      {showSpinner === true ?
+        (
+          <Spinner></Spinner>
+        )
+        :
+        (
+          <>
+            <div>
+              <button
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  downloadPDFPreApproval(e);
+                }}
+                className="view-pdf"
+              // ng-if="source_sys == 'sc.com' || source_sys == 'asiamiles'" //for future reference
+              >
+                {language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadBtn_CN : CONSTANTS.DownloadBtn_HK}
+              </button>
+            </div>
+            <div className="pdf-view">
+              <div
+                style={{ maxHeight: stageID === 1 ? `calc(100vh - ${pdfHeight}px)` : "" }}
+                id="pdf-view"
+                className={stageID == 0 ? "react-pdf__Page__canvas pdf__kfs__page" : "react-pdf__Page__canvas pdf__tnc__page"}
+                ref={listInnerRef}
+              >
+                <Pdf fileName={kfsDocPDF} />
+              </div>
+            </div>
+
+            {stageID == 1 && (
+              <div className="pdf-table" ref={pdfLinksRef}>
+                <div className="download-section">
+                  <span className="download-header">{language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadHeader : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadHeader_CN : CONSTANTS.DownloadHeader_HK}</span>
+                  <span className="images"></span>
+                </div>
+
+                <div className="tc-container">
+                  <table className="tcTable" border={1}>
+                    <tbody>
+                      {pdfLinkTerms?.map((item: any, index: any) => {
+                        return (
+                          <tr key={index}>
+                            <td className="tcTable__title">{item.Title}</td>
+                            <td className="tcTable__read">
+                              <a
+                                href={item.url}
+                                download
+                                target="_blank"
+                              >
+                                {language === CONSTANTS.LANG_EN ? CONSTANTS.ReadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.ReadBtn_CN : CONSTANTS.ReadBtn_HK}
+                              </a>
+                              <span> / </span>
+                              <span className="tcTable__download"
+                                onClick={() => {
+                                  downloadPdf(item.Title);
+                                }}
+                              >
+
+                                {language === CONSTANTS.LANG_EN ? CONSTANTS.DownloadBtn : language === CONSTANTS.LANG_CN ? CONSTANTS.DownloadBtn_CN : CONSTANTS.DownloadBtn_HK}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="remarks-section">
+                  <span className="remarks-section__span">
+                    {" "}
+                    {language === CONSTANTS.LANG_EN ? CONSTANTS.Remarks : language === CONSTANTS.LANG_CN ? CONSTANTS.Remarks_CN : CONSTANTS.Remarks_HK}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="footer-button-list app__footer">
+              {isVisible ?
+                (
+                  <>
+                    <div className="next-arrow" aria-describedby="submitButton">
+                      <footer
+                        // className={`${stageSelector[0].stageId!=='ad-9a'? 'footer-next1 enabled' : 'footer-next enabled'}`}
+                        className="footer-next enabled"
+                        onClick={btnClickScroll}
+                      >
+                        <i className="next-btn"></i>
+                      </footer>
+                    </div>
+                  </>
+                )
+                :
+                <button
+                  className="pre-approval-accept-button"
+                  onClick={nextPage}
+                >
+                  {language === CONSTANTS.LANG_EN ? CONSTANTS.acceptButton : language === CONSTANTS.LANG_CN ? CONSTANTS.acceptButton_CN : CONSTANTS.acceptButton_HK}
+                </button>
+              }
+            </div>
+          </>
+        )
+      }
+    </div>
+  );
+};
+
+export default OnboardingBeforeStart;
+
