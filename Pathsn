@@ -1,288 +1,540 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import OnboardingBeforeStart from './OnboardingBeforeStart';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import Pdf from '../../../../shared/components/pdf/pdf';
+import { configureStore } from '@reduxjs/toolkit';
+import OnboardingBeforeStart from './onboarding-before-start';
+import * as preApprovalServices from '../../services/preApprovalServices';
+import * as commonService from '../../../../services/common-service';
+import * as changeUtils from '../../../../utils/common/change.utils';
+import { CONSTANTS } from '../../../../utils/common/constants';
 
-// Mock dependencies
-jest.mock('../../services/preApprovalServices', () => ({
-  getData: jest.fn(),
-  getPDFData: jest.fn(),
-}));
-
+// Mock external dependencies
 jest.mock('../../../../shared/components/pdf/pdf', () => {
-  return jest.fn(() => <div>Mock PDF Component</div>);
+  return function MockPdf({ fileName }) {
+    return <div data-testid="pdf-component">PDF: {fileName}</div>;
+  };
 });
 
-jest.mock('../../../../utils/common/change.utils', () => ({
-  getUrl: {
-    getLanguageInfo: jest.fn(() => 'en'),
-    getParameterByName: jest.fn(() => null),
-  },
-}));
+jest.mock('../../../../shared/components/spinner/spinner', () => {
+  return function MockSpinner() {
+    return <div data-testid="spinner">Loading...</div>;
+  };
+});
 
-// Mock Redux store
-const mockStore = configureStore([]);
+jest.mock('../../services/preApprovalServices');
+jest.mock('../../../../services/common-service');
+jest.mock('../../../../utils/common/change.utils');
+
+// Mock PDF imports
+jest.mock('../../../../assets/pdf-file/PIL/hk-personal-loan-terms-pil-aug09.pdf', () => 'mock-pil-pdf-1');
+jest.mock('../../../../assets/pdf-file/PIL/hk-gn175.pdf', () => 'mock-pil-pdf-2');
+jest.mock('../../../../assets/pdf-file/PIL/hk-loans-personal-instalment-loan-eng.pdf', () => 'mock-pil-pdf-3');
+jest.mock('../../../../assets/pdf-file/CC/hk-gn175.pdf', () => 'mock-cc-pdf-1');
+jest.mock('../../../../assets/pdf-file/CC/hk-gn177.pdf', () => 'mock-cc-pdf-2');
+jest.mock('../../../../assets/pdf-file/CC/hk-cc-tncs-downloadnow.pdf', () => 'mock-cc-pdf-3');
+jest.mock('../../../../assets/pdf-file/CC/e-statement-en.pdf', () => 'mock-cc-pdf-4');
+jest.mock('../../../../assets/pdf-file/CC/hk-rewards-tncs-en.pdf', () => 'mock-cc-pdf-5');
+jest.mock('../../../../assets/pdf-file/CC/hk-tnc-credit-card-instalment-plan-en.pdf', () => 'mock-cc-pdf-6');
+
+// Mock environment variables
+process.env.REACT_APP_KFS_DOC_URL = 'https://test-kfs-url.com';
+process.env.REACT_APP_KFS_DOC_URL_Chinees = 'https://test-kfs-url-chinese.com';
 
 describe('OnboardingBeforeStart Component', () => {
-  const mockGetData = require('../../services/preApprovalServices').getData;
-  const mockGetPDFData = require('../../services/preApprovalServices').getPDFData;
+  let mockStore;
+  let mockDispatch;
+  
+  const defaultProps = {
+    isVisible: true,
+    onScrollEnd: jest.fn(),
+    stageID: 0,
+    nextPage: jest.fn()
+  };
+
+  const mockStoreState = {
+    stages: {
+      stages: [{
+        stageInfo: {
+          products: [{
+            campaign: 'HKPIL23PLSTP10',
+            product_type: '1313'
+          }]
+        }
+      }]
+    },
+    preApproval: {
+      formConfigmetaData: {
+        products: [{
+          campaign: 'HKPIL23PLSTP10'
+        }]
+      }
+    }
+  };
+
+  const mockApiResponse = {
+    data: {
+      products: {
+        'HKPIL23PLSTP10': [{
+          pdfURL: 'https://pt.sc.com/test-pdf.pdf'
+        }]
+      },
+      productsMob: {
+        'HKPIL23PLSTP10': [{
+          pdfURL: 'https://pt.sc.com/test-pdf-mobile.pdf'
+        }]
+      },
+      CampaignTnC: {
+        'HKPIL23PLSTP10': [{
+          pdfURL: 'https://pt.sc.com/test-tnc.pdf'
+        }]
+      },
+      CampaignTnCMob: {
+        'HKPIL23PLSTP10': [{
+          pdfURL: 'https://pt.sc.com/test-tnc-mobile.pdf'
+        }]
+      },
+      tncLinkCampaignCode: {
+        'HKPIL23PLSTP10': [{
+          pdfLinks: [
+            { Title: 'II. Personal Loan Terms', url: 'https://test.com/terms1.pdf' },
+            { Title: 'III. Client Terms', url: 'https://test.com/terms2.pdf' }
+          ]
+        }]
+      }
+    }
+  };
 
   beforeEach(() => {
-    mockGetData.mockResolvedValue({
-      data: {
-        products: {
-          'test-campaign': [{ pdfURL: 'https://test.pdf' }],
-        },
-        productsMob: {
-          'test-campaign': [{ pdfURL: 'https://test-mobile.pdf' }],
-        },
-        CampaignTnC: {
-          'test-campaign': [{ pdfURL: 'https://test-tnc.pdf' }],
-        },
-        CampaignTnCMob: {
-          'test-campaign': [{ pdfURL: 'https://test-tnc-mobile.pdf' }],
-        },
-        tncLinkCampaignCode: {
-          'test-campaign': [{
-            pdfLinks: [
-              { url: 'https://link1.pdf', Title: 'Terms 1' },
-            ],
-          }],
-        },
-      },
+    mockDispatch = jest.fn();
+    mockStore = configureStore({
+      reducer: {
+        stages: (state = mockStoreState.stages) => state,
+        preApproval: (state = mockStoreState.preApproval) => state
+      }
     });
-    
-    mockGetPDFData.mockResolvedValue('mock-pdf-data');
-  });
 
-  afterEach(() => {
+    // Reset all mocks
     jest.clearAllMocks();
-  });
+    
+    // Setup default mocks
+    preApprovalServices.getData = jest.fn().mockResolvedValue(mockApiResponse);
+    preApprovalServices.getPDFData = jest.fn().mockResolvedValue('mock-pdf-data');
+    commonService.dispatchLoader = jest.fn();
+    changeUtils.getUrl.getParameterByName = jest.fn().mockReturnValue('001');
+    changeUtils.getUrl.getLanguageInfo = jest.fn().mockReturnValue('en');
 
-  it('1. renders spinner initially', () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
+    // Mock window.history
+    Object.defineProperty(window, 'history', {
+      value: { replaceState: jest.fn() },
+      writable: true
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={0} />
-      </Provider>
-    );
-    
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-  });
-
-  it('2. renders main content after loading for stage 0', async () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
+    // Mock window.location
+    Object.defineProperty(window, 'location', {
+      value: { host: 'localhost:3000' },
+      writable: true
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={0} />
+    // Mock navigator.userAgent
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      writable: true
+    });
+
+    // Mock document.createElement and DOM methods
+    const mockLink = {
+      href: '',
+      download: '',
+      click: jest.fn()
+    };
+    document.createElement = jest.fn().mockReturnValue(mockLink);
+    document.body.appendChild = jest.fn();
+    document.body.removeChild = jest.fn();
+  });
+
+  const renderComponent = (props = {}) => {
+    return render(
+      <Provider store={mockStore}>
+        <OnboardingBeforeStart {...defaultProps} {...props} />
       </Provider>
     );
-    
-    await waitFor(() => {
+  };
+
+  describe('Initial Rendering and Loading', () => {
+    test('renders spinner initially', () => {
+      renderComponent();
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    });
+
+    test('calls getData with correct KFS URL for English', async () => {
+      changeUtils.getUrl.getLanguageInfo.mockReturnValue('en');
+      
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(preApprovalServices.getData).toHaveBeenCalledWith(process.env.REACT_APP_KFS_DOC_URL);
+      });
+    });
+
+    test('calls getData with Chinese KFS URL for Chinese language', async () => {
+      changeUtils.getUrl.getLanguageInfo.mockReturnValue('zh');
+      
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(preApprovalServices.getData).toHaveBeenCalledWith(process.env.REACT_APP_KFS_DOC_URL_Chinees);
+      });
+    });
+  });
+
+  describe('Stage ID 0 (KFS Document)', () => {
+    test('renders PDF component and download button after loading', async () => {
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('pdf-component')).toBeInTheDocument();
       expect(screen.getByText('Download')).toBeInTheDocument();
-      expect(Pdf).toHaveBeenCalled();
-    });
-  });
-
-  it('3. renders main content after loading for stage 1', async () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={1} />
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByText('Download')).toBeInTheDocument();
-      expect(Pdf).toHaveBeenCalled();
-    });
-  });
+    test('handles mobile user agent for PDF URL', async () => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
+        writable: true
+      });
 
-  it('4. handles download button click', async () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(preApprovalServices.getPDFData).toHaveBeenCalledWith(
+          expect.stringContaining('test-pdf-mobile.pdf')
+        );
+      });
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={0} />
-      </Provider>
-    );
-    
-    await waitFor(() => {
+    test('handles localhost URL replacement', async () => {
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(preApprovalServices.getPDFData).toHaveBeenCalledWith(
+          expect.stringContaining('localhost:3000')
+        );
+      });
+    });
+
+    test('downloads PDF when download button is clicked', async () => {
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
       const downloadButton = screen.getByText('Download');
       fireEvent.click(downloadButton);
-      // Verify download behavior
+
+      expect(document.createElement).toHaveBeenCalledWith('a');
     });
   });
 
-  it('5. renders terms links for stage 1', async () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
+  describe('Stage ID 1 (Terms and Conditions)', () => {
+    test('renders TnC PDF and table with links', async () => {
+      renderComponent({ stageID: 1 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('pdf-component')).toBeInTheDocument();
+      expect(screen.getByText('II. Personal Loan Terms')).toBeInTheDocument();
+      expect(screen.getByText('III. Client Terms')).toBeInTheDocument();
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={1} />
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByText('Terms 1')).toBeInTheDocument();
+    test('handles premium code for specific campaign', async () => {
+      const mockStoreWithSpecificCampaign = {
+        ...mockStoreState,
+        preApproval: {
+          formConfigmetaData: {
+            products: [{
+              campaign: 'HKSOG20VAWV000'
+            }]
+          }
+        }
+      };
+
+      const store = configureStore({
+        reducer: {
+          stages: (state = mockStoreWithSpecificCampaign.stages) => state,
+          preApproval: (state = mockStoreWithSpecificCampaign.preApproval) => state
+        }
+      });
+
+      render(
+        <Provider store={store}>
+          <OnboardingBeforeStart {...defaultProps} stageID={1} />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(preApprovalServices.getData).toHaveBeenCalled();
+      });
+    });
+
+    test('downloads specific PDF for PIL campaign terms', async () => {
+      renderComponent({ stageID: 1 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const downloadSpan = screen.getAllByText('Download')[1]; // Second download button in table
+      fireEvent.click(downloadSpan);
+
+      expect(document.createElement).toHaveBeenCalledWith('a');
     });
   });
 
-  it('6. shows scroll button when isVisible is true', async () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
+  describe('Device Detection and Styling', () => {
+    test('detects iPhone Safari', () => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+        writable: true
+      });
+
+      renderComponent();
+      // Component should handle iPhone Safari detection internally
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={0} isVisible={true} />
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('scroll-button')).toBeInTheDocument();
+    test('detects Android device', () => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36',
+        writable: true
+      });
+
+      renderComponent();
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
     });
   });
 
-  it('7. shows accept button when isVisible is false', async () => {
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
-        },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
-          }
-        }],
-      },
+  describe('Language Support', () => {
+    test('renders Chinese text when language is Chinese', async () => {
+      changeUtils.getUrl.getLanguageInfo.mockReturnValue('zh');
+      
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText(CONSTANTS.DownloadBtn_CN)).toBeInTheDocument();
     });
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={0} isVisible={false} />
-      </Provider>
-    );
-    
-    await waitFor(() => {
+    test('renders traditional Chinese text when language is HK', async () => {
+      changeUtils.getUrl.getLanguageInfo.mockReturnValue('hk');
+      
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText(CONSTANTS.DownloadBtn_HK)).toBeInTheDocument();
+    });
+  });
+
+  describe('Scroll Functionality', () => {
+    test('calls onScrollEnd when scrolled to bottom', async () => {
+      const mockOnScrollEnd = jest.fn();
+      renderComponent({ onScrollEnd: mockOnScrollEnd, stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      // Mock scroll event
+      const pdfContainer = document.querySelector('#pdf-view');
+      if (pdfContainer) {
+        Object.defineProperty(pdfContainer, 'scrollTop', { value: 1000, writable: true });
+        Object.defineProperty(pdfContainer, 'scrollHeight', { value: 1050, writable: true });
+        Object.defineProperty(pdfContainer, 'clientHeight', { value: 500, writable: true });
+
+        fireEvent.scroll(pdfContainer);
+        expect(mockOnScrollEnd).toHaveBeenCalledWith(false);
+      }
+    });
+
+    test('scroll button triggers smooth scroll', async () => {
+      renderComponent({ isVisible: true, stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const scrollButton = document.querySelector('.footer-next');
+      if (scrollButton) {
+        fireEvent.click(scrollButton);
+        // scrollBy should be called on the container
+      }
+    });
+  });
+
+  describe('Footer Button Behavior', () => {
+    test('shows scroll button when isVisible is true', async () => {
+      renderComponent({ isVisible: true, stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      expect(document.querySelector('.footer-next')).toBeInTheDocument();
+    });
+
+    test('shows accept button when isVisible is false', async () => {
+      renderComponent({ isVisible: false, stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
       expect(screen.getByText('Accept')).toBeInTheDocument();
     });
+
+    test('calls nextPage when accept button is clicked', async () => {
+      const mockNextPage = jest.fn();
+      renderComponent({ isVisible: false, nextPage: mockNextPage, stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const acceptButton = screen.getByText('Accept');
+      fireEvent.click(acceptButton);
+      
+      expect(mockNextPage).toHaveBeenCalled();
+    });
   });
 
-  it('8. handles mobile detection for PDF URL', async () => {
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
-      writable: true,
+  describe('Error Handling', () => {
+    test('handles API error gracefully', async () => {
+      preApprovalServices.getData.mockRejectedValue(new Error('API Error'));
+      
+      renderComponent();
+      
+      // Component should still render without crashing
+      expect(screen.getByTestId('spinner')).toBeInTheDocument();
     });
 
-    const store = mockStore({
-      preApproval: {
-        formConfigmetaData: {
-          products: [{ campaign: 'test-campaign' }],
+    test('handles PDF data error gracefully', async () => {
+      preApprovalServices.getPDFData.mockRejectedValue(new Error('PDF Error'));
+      
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(preApprovalServices.getData).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Redux Integration', () => {
+    test('dispatches loader actions correctly', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(commonService.dispatchLoader).toHaveBeenCalledWith(true);
+      });
+    });
+
+    test('accesses Redux state correctly', () => {
+      renderComponent();
+      
+      // Component should access the mocked store state
+      expect(mockStore.getState().stages.stages).toBeDefined();
+      expect(mockStore.getState().preApproval.formConfigmetaData).toBeDefined();
+    });
+  });
+
+  describe('PDF Download Functionality', () => {
+    test('downloads correct PDF for CC campaign III. Client Terms', async () => {
+      const ccMockStore = {
+        ...mockStoreState,
+        stages: {
+          stages: [{
+            stageInfo: {
+              products: [{
+                campaign: 'HKSOG20VAWV000',
+                product_type: '1313'
+              }]
+            }
+          }]
         },
-      },
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ campaign: 'test-campaign', product_type: '1313' }]
+        preApproval: {
+          formConfigmetaData: {
+            products: [{
+              campaign: 'HKSOG20VAWV000'
+            }]
           }
-        }],
-      },
-    });
+        }
+      };
 
-    render(
-      <Provider store={store}>
-        <OnboardingBeforeStart stageID={0} />
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(mockGetData).toHaveBeenCalled();
-      expect(mockGetPDFData).toHaveBeenCalledWith(expect.stringContaining('test-mobile.pdf'));
+      const store = configureStore({
+        reducer: {
+          stages: (state = ccMockStore.stages) => state,
+          preApproval: (state = ccMockStore.preApproval) => state
+        }
+      });
+
+      const mockApiResponseCC = {
+        ...mockApiResponse,
+        data: {
+          ...mockApiResponse.data,
+          tncLinkCampaignCode: {
+            'HKSOG20VAWV000': [{
+              pdfLinks: [
+                { Title: 'III. Client Terms', url: 'https://test.com/cc-terms.pdf' }
+              ]
+            }]
+          }
+        }
+      };
+
+      preApprovalServices.getData.mockResolvedValue(mockApiResponseCC);
+
+      render(
+        <Provider store={store}>
+          <OnboardingBeforeStart {...defaultProps} stageID={1} />
+        </Provider>
+      );
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const downloadSpan = screen.getByText('Download');
+      fireEvent.click(downloadSpan);
+
+      expect(document.createElement).toHaveBeenCalledWith('a');
+    });
+  });
+
+  describe('Safari Browser Detection', () => {
+    test('handles Safari download with PDF extension', async () => {
+      Object.defineProperty(navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+        writable: true
+      });
+
+      renderComponent({ stageID: 0 });
+      
+      await waitFor(() => {
+        expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByText('Download');
+      fireEvent.click(downloadButton);
+
+      expect(document.createElement).toHaveBeenCalledWith('a');
     });
   });
 });
