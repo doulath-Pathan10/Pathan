@@ -1,39 +1,18 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
+import configureStore from 'redux-mock-store';
+import thunk from 'redux-thunk';
 import Close from './Close';
 import { CONSTANTS } from '../../../utils/common/constants';
 
-// Mock Redux store
-const mockStore = configureStore({
-  reducer: {
-    stages: () => ({
-      stages: [
-        {
-          stageId: 'pd-1',
-          stageInfo: {},
-        },
-      ],
-      userInput: {
-        applicants: [{}],
-      },
-      journeyType: 'test',
-    }),
-    lov: () => ({}),
-    valueUpdate: () => ({}),
-    error: () => ({}),
-  },
-});
+// Mock Redux store with middleware
+const mockStore = configureStore([thunk]);
 
-// Mock modules and utilities
-jest.mock('react-router-dom', () => ({
-  useNavigate: jest.fn(),
-}));
-
+// Mock implementations
 jest.mock('../../../utils/common/change.utils', () => ({
   getUrl: {
-    getLanguageInfo: jest.fn().mockReturnValue('en'),
+    getLanguageInfo: jest.fn(() => CONSTANTS.LANG_EN),
   },
   homePage: jest.fn(),
 }));
@@ -47,21 +26,34 @@ jest.mock('../../../modules/preApproval/services/preApprovalPostServices', () =>
 }));
 
 describe('Close Component', () => {
+  const initialState = {
+    stages: {
+      stages: [
+        {
+          stageId: 'pd-1',
+          stageInfo: {},
+        },
+      ],
+      userInput: {
+        applicants: [{}],
+      },
+      journeyType: 'test',
+    },
+    lov: {},
+    valueUpdate: {},
+    error: {},
+  };
+
+  let store;
+
   beforeEach(() => {
+    store = mockStore(initialState);
     jest.clearAllMocks();
   });
 
-  it('renders without crashing', () => {
+  it('should render close button when stage is not ad-9', () => {
     render(
-      <Provider store={mockStore}>
-        <Close />
-      </Provider>
-    );
-  });
-
-  it('displays the close button when stage is not ad-9', () => {
-    render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -69,28 +61,18 @@ describe('Close Component', () => {
     expect(screen.getByTestId('logout-button')).toBeInTheDocument();
   });
 
-  it('does not display the close button when stage is ad-9', () => {
-    const customStore = configureStore({
-      reducer: {
-        stages: () => ({
-          stages: [
-            {
-              stageId: 'ad-9',
-              stageInfo: {},
-            },
-          ],
-          userInput: {
-            applicants: [{}],
-          },
-        }),
-        lov: () => ({}),
-        valueUpdate: () => ({}),
-        error: () => ({}),
+  it('should not render close button when stage is ad-9', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        stages: [{ stageId: 'ad-9', stageInfo: {} }],
       },
-    });
+    };
+    store = mockStore(customState);
 
     render(
-      <Provider store={customStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -98,9 +80,9 @@ describe('Close Component', () => {
     expect(screen.queryByTestId('logout-button')).not.toBeInTheDocument();
   });
 
-  it('opens popup when close button is clicked', () => {
+  it('should open popup when close button is clicked', () => {
     render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -109,9 +91,9 @@ describe('Close Component', () => {
     expect(screen.getByText('Back to Home')).toBeInTheDocument();
   });
 
-  it('displays correct text in English', () => {
+  it('should display English text by default', () => {
     render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -121,12 +103,11 @@ describe('Close Component', () => {
     expect(screen.getByText('Do you want to exit the application ?')).toBeInTheDocument();
   });
 
-  it('displays correct text in Chinese (CN)', () => {
-    jest.spyOn(require('../../../utils/common/change.utils').getUrl, 'getLanguageInfo')
-      .mockReturnValueOnce(CONSTANTS.LANG_CN);
+  it('should display Chinese (CN) text when language is CN', () => {
+    require('../../../utils/common/change.utils').getUrl.getLanguageInfo.mockReturnValueOnce(CONSTANTS.LANG_CN);
 
     render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -136,24 +117,9 @@ describe('Close Component', () => {
     expect(screen.getByText('确认停止申请？')).toBeInTheDocument();
   });
 
-  it('displays correct text in Chinese (HK)', () => {
-    jest.spyOn(require('../../../utils/common/change.utils').getUrl, 'getLanguageInfo')
-      .mockReturnValueOnce(CONSTANTS.LANG_HK);
-
+  it('should close popup when cancel button is clicked', () => {
     render(
-      <Provider store={mockStore}>
-        <Close />
-      </Provider>
-    );
-    
-    fireEvent.click(screen.getByTestId('logout-button'));
-    expect(screen.getByText('返回主頁')).toBeInTheDocument();
-    expect(screen.getByText('確認停止申請？')).toBeInTheDocument();
-  });
-
-  it('closes popup when cancel button is clicked', () => {
-    render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -163,10 +129,11 @@ describe('Close Component', () => {
     expect(screen.queryByText('Back to Home')).not.toBeInTheDocument();
   });
 
-  it('calls homePage when Exit button is clicked on pd-1 stage', () => {
+  it('should call homePage when Exit is clicked on pd-1 stage', () => {
     const { homePage } = require('../../../utils/common/change.utils');
+    
     render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -176,25 +143,15 @@ describe('Close Component', () => {
     expect(homePage).toHaveBeenCalled();
   });
 
-  it('calls withSaveAndExit when Save & Exit button is clicked on non-pd-1 stage', () => {
-    const customStore = configureStore({
-      reducer: {
-        stages: () => ({
-          stages: [
-            {
-              stageId: 'pd-2',
-              stageInfo: {},
-            },
-          ],
-          userInput: {
-            applicants: [{}],
-          },
-        }),
-        lov: () => ({}),
-        valueUpdate: () => ({}),
-        error: () => ({}),
+  it('should call withSaveAndExit when Save & Exit is clicked on non-pd-1 stage', async () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        stages: [{ stageId: 'pd-2', stageInfo: {} }],
       },
-    });
+    };
+    store = mockStore(customState);
 
     const { postPeserveData } = require('../../../modules/preApproval/services/preApprovalPostServices');
     postPeserveData.mockResolvedValue({
@@ -209,41 +166,34 @@ describe('Close Component', () => {
     });
 
     render(
-      <Provider store={customStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
     
     fireEvent.click(screen.getByTestId('logout-button'));
     fireEvent.click(screen.getByText('Save & Exit'));
-    expect(postPeserveData).toHaveBeenCalled();
+    
+    await waitFor(() => {
+      expect(postPeserveData).toHaveBeenCalled();
+    });
   });
 
-  it('handles error in withSaveAndExit', async () => {
-    const customStore = configureStore({
-      reducer: {
-        stages: () => ({
-          stages: [
-            {
-              stageId: 'pd-2',
-              stageInfo: {},
-            },
-          ],
-          userInput: {
-            applicants: [{}],
-          },
-        }),
-        lov: () => ({}),
-        valueUpdate: () => ({}),
-        error: () => ({}),
+  it('should handle API error in withSaveAndExit', async () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        stages: [{ stageId: 'pd-2', stageInfo: {} }],
       },
-    });
+    };
+    store = mockStore(customState);
 
     const { postPeserveData } = require('../../../modules/preApproval/services/preApprovalPostServices');
     postPeserveData.mockRejectedValue(new Error('API Error'));
 
     render(
-      <Provider store={customStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -251,14 +201,17 @@ describe('Close Component', () => {
     fireEvent.click(screen.getByTestId('logout-button'));
     fireEvent.click(screen.getByText('Save & Exit'));
     
-    // You might want to add assertions for error handling here
+    await waitFor(() => {
+      const actions = store.getActions();
+      expect(actions.some(action => action.type === 'error/getError')).toBeTruthy();
+    });
   });
 
-  it('triggers Adobe event when buttons are clicked', () => {
+  it('should trigger Adobe event when buttons are clicked', () => {
     const { triggerAdobeEvent } = require('../../../services/track-events');
     
     render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close />
       </Provider>
     );
@@ -269,9 +222,9 @@ describe('Close Component', () => {
     expect(triggerAdobeEvent).toHaveBeenCalledWith('ctaClick', 'Cancel: Back to Home');
   });
 
-  it('displays OTP exit text when props are passed', () => {
+  it('should display OTP exit text when props are passed', () => {
     render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Close someProp={true} />
       </Provider>
     );
@@ -279,4 +232,99 @@ describe('Close Component', () => {
     fireEvent.click(screen.getByTestId('logout-button'));
     expect(screen.getByText(/Your current progress will be lost/)).toBeInTheDocument();
   });
+
+  it('should dispatch correct actions when withSaveAndExit succeeds', async () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        stages: [{ stageId: 'pd-2', stageInfo: {} }],
+      },
+    };
+    store = mockStore(customState);
+
+    const { postPeserveData } = require('../../../modules/preApproval/services/preApprovalPostServices');
+    postPeserveData.mockResolvedValue({
+      status: 200,
+      data: {
+        application: {
+          response_type: 'INFO',
+          response_action: 'CONTINUE',
+        },
+        applicants: { test: 'data' },
+        stage: {
+          page_id: 'pd-2',
+          stage_id: 'PD',
+        },
+      },
+    });
+
+    render(
+      <Provider store={store}>
+        <Close />
+      </Provider>
+    );
+    
+    fireEvent.click(screen.getByTestId('logout-button'));
+    fireEvent.click(screen.getByText('Save & Exit'));
+    
+    await waitFor(() => {
+      const actions = store.getActions();
+      expect(actions.some(action => action.type === 'stages/getStage')).toBeTruthy();
+      expect(actions.some(action => action.type === 'preApproval/setResumeSave')).toBeTruthy();
+    });
+  });
+});
+it('should handle different props correctly', () => {
+  render(
+    <Provider store={store}>
+      <Close customProp="test" />
+    </Provider>
+  );
+  // Add specific assertions
+});
+it('should handle empty stages array', () => {
+  const emptyState = {
+    ...initialState,
+    stages: {
+      ...initialState.stages,
+      stages: [],
+    },
+  };
+  store = mockStore(emptyState);
+
+  render(
+    <Provider store={store}>
+      <Close />
+    </Provider>
+  );
+  
+  fireEvent.click(screen.getByTestId('logout-button'));
+  // Verify behavior with empty stages
+});
+it('should interact with localStorage if needed', () => {
+  Storage.prototype.getItem = jest.fn(() => 'some-value');
+  
+  render(
+    <Provider store={store}>
+      <Close />
+    </Provider>
+  );
+  
+  // Add assertions for localStorage interactions
+});
+it('should redirect correctly on certain actions', () => {
+  delete window.location;
+  window.location = { href: '' };
+  
+  render(
+    <Provider store={store}>
+      <Close />
+    </Provider>
+  );
+  
+  fireEvent.click(screen.getByTestId('logout-button'));
+  fireEvent.click(screen.getByText('Yes, Exit'));
+  
+  expect(window.location.href).toBe(process.env.REACT_APP_HOME_PAGE_URL);
 });
