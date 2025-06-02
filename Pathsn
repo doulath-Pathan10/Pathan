@@ -1,178 +1,122 @@
-import React from 'react';
-import { render, screen } from '@testing-library/react';
-import DynamicComponent from './DynamicComponent';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import OnboardingBeforeStart from '../commonComponents/onboarding-before-start/onboarding-before-start';
-import Fields from '../../dashboard/fields/fields';
-import LoanDisbursement from '../commonComponents/loanDisbursement/loan-disbursement';
-import DocumentUploadSRC from '../commonComponents/documentUpload/documentUploadMain/document-upload-main-scr';
-import Submission from '../submission/submission';
+import "./header-modal.scss"
+import Pdf from "../pdf/pdf";
+import { useState, useEffect } from "react";
+import { KFS_DOC_URL, KFS_DOC_URL_Chinees } from "../../../modules/preApproval/services/constants";
+import { getUrl } from "../../../utils/common/change.utils";
+import { getData, getPDFData } from "../../../modules/preApproval/services/preApprovalServices";
+import { preApprovalAction } from "../../../modules/preApproval/store/preApproval-slice";
+import { dispatchLoader } from "../../../services/common-service";
+import { useSelector, useDispatch } from "react-redux";
+import { StoreModel } from "../../../utils/model/common-model";
 
-// Mock the child components
-jest.mock('../commonComponents/onboarding-before-start/onboarding-before-start', () => () => <div>OnboardingBeforeStart</div>);
-jest.mock('../../dashboard/fields/fields', () => () => <div>Fields</div>);
-jest.mock('../commonComponents/loanDisbursement/loan-disbursement', () => () => <div>LoanDisbursement</div>);
-jest.mock('../commonComponents/documentUpload/documentUploadMain/document-upload-main-scr', () => () => <div>DocumentUploadSRC</div>);
-jest.mock('../submission/submission', () => () => <div>Submission</div>);
 
-const mockStore = configureStore([]);
+const HeaderModel: React.FC<any> = ({
+  fileName,
+  closepdf,
+  title,
+  footer
+}) => {
+  const language = getUrl.getLanguageInfo("lang");
+  const [pdfLinkTerms, setPdfLinkTerms] = useState<any | null>(null);
+  const [pdfName, setPdfName] = useState('');
+  const [kfsDocPDF, setkfsDocPDF] = useState("");
+  const [kfsDocPDFDownload, setkfsDocPDFDownload] = useState("");
+  const [showSpinner, setShowSpinner] = useState(true);
+  const dispatch = useDispatch();
+  const formConfigmetaData = useSelector(
+    (state: StoreModel) => state?.preApproval.formConfigmetaData
+  );
 
-describe('DynamicComponent', () => {
-  const defaultProps = {
-    isVisible: true,
-    onScrollEnd: jest.fn(),
-    stageId: 'test-stage',
-    nextPage: jest.fn(),
-  };
+  useEffect(() => {
+    let KFS;
+    if (language === 'zh') {
+      KFS = process.env.REACT_APP_KFS_DOC_URL_Chinees
+    } else {
+      KFS = process.env.REACT_APP_KFS_DOC_URL
+    }
 
-  it('should render OnboardingBeforeStart for PD-0 stage', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'PD-0' }
-    });
+    getData(KFS)?.then((response: any) => {
+      const campaignID = formConfigmetaData?.products[0].campaign;
+      let pdfURLNew = "";
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isMobileUA = /andriod|iphone|ipad|mobile/i.test(userAgent) || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth < 768;
+      const isMobile = isMobileUA && isSmallScreen;
+      const pdfURL = isMobile ? response.data.productsMob[campaignID] : response.data.products[campaignID];
+      const pdfMap = pdfURL.map((item: any) => item.pdfURL)
+      const getPDFName: any = new URL(pdfMap).pathname.split('/').pop();
+      if (window.location.host === "localhost:3000") {
+        pdfURLNew = pdfURL[0].pdfURL.replace(
+          "https://pt.sc.com/",
+          "http://localhost:3000/"
+        );
+        setPdfName(getPDFName);
+      } else {
+        pdfURLNew = pdfURL[0].pdfURL;
+      }
+      setkfsDocPDF(pdfURLNew);
+      getPDFData(pdfURLNew).then((response: any) => {
+        const pdfurl: any = {};
+        pdfurl.pdf = response;
+        pdfurl.pdfurl = pdfURLNew;
+        setkfsDocPDFDownload(response);
+        dispatch(preApprovalAction.setKfsDocumentPdf(pdfurl.pdf));
+        setShowSpinner(false);
+        dispatch(dispatchLoader(false));
+      });
+      if (title === 'Terms & Conditions , Credit Card Application Declaration') {
+        const allPDFLinks = response?.data?.tncLinkCampaignCode[campaignID][0].pdfLinks;
+        setPdfLinkTerms(allPDFLinks);
+      } else {
+        const PDFLinksIntegratedDeposit = response.data.tncLinkCampaignCode.isCasa[0].pdfLinks;
+      setPdfLinkTerms(PDFLinksIntegratedDeposit)
+      }
+    })
+  }, [])
+  return (
+    <>
 
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
+      <div className="popup-declare">
+        <button type="button" className="close pdfClose" onClick={closepdf}></button>
+        <div className="popup-container1-declare">
+          <div className="popup-info-declare">
+            <div className="popup-info__desc">
+              <div className="popup-title">{title}</div>
+              <div className="popup_width"><Pdf fileName={fileName} /></div>
+              {footer &&
+                <div className="popUp_footer">
+                  <div className="hintIcon">
+                    <p>{footer}</p>
+                    <div className="images">
+                      <div></div>
+                    </div>
+                  </div>
+                  <div className="popup_title_link">
+                    {pdfLinkTerms?.map((item: any, index: any) => {
+                      return (
+                        <a
+                          href={item.url}
+                          download
+                          target="_blank">
+                          {item.Title}
+                        </a>
+                      );
+                    })}
+                  </div>
 
-    expect(screen.getByText('OnboardingBeforeStart')).toBeInTheDocument();
-  });
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
 
-  it('should render OnboardingBeforeStart for PD-1 stage', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'PD-1' }
-    });
+    </>
 
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
+  )
 
-    expect(screen.getByText('OnboardingBeforeStart')).toBeInTheDocument();
-  });
+}
 
-  it('should render Fields for PD-2 stage', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'PD-2' }
-    });
+export default HeaderModel
 
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Fields')).toBeInTheDocument();
-  });
-
-  it('should render LoanDisbursement for LD stage', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'LD' }
-    });
-
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('LoanDisbursement')).toBeInTheDocument();
-  });
-
-  it('should render DocumentUploadSRC for DC stage', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'DC' }
-    });
-
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('DocumentUploadSRC')).toBeInTheDocument();
-  });
-
-  it('should render Submission for FFD stage', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'FFD' }
-    });
-
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Submission')).toBeInTheDocument();
-  });
-
-  it('should render Fields as default when currentStage is unknown', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'UNKNOWN' }
-    });
-
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Fields')).toBeInTheDocument();
-  });
-
-  it('should render Fields as default when currentStage is empty', () => {
-    const store = mockStore({
-      preApproval: { currentStage: '' }
-    });
-
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Fields')).toBeInTheDocument();
-  });
-
-  it('should pass correct props to OnboardingBeforeStart', () => {
-    const store = mockStore({
-      preApproval: { currentStage: 'PD-0' }
-    });
-
-    const props = {
-      isVisible: false,
-      onScrollEnd: jest.fn(),
-      stageId: 'test-id',
-      nextPage: jest.fn(),
-    };
-
-    render(
-      <Provider store={store}>
-        <DynamicComponent {...props} />
-      </Provider>
-    );
-
-    // Since we're mocking OnboardingBeforeStart, we can't directly test prop passing
-    // But we can verify the mock was called with the right props if needed
-    expect(OnboardingBeforeStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        stageID: 'test-id',
-        isVisible: false,
-        onScrollEnd: props.onScrollEnd,
-        nextPage: props.nextPage,
-      }),
-      expect.anything()
-    );
-  });
-
-  it('should handle missing redux store gracefully', () => {
-    // This test would require additional setup to test error boundaries
-    // or default behavior when store is missing
-    // Currently, it would throw an error as we're not wrapping in Provider
-    // This is more of a placeholder to consider this edge case
-  });
-});
+please write test cases using jest with RTL
