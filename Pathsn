@@ -1,295 +1,261 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { createStore } from 'redux';
-import DynamicComponent from './DynamicComponent'; // Adjust path as needed
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import HeaderModal from './HeaderModal';
+import { useSelector, useDispatch } from 'react-redux';
+import { getData, getPDFData } from '../../../modules/preApproval/services/preApprovalServices';
 
-// Mock all the imported components
-jest.mock('../commonComponents/onboarding-before-start/onboarding-before-start', () => {
-  return function OnboardingBeforeStart(props) {
-    return (
-      <div data-testid="onboarding-before-start">
-        OnboardingBeforeStart Component
-        <div data-testid="stage-id">{props.stageID}</div>
-        <div data-testid="is-visible">{props.isVisible ? 'visible' : 'hidden'}</div>
-      </div>
-    );
-  };
-});
-
-jest.mock('../../dashboard/fields/fields', () => {
-  return function Fields(props) {
-    return (
-      <div data-testid="fields">
-        Fields Component
-        <div data-testid="selected-menu">{props.selectedLeftMenu}</div>
-      </div>
-    );
-  };
-});
-
-jest.mock('../commonComponents/loanDisbursement/loan-disbursement', () => {
-  return function LoanDisbursement() {
-    return <div data-testid="loan-disbursement">LoanDisbursement Component</div>;
-  };
-});
-
-jest.mock('../commonComponents/documentUpload/documentUploadMain/document-upload-main-scr', () => {
-  return function DocumentUploadSRC() {
-    return <div data-testid="document-upload">DocumentUploadSRC Component</div>;
-  };
-});
-
-jest.mock('../submission/submission', () => {
-  return {
-    Submission: function Submission() {
-      return <div data-testid="submission">Submission Component</div>;
-    }
-  };
-});
-
-// Mock useSelector hook
+// Mock the react-redux hooks
 jest.mock('react-redux', () => ({
-  ...jest.requireActual('react-redux'),
   useSelector: jest.fn(),
+  useDispatch: jest.fn(),
 }));
 
-describe('DynamicComponent', () => {
-  const mockUseSelector = require('react-redux').useSelector;
-  
-  // Default props for testing
-  const defaultProps = {
-    isVisible: true,
-    onScrollEnd: jest.fn(),
-    stageId: 'test-stage-id',
-    nextPage: jest.fn()
-  };
+// Mock the services
+jest.mock('../../../modules/preApproval/services/preApprovalServices', () => ({
+  getData: jest.fn(),
+  getPDFData: jest.fn(),
+}));
 
-  // Create a mock store
-  const createMockStore = (currentStage) => {
-    return createStore(() => ({
-      preApproval: {
-        currentStage
-      }
-    }));
-  };
+// Mock the getLanguageInfo utility
+jest.mock('../../../utils/common/change.utils', () => ({
+  getUrl: {
+    getLanguageInfo: jest.fn().mockReturnValue('en'),
+  },
+}));
 
-  const renderWithProvider = (props = {}, currentStage = 'PD-0') => {
-    const store = createMockStore(currentStage);
-    mockUseSelector.mockReturnValue(currentStage);
-    
-    return render(
-      <Provider store={store}>
-        <DynamicComponent {...defaultProps} {...props} />
-      </Provider>
-    );
+// Mock the PDF component
+jest.mock('../pdf/pdf', () => () => <div>Mock PDF Component</div>);
+
+describe('HeaderModal Component', () => {
+  const mockDispatch = jest.fn();
+  const mockClosepdf = jest.fn();
+  const mockFormConfigmetaData = {
+    products: [
+      {
+        campaign: 'test-campaign',
+      },
+    ],
   };
 
   beforeEach(() => {
+    (useDispatch as jest.Mock).mockReturnValue(mockDispatch);
+    (useSelector as jest.Mock).mockImplementation((selector) => {
+      if (selector.toString().includes('formConfigmetaData')) {
+        return mockFormConfigmetaData;
+      }
+      return null;
+    });
+
+    // Mock successful responses
+    (getData as jest.Mock).mockResolvedValue({
+      data: {
+        products: {
+          'test-campaign': [
+            { pdfURL: 'https://example.com/test.pdf' },
+          ],
+        },
+        productsMob: {
+          'test-campaign': [
+            { pdfURL: 'https://example.com/mobile/test.pdf' },
+          ],
+        },
+        tncLinkCampaignCode: {
+          'test-campaign': [
+            {
+              pdfLinks: [
+                { url: 'https://example.com/terms1.pdf', Title: 'Terms 1' },
+                { url: 'https://example.com/terms2.pdf', Title: 'Terms 2' },
+              ],
+            },
+          ],
+          isCasa: [
+            {
+              pdfLinks: [
+                { url: 'https://example.com/deposit1.pdf', Title: 'Deposit 1' },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    (getPDFData as jest.Mock).mockResolvedValue('mock-pdf-data');
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('Component Rendering Based on Current Stage', () => {
-    test('renders OnboardingBeforeStart component when currentStage is PD-0', () => {
-      renderWithProvider({}, 'PD-0');
-      
-      expect(screen.getByTestId('onboarding-before-start')).toBeInTheDocument();
-      expect(screen.getByText('OnboardingBeforeStart Component')).toBeInTheDocument();
-    });
+  it('renders without crashing', () => {
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
+    expect(screen.getByText('Test Title')).toBeInTheDocument();
+  });
 
-    test('renders OnboardingBeforeStart component when currentStage is PD-1', () => {
-      renderWithProvider({}, 'PD-1');
-      
-      expect(screen.getByTestId('onboarding-before-start')).toBeInTheDocument();
-      expect(screen.getByText('OnboardingBeforeStart Component')).toBeInTheDocument();
-    });
+  it('displays the PDF component', () => {
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
+    expect(screen.getByText('Mock PDF Component')).toBeInTheDocument();
+  });
 
-    test('renders Fields component when currentStage is PD-2', () => {
-      renderWithProvider({}, 'PD-2');
-      
-      expect(screen.getByTestId('fields')).toBeInTheDocument();
-      expect(screen.getByText('Fields Component')).toBeInTheDocument();
-    });
+  it('calls closepdf when close button is clicked', () => {
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    expect(mockClosepdf).toHaveBeenCalled();
+  });
 
-    test('renders LoanDisbursement component when currentStage is LD', () => {
-      renderWithProvider({}, 'LD');
-      
-      expect(screen.getByTestId('loan-disbursement')).toBeInTheDocument();
-      expect(screen.getByText('LoanDisbursement Component')).toBeInTheDocument();
-    });
+  it('fetches PDF data on mount', async () => {
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
 
-    test('renders DocumentUploadSRC component when currentStage is DC', () => {
-      renderWithProvider({}, 'DC');
-      
-      expect(screen.getByTestId('document-upload')).toBeInTheDocument();
-      expect(screen.getByText('DocumentUploadSRC Component')).toBeInTheDocument();
-    });
-
-    test('renders Submission component when currentStage is FFD', () => {
-      renderWithProvider({}, 'FFD');
-      
-      expect(screen.getByTestId('submission')).toBeInTheDocument();
-      expect(screen.getByText('Submission Component')).toBeInTheDocument();
-    });
-
-    test('renders Fields component as default when currentStage is unknown', () => {
-      renderWithProvider({}, 'UNKNOWN_STAGE');
-      
-      expect(screen.getByTestId('fields')).toBeInTheDocument();
-      expect(screen.getByText('Fields Component')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getData).toHaveBeenCalled();
+      expect(getPDFData).toHaveBeenCalled();
     });
   });
 
-  describe('Props Passing', () => {
-    test('passes correct props to OnboardingBeforeStart for PD-0 stage', () => {
-      const customProps = {
-        isVisible: false,
-        stageId: 'custom-stage-id',
-        onScrollEnd: jest.fn(),
-        nextPage: jest.fn()
-      };
-      
-      renderWithProvider(customProps, 'PD-0');
-      
-      expect(screen.getByTestId('stage-id')).toHaveTextContent('custom-stage-id');
-      expect(screen.getByTestId('is-visible')).toHaveTextContent('hidden');
-    });
+  it('displays terms and conditions links when footer is true and title matches', async () => {
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Terms & Conditions , Credit Card Application Declaration"
+        footer={true}
+      />
+    );
 
-    test('passes correct props to OnboardingBeforeStart for PD-1 stage', () => {
-      const customProps = {
-        isVisible: true,
-        stageId: 'another-stage-id',
-        onScrollEnd: jest.fn(),
-        nextPage: jest.fn()
-      };
-      
-      renderWithProvider(customProps, 'PD-1');
-      
-      expect(screen.getByTestId('stage-id')).toHaveTextContent('another-stage-id');
-      expect(screen.getByTestId('is-visible')).toHaveTextContent('visible');
-    });
-
-    test('passes selectedLeftMenu prop to Fields component', () => {
-      renderWithProvider({}, 'PD-2');
-      
-      // selectedLeftMenu should be empty string by default
-      expect(screen.getByTestId('selected-menu')).toHaveTextContent('');
+    await waitFor(() => {
+      expect(screen.getByText('Terms 1')).toBeInTheDocument();
+      expect(screen.getByText('Terms 2')).toBeInTheDocument();
     });
   });
 
-  describe('Redux State Integration', () => {
-    test('correctly uses currentStage from Redux store', () => {
-      const stages = ['PD-0', 'PD-1', 'PD-2', 'LD', 'DC', 'FFD'];
-      const expectedComponents = [
-        'onboarding-before-start',
-        'onboarding-before-start', 
-        'fields',
-        'loan-disbursement',
-        'document-upload',
-        'submission'
-      ];
+  it('displays deposit links when footer is true and title does not match terms', async () => {
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Deposit Terms"
+        footer={true}
+      />
+    );
 
-      stages.forEach((stage, index) => {
-        const { unmount } = renderWithProvider({}, stage);
-        expect(screen.getByTestId(expectedComponents[index])).toBeInTheDocument();
-        unmount();
-      });
-    });
-
-    test('handles undefined currentStage gracefully', () => {
-      mockUseSelector.mockReturnValue(undefined);
-      const store = createMockStore(undefined);
-      
-      render(
-        <Provider store={store}>
-          <DynamicComponent {...defaultProps} />
-        </Provider>
-      );
-      
-      // Should render Fields component as default
-      expect(screen.getByTestId('fields')).toBeInTheDocument();
-    });
-
-    test('handles null currentStage gracefully', () => {
-      mockUseSelector.mockReturnValue(null);
-      const store = createMockStore(null);
-      
-      render(
-        <Provider store={store}>
-          <DynamicComponent {...defaultProps} />
-        </Provider>
-      );
-      
-      // Should render Fields component as default
-      expect(screen.getByTestId('fields')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Deposit 1')).toBeInTheDocument();
     });
   });
 
-  describe('Component Mounting and Unmounting', () => {
-    test('component mounts without errors', () => {
-      expect(() => {
-        renderWithProvider({}, 'PD-0');
-      }).not.toThrow();
+  it('handles mobile device detection', async () => {
+    // Mock mobile user agent
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15',
+      writable: true,
+    });
+    Object.defineProperty(window, 'innerWidth', {
+      value: 500,
+      writable: true,
     });
 
-    test('component unmounts without errors', () => {
-      const { unmount } = renderWithProvider({}, 'PD-0');
-      
-      expect(() => {
-        unmount();
-      }).not.toThrow();
-    });
-  });
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
 
-  describe('State Management', () => {
-    test('selectedLeftMenu state is initialized as empty string', () => {
-      renderWithProvider({}, 'PD-2');
-      
-      expect(screen.getByTestId('selected-menu')).toHaveTextContent('');
-    });
-  });
-
-  describe('Edge Cases', () => {
-    test('handles empty string currentStage', () => {
-      renderWithProvider({}, '');
-      
-      // Should render Fields component as default
-      expect(screen.getByTestId('fields')).toBeInTheDocument();
-    });
-
-    test('handles whitespace-only currentStage', () => {
-      renderWithProvider({}, '   ');
-      
-      // Should render Fields component as default
-      expect(screen.getByTestId('fields')).toBeInTheDocument();
-    });
-
-    test('renders only one component at a time', () => {
-      renderWithProvider({}, 'PD-0');
-      
-      expect(screen.getByTestId('onboarding-before-start')).toBeInTheDocument();
-      expect(screen.queryByTestId('fields')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('loan-disbursement')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('document-upload')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('submission')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(getData).toHaveBeenCalled();
     });
   });
 
-  describe('Function Props', () => {
-    test('onScrollEnd function is passed correctly', () => {
-      const mockOnScrollEnd = jest.fn();
-      renderWithProvider({ onScrollEnd: mockOnScrollEnd }, 'PD-0');
-      
-      expect(screen.getByTestId('onboarding-before-start')).toBeInTheDocument();
-      // The mock component doesn't trigger the function, but we can verify it's passed
+  it('handles localhost URL replacement', async () => {
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = {
+      ...originalLocation,
+      host: 'localhost:3000',
+    };
+
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
+
+    await waitFor(() => {
+      expect(getData).toHaveBeenCalled();
     });
 
-    test('nextPage function is passed correctly', () => {
-      const mockNextPage = jest.fn();
-      renderWithProvider({ nextPage: mockNextPage }, 'PD-1');
-      
-      expect(screen.getByTestId('onboarding-before-start')).toBeInTheDocument();
-      // The mock component doesn't trigger the function, but we can verify it's passed
+    window.location = originalLocation;
+  });
+
+  it('handles Chinese language', async () => {
+    // Mock Chinese language
+    (require('../../../utils/common/change.utils').getUrl.getLanguageInfo as jest.Mock).mockReturnValue('zh');
+
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
+
+    await waitFor(() => {
+      expect(getData).toHaveBeenCalled();
+    });
+  });
+
+  it('displays footer content when provided', () => {
+    const testFooter = 'This is a test footer message';
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+        footer={testFooter}
+      />
+    );
+    expect(screen.getByText(testFooter)).toBeInTheDocument();
+  });
+
+  it('handles errors in data fetching', async () => {
+    (getData as jest.Mock).mockRejectedValue(new Error('Failed to fetch'));
+    
+    render(
+      <HeaderModal
+        fileName="test.pdf"
+        closepdf={mockClosepdf}
+        title="Test Title"
+      />
+    );
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(dispatchLoader(false));
     });
   });
 });
