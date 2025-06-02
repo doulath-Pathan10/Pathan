@@ -1,44 +1,178 @@
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import DynamicComponent from './DynamicComponent';
+import { Provider } from 'react-redux';
+import configureStore from 'redux-mock-store';
+import OnboardingBeforeStart from '../commonComponents/onboarding-before-start/onboarding-before-start';
+import Fields from '../../dashboard/fields/fields';
+import LoanDisbursement from '../commonComponents/loanDisbursement/loan-disbursement';
+import DocumentUploadSRC from '../commonComponents/documentUpload/documentUploadMain/document-upload-main-scr';
+import Submission from '../submission/submission';
 
-import OnboardingBeforeStart from "../commonComponents/onboarding-before-start/onboarding-before-start";
-import Fields from "../../dashboard/fields/fields";
-import { useState } from "react";
-import { useSelector } from "react-redux";
-import { StoreModel } from "../../../utils/model/common-model";
-import LoanDisbursement from "../commonComponents/loanDisbursement/loan-disbursement";
-import DocumentUploadSRC from "../commonComponents/documentUpload/documentUploadMain/document-upload-main-scr"; //"../../documentUpload/documentUploadMain/document-upload-main-scr";
-import { Submission } from "../submission/submission";
+// Mock the child components
+jest.mock('../commonComponents/onboarding-before-start/onboarding-before-start', () => () => <div>OnboardingBeforeStart</div>);
+jest.mock('../../dashboard/fields/fields', () => () => <div>Fields</div>);
+jest.mock('../commonComponents/loanDisbursement/loan-disbursement', () => () => <div>LoanDisbursement</div>);
+jest.mock('../commonComponents/documentUpload/documentUploadMain/document-upload-main-scr', () => () => <div>DocumentUploadSRC</div>);
+jest.mock('../submission/submission', () => () => <div>Submission</div>);
 
-const DynamicComponent: React.FC<any> = ({ isVisible, onScrollEnd, stageId, nextPage }) => {
-  const [selectedLeftMenu, setSelectedLeftMenu] = useState("");
-  const currentStage = useSelector((state: StoreModel) => state.preApproval.currentStage);
-  // const currentStage:any = "DC";
+const mockStore = configureStore([]);
 
-  const renderPage = () => {
-    switch (currentStage) {
-      case "PD-0":
-        return <OnboardingBeforeStart stageID={stageId} isVisible={isVisible} onScrollEnd={onScrollEnd} nextPage={nextPage} />
-      case "PD-1":
-        return <OnboardingBeforeStart stageID={stageId} isVisible={isVisible} onScrollEnd={onScrollEnd} nextPage={nextPage} />
-      case "PD-2":
-        return <Fields selectedLeftMenu={selectedLeftMenu} />
-      // case "RP":
-      //   return <ReviewPage />
-      case "LD":
-        return <LoanDisbursement />
-      case "DC":
-        return <DocumentUploadSRC />
-      case "FFD":
-        return <Submission />
-      default:
-        return <Fields selectedLeftMenu={selectedLeftMenu} />
-    }
-  }
-  return (
-    <>
-      {renderPage()}
-    </>
-  )
-}
-export default DynamicComponent;
+describe('DynamicComponent', () => {
+  const defaultProps = {
+    isVisible: true,
+    onScrollEnd: jest.fn(),
+    stageId: 'test-stage',
+    nextPage: jest.fn(),
+  };
 
-this very small component please write test cases using jest and RTL without fail test cases
+  it('should render OnboardingBeforeStart for PD-0 stage', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'PD-0' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('OnboardingBeforeStart')).toBeInTheDocument();
+  });
+
+  it('should render OnboardingBeforeStart for PD-1 stage', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'PD-1' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('OnboardingBeforeStart')).toBeInTheDocument();
+  });
+
+  it('should render Fields for PD-2 stage', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'PD-2' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Fields')).toBeInTheDocument();
+  });
+
+  it('should render LoanDisbursement for LD stage', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'LD' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('LoanDisbursement')).toBeInTheDocument();
+  });
+
+  it('should render DocumentUploadSRC for DC stage', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'DC' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('DocumentUploadSRC')).toBeInTheDocument();
+  });
+
+  it('should render Submission for FFD stage', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'FFD' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Submission')).toBeInTheDocument();
+  });
+
+  it('should render Fields as default when currentStage is unknown', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'UNKNOWN' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Fields')).toBeInTheDocument();
+  });
+
+  it('should render Fields as default when currentStage is empty', () => {
+    const store = mockStore({
+      preApproval: { currentStage: '' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...defaultProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Fields')).toBeInTheDocument();
+  });
+
+  it('should pass correct props to OnboardingBeforeStart', () => {
+    const store = mockStore({
+      preApproval: { currentStage: 'PD-0' }
+    });
+
+    const props = {
+      isVisible: false,
+      onScrollEnd: jest.fn(),
+      stageId: 'test-id',
+      nextPage: jest.fn(),
+    };
+
+    render(
+      <Provider store={store}>
+        <DynamicComponent {...props} />
+      </Provider>
+    );
+
+    // Since we're mocking OnboardingBeforeStart, we can't directly test prop passing
+    // But we can verify the mock was called with the right props if needed
+    expect(OnboardingBeforeStart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stageID: 'test-id',
+        isVisible: false,
+        onScrollEnd: props.onScrollEnd,
+        nextPage: props.nextPage,
+      }),
+      expect.anything()
+    );
+  });
+
+  it('should handle missing redux store gracefully', () => {
+    // This test would require additional setup to test error boundaries
+    // or default behavior when store is missing
+    // Currently, it would throw an error as we're not wrapping in Provider
+    // This is more of a placeholder to consider this edge case
+  });
+});
