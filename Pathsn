@@ -1,372 +1,251 @@
-// api.services.test.tsx
-import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import axios from 'axios';
-import { store } from '../../../utils/store/store';
-import * as apiServices from './api.services';
+import React, { useEffect, useState } from 'react';
+import './spinner.scss';
+import { getUrl } from '../../../utils/common/change.utils';
 import { CONSTANTS } from '../../../utils/common/constants';
-import PreApprovalUtil from './preApprovalUtils';
+import { useDispatch, useSelector } from 'react-redux';
+import { StoreModel } from '../../../utils/model/common-model';
+import { Player } from '@lottiefiles/react-lottie-player';
+import lottieSrc from "./../../../assets/_json/lottie/motorcycle_insurance.json";
+import { postFulFilmentData } from '../../../modules/preApproval/services/preApprovalPostServices';
+import { stagesAction } from '../../../utils/store/stages-slice';
+import { preApprovalAction } from '../../../modules/preApproval/store/preApproval-slice';
+import { HardStop } from '../../../modules/preApproval/services/preApprovalUtilsService';
+import { errorAction } from '../../../utils/store/error-slice';
+import { useNavigate } from 'react-router-dom';
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-// Mock store and other dependencies
-jest.mock('../../../utils/store/store', () => ({
-  store: {
-    getState: jest.fn(),
-    dispatch: jest.fn(),
-  },
-}));
+export const Spinner = (props: any) => {
+  const [currentYear, setCurrentYear] = useState(0);
+  const [requestUpdate, setRequestUpdate] = useState(true);
+  const [error, setError] = useState(false);
+  const [ffd2On, setFFD2On] = useState(false);
+  const language = getUrl.getLanguageInfo("lang");
+  const channelRefSelector = useSelector((state: StoreModel) => state.stages.stages[0].stageInfo?.application?.channel_reference);
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages[0].stageInfo);
+  const stageId = useSelector((state: StoreModel) => state.stages.stages[0].stageId);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    let requestTimer = setTimeout(() => {
+      setRequestUpdate(false);
+    }, 10000);
 
-jest.mock('../../../utils/common/change.utils', () => ({
-  getUrl: {
-    getParameterByName: jest.fn(),
-    getChannelRefNo: jest.fn(),
-  },
-}));
+    const startYear = 1859;
+    const todate = new Date();
+    setCurrentYear(todate.getFullYear() - startYear);
 
-jest.mock('../../../services/encryption', () => jest.fn());
-
-jest.mock('./preApprovalUtils', () => ({
-  generateUUID: jest.fn().mockReturnValue('mock-uuid'),
-  getAckMetaData: jest.fn().mockReturnValue('mock-ack-metadata'),
-}));
-
-describe('API Services', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (store.getState as jest.Mock).mockImplementation(() => ({
-      stages: {
-        stages: [{
-          stageId: 'PD-1',
-          stageInfo: {
-            products: [{ product_type: '1234', product_category: 'CC' }],
-            applicants: [{
-              HKID_a_1: 'A1234567',
-              date_of_birth: '1990-01-01',
-              last_name_a_1: 'Doe',
-              first_name_a_1: 'John'
-            }],
-            application: {
-              channel_reference: 'mock-channel-ref',
-              channel_ref_number: 'mock-channel-ref',
-              cos_ref_number: 'mock-cos-ref',
-            },
-            applicant_documents: [{ journey_type: 'NTC' }],
-            fieldmetadata: {},
-          },
-          userInput: {
-            applicants: [{
-              mobile_number: '91234567',
-              'id type': 'HKID'
-            }]
-          },
-        }],
-      },
-      urlParam: {
-        applicationDetails: {
-          channelRefNo: 'mock-channel-ref'
-        },
-        resume: false,
-      },
-      preApproval: {
-        resumeAllowed: 'N',
-      },
-    }));
-  });
-
-  // Test cases will go here
-});
-describe('getData', () => {
-  it('should make a GET request and return response', async () => {
-    const mockResponse = { data: 'test-data', status: 200 };
-    mockedAxios.get.mockResolvedValue(mockResponse);
-
-    const result = await apiServices.getData('test-url');
-    expect(mockedAxios.get).toHaveBeenCalledWith('test-url');
-    expect(result).toEqual(mockResponse);
-  });
-
-  it('should handle errors and return resolved promise with error', async () => {
-    const mockError = new Error('Test error');
-    mockedAxios.get.mockRejectedValue(mockError);
-
-    const result = await apiServices.getData('test-url');
-    expect(mockedAxios.get).toHaveBeenCalledWith('test-url');
-    expect(result).toEqual(mockError);
-    expect(store.dispatch).toHaveBeenCalled();
-  });
-});
-describe('getPDFData', () => {
-  it('should fetch PDF data and return blob URL', async () => {
-    const mockPdfData = new ArrayBuffer(8);
-    const mockResponse = { 
-      status: 200, 
-      data: mockPdfData 
+    return () => {
+      clearTimeout(requestTimer);
     };
-    mockedAxios.get.mockResolvedValue(mockResponse);
+  }, []);
 
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Chrome',
-      writable: true
-    });
-
-    const result = await apiServices.getPDFData('test-url');
-    expect(mockedAxios.get).toHaveBeenCalledWith('test-url', { responseType: 'arraybuffer' });
-    expect(result).toContain('blob:');
-  });
-
-  it('should handle non-Chrome browsers', async () => {
-    const mockPdfData = new ArrayBuffer(8);
-    const mockResponse = { 
-      status: 200, 
-      data: mockPdfData 
-    };
-    mockedAxios.get.mockResolvedValue(mockResponse);
-
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Firefox',
-      writable: true
-    });
-
-    const result = await apiServices.getPDFData('test-url');
-    expect(result).toContain('blob:');
-  });
-
-  it('should handle Safari browsers', async () => {
-    const mockPdfData = new ArrayBuffer(8);
-    const mockResponse = { 
-      status: 200, 
-      data: mockPdfData 
-    };
-    mockedAxios.get.mockResolvedValue(mockResponse);
-
-    Object.defineProperty(navigator, 'userAgent', {
-      value: 'Safari',
-      writable: true
-    });
-
-    const result = await apiServices.getPDFData('test-url');
-    expect(result).toContain('blob:');
-  });
-
-  it('should handle errors', async () => {
-    const mockError = new Error('Test error');
-    mockedAxios.get.mockRejectedValue(mockError);
-
-    const result = await apiServices.getPDFData('test-url');
-    expect(result).toEqual(mockError);
-    expect(store.dispatch).toHaveBeenCalled();
-  });
-});
-describe('getDataFormConfig', () => {
-  it('should post form config data and dispatch actions', async () => {
-    const mockResponse = {
-      status: 200,
-      data: {
-        products: [{ name: 'Test Product' }],
-        fieldmetadata: {},
-        applicants: {}
-      }
-    };
-    mockedAxios.post.mockResolvedValue(mockResponse);
-
-    const formPayload = {
-      stage: { stage_id: '', page_id: CONSTANTS.STAGE_NAMES.PD_1 },
-      applicant: {}
-    };
-
-    const dispatch = jest.fn();
-    await apiServices.getDataFormConfig(formPayload)(dispatch);
-
-    expect(mockedAxios.post).toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledTimes(5); // Adjust based on actual dispatch calls
-    expect(document.title).toContain('Test Product');
-  });
-
-  it('should handle resume flow', async () => {
-    (store.getState as jest.Mock).mockImplementation(() => ({
-      ...store.getState(),
-      preApproval: { resumeAllowed: 'Y' },
-    }));
-
-    const mockResponse = {
-      status: 200,
-      data: {
-        products: [{ name: 'Test Product' }],
-        fieldmetadata: {},
-        applicants: {}
-      }
-    };
-    mockedAxios.post.mockResolvedValue(mockResponse);
-
-    const formPayload = {
-      stage: { stage_id: '', page_id: '' },
-      applicant: {}
-    };
-
-    const dispatch = jest.fn();
-    await apiServices.getDataFormConfig(formPayload)(dispatch);
-
-    expect(mockedAxios.post).toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledTimes(6); // Adjust based on actual dispatch calls
-  });
-
-  it('should handle errors', async () => {
-    const mockError = new Error('Test error');
-    mockedAxios.post.mockRejectedValue(mockError);
-
-    const dispatch = jest.fn();
-    await apiServices.getDataFormConfig({})(dispatch);
-
-    expect(dispatch).toHaveBeenCalled();
-    expect(mockedAxios.post).toHaveBeenCalled();
-  });
-});
-describe('getProductMetaDataInfo', () => {
-  beforeEach(() => {
-    (require('../../../utils/common/change.utils').getUrl.getParameterByName as jest.Mock)
-      .mockImplementation((param) => {
-        if (param === 'products') return '1258';
-        return null;
-      });
-  });
-
-  it('should fetch product metadata and dispatch actions', async () => {
-    const mockResponse = {
-      status: 200,
-      data: {
-        products: {
-          '1258': [{
-            product_type: '1258',
-            product_category: 'PL',
-            name: 'personal-instalment-loan'
-          }]
-        }
-      }
-    };
-    mockedAxios.request.mockResolvedValue(mockResponse);
-
-    const dispatch = jest.fn();
-    const result = await apiServices.getProductMetaDataInfo({ search: '?products=1258' })(dispatch);
-
-    expect(mockedAxios.request).toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalled();
-    expect(result[0].name).toBe('personal-instalment-loan');
-  });
-
-  it('should handle different product types', async () => {
-    (require('../../../utils/common/change.utils').getUrl.getParameterByName as jest.Mock)
-      .mockImplementation((param) => {
-        if (param === 'products') return '1312';
-        return null;
-      });
-
-    const mockResponse = {
-      status: 200,
-      data: {
-        products: {
-          '1312': [{
-            product_type: '1312',
-            product_category: 'PL',
-            name: 'debt-consolidation'
-          }]
-        }
-      }
-    };
-    mockedAxios.request.mockResolvedValue(mockResponse);
-
-    const dispatch = jest.fn();
-    const result = await apiServices.getProductMetaDataInfo({ search: '?products=1312' })(dispatch);
-
-    expect(result[0].name).toBe('debt-consolidation');
-  });
-
-  it('should handle errors', async () => {
-    const mockError = new Error('Test error');
-    mockedAxios.request.mockRejectedValue(mockError);
-
-    const dispatch = jest.fn();
-    await apiServices.getProductMetaDataInfo({})(dispatch);
-
-    expect(dispatch).toHaveBeenCalled();
-  });
-});
-describe('getEnquiryData', () => {
-  it('should post enquiry data', async () => {
-    const mockResponse = { status: 200, data: {} };
-    mockedAxios.post.mockResolvedValue(mockResponse);
-
-    const productData = { product_type: '1258', product_category: 'PL' };
-    const applicantsSelector = { HKID: 'A1234567', date_of_birth: '1990-01-01' };
-    const channelRef = 'mock-channel-ref';
-
-    const result = await apiServices.getEnquiryData(productData, applicantsSelector, channelRef);
-
-    expect(mockedAxios.post).toHaveBeenCalled();
-    expect(result).toEqual(mockResponse);
-  });
-
-  it('should handle errors', async () => {
-    const mockError = new Error('Test error');
-    mockedAxios.post.mockRejectedValue(mockError);
-
-    const result = await apiServices.getEnquiryData({}, {}, 'mock-channel-ref');
-    expect(result).toEqual(mockError);
-    expect(store.dispatch).toHaveBeenCalled();
-  });
-});
-describe('getDedupeData', () => {
-  it('should post dedupe data', async () => {
-    const mockResponse = { status: 200, data: {} };
-    mockedAxios.post.mockResolvedValue(mockResponse);
-
-    const result = await apiServices.getDedupeData('mock-channel-ref');
-    
-    expect(mockedAxios.post).toHaveBeenCalled();
-    expect(result).toEqual(mockResponse);
-  });
-
-  it('should handle product type 1313', async () => {
-    (store.getState as jest.Mock).mockImplementation(() => ({
-      stages: {
-        stages: [{
-          stageInfo: {
-            products: [{ product_type: '1313' }],
-            applicants: [{
-              HKID_a_1: 'A1234567',
-              date_of_birth: '1990-01-01',
-              last_name_a_1: 'Doe',
-              first_name_a_1: 'John'
-            }],
-            application: {
-              channel_reference: 'mock-channel-ref'
-            },
-            applicant_documents: [{ journey_type: 'NTC' }],
-            fieldmetadata: {},
-            lov_desc: {}
+  const getFFD2Status=()=>{
+    setFFD2On(true)
+    postFulFilmentData(stageSelector).then(
+      async (res: any) => {
+        /*istanbul ignore else*/
+        if (res.status >= 200 && res.status < 300) {
+          let responseType =
+            res.data.application.response_type.toUpperCase();
+          let responseAction =
+            res.data.application.response_action.toUpperCase();
+            /*istanbul ignore else*/
+          if (
+            responseAction === "SUCCESS" ||
+            responseType === "INFO" ||
+            (responseType === "SOFT" &&
+              responseAction === "CONTINUE")
+          ) {
+            let stageData = JSON.parse(
+              JSON.stringify(stageSelector)
+            );
+            stageData.applicants = [res.data.applicants];
+            stageData.application = res.data.application;
+            for (let [key, value] of Object.entries(res.data)) {
+              if(key === "applicants") {
+                stageData[key] = [value];
+              }
+              else {
+                stageData[key] = value;
+              }
+            }
+            dispatch(
+              stagesAction.getStage({
+                id: CONSTANTS.STAGE_NAMES.FFD_2,
+                formConfig: stageData,
+              })
+            );
+            dispatch(preApprovalAction.setCurrentStage("FFD"));
+            navigate('/hk/preference');
+          } else {
+            HardStop(res);
           }
-        }],
-        userInput: {
-          applicants: [{
-            mobile_number: '91234567',
-            'id type': 'HKID'
-          }]
-        },
-      },
-      urlParam: {
-        applicationDetails: {
-          channelRefNo: 'mock-channel-ref'
-        },
-        resume: false,
-      },
-      preApproval: {
-        resumeAllowed: 'N',
-      },
-    }));
+        }
+        else {
+          setError(true);
+          dispatch(
+            errorAction.getError({
+              statusCode: "error",
+              statusText: "no response",
+            })
+          );
+        }
+      }
+    );
+  }
 
-    const mockResponse = { status: 200, data: {} };
-    mockedAxios.post.mockResolvedValue(mockResponse);
+  return (
+    <>
+      {!props.loaderType && 
+        <div className={`lottie ${!channelRefSelector ? 'opacity': ''}`}>
+          <div className="lottie__container">
+            <Player src={lottieSrc} className="player" loop autoplay />
+            <div className="lottie__body">
+              <div className="lottie__text">
+                {language === CONSTANTS.LANG_EN ? CONSTANTS.processing1 : language === CONSTANTS.LANG_CN?CONSTANTS.processing1_CN : CONSTANTS.processing1_HK}<br/>
+                {stageId === CONSTANTS.STAGE_NAMES.ACD_1 || stageId === CONSTANTS.STAGE_NAMES.ACD_2 || stageId === CONSTANTS.STAGE_NAMES.ACD_3 || stageId === CONSTANTS.STAGE_NAMES.ACD_4 || stageId === CONSTANTS.STAGE_NAMES.DOC_3 ||stageId === CONSTANTS.STAGE_NAMES.LD_1 ? 
+                  <>
+                    {language === CONSTANTS.LANG_EN ? CONSTANTS.processing3 : language === CONSTANTS.LANG_CN?CONSTANTS.processing3_CN : CONSTANTS.processing3_HK} 
+                  </>
+                  :
+                  <>
+                    {language === CONSTANTS.LANG_EN ? CONSTANTS.processing2 : language === CONSTANTS.LANG_CN?CONSTANTS.processing2_CN : CONSTANTS.processing2_HK} 
+                  </>
+                }
+              </div>
+            </div>
+          </div>
+        </div>  
+      }
+    {/* {!props.loaderType && 
+      <div className="spinner">
+        <div className="spinner__container">
+          <div className="spinner__icon"></div>
+          {props.type === 'saving' &&
+            <div className="spinner__text">{language === CONSTANTS.LANG_EN ? "Saving, Please Wait" : language === CONSTANTS.LANG_CN ? "正在保存，請稍候" : "正在保存，請稍候"}</div>
+          }
 
-   
+        </div>
+      </div>
+    }    */}
+
+      {props.loaderType === "showTimmer" &&
+        <div id="spinner" className="hk-spinner blocker-spinner blocker-spinner-modal" ng-if="showTimmer">
+          <div id="hk-spinner" className="blocker---modal---wrapper">
+            <div className="blocker---inner-wrapper">
+              <div className="blocker---header">
+                <p className="loading_bar" data-grunticon-embed></p>
+                <p className="blocker---title-b visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline">
+                  {language === CONSTANTS.LANG_CN ? "感謝您的申請！我們正在查閱您的資料" : "Thank you for your application. We are checking your details."}
+                </p><br /><br />
+                <p className="blocker---title visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline">
+                  {language === CONSTANTS.LANG_CN ? "請不要關閉或重新整理瀏覽器" : "Please do not close or refresh browser."}
+                </p><br />
+                <p className="timmer" data-grunticon-embed></p>
+                <p className="visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline spinnerSubText3">
+                  {language === CONSTANTS.LANG_CN ? "請稍候" : "Just a moment"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      {props.loaderType === "resumeTimmer" &&
+        <div className={`lottie ${!channelRefSelector ? 'opacity': ''}`}>
+        <div className="lottie__container">
+          <Player src={lottieSrc} className="player" loop autoplay />
+          <div className="lottie__body">
+            <div className="lottie__text">
+            {language === CONSTANTS.LANG_CN ? "继续申请..." : "Resume application..."}
+            </div>
+          </div>
+        </div>
+      </div>  
+      }
+
+      {props.loaderType === "showSearchSpinner" &&
+        <div id="spinner" className="hk-spinner blocker-spinner blocker-spinner-modal" ng-if="showSearchSpinner">
+          <div id="hk-spinner" className="blocker---modal---wrapper">
+            <div className="blocker---inner-wrapper">
+              <div className="blocker---header">
+                <p className="loading_bar" data-grunticon-embed></p>
+                <p className="blocker---title-b visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline">
+                  {language === CONSTANTS.LANG_CN ? "我們正在初步審批您的申請" : "We are reviewing your application submission."}
+                </p><br /><br />
+                <p className="blocker---title visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline">
+                  {language === CONSTANTS.LANG_CN ? "請不要關閉或重新整理瀏覽器" : "Please do not close or refresh browser."}
+                </p><br />
+                <p className="searchSpinner" data-grunticon-embed></p>
+                <p className="visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline SearchSpinnerSubText3">
+                  {language === CONSTANTS.LANG_CN ? "請稍候" : "Just a moment"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      {(props.loaderType === "lastStep" && !error) &&
+
+        <div className={!ffd2On ? "spinner hk-spinner blocker-spinner blocker-spinner-modal" : "lottie"} ng-if="pageType=='FFD1'">
+          {!ffd2On ? 
+            <div className="blocker---modal---wrapper">
+              <div className="blocker---inner-wrapper application-content">
+                <div className="blocker---header ">
+                  <p className="loading_bar" data-grunticon-embed></p>
+                  <p className="blocker---title-b align-left visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline">
+                    {language === CONSTANTS.LANG_CN ? "最後一步!" : "You’re at the last step!"}
+                  </p><br /><br />
+                  <p className="blocker---title visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline">
+                    {language === CONSTANTS.LANG_CN ? "請不要關閉或重新整理瀏覽器" : "Please do not close or refresh browser."}
+                  </p><br />
+                </div>
+                <div>
+                  <p className='ffd1-banner' data-grunticon-embed></p>
+                  <p
+                    className="spinnerSubText3 visible-xs-block visible-sm-inline visible-md-inline visible-lg-inline details2">
+                    {language === CONSTANTS.LANG_CN ? "請稍候數分鐘，我們正在審批您的申請" : "Please wait a few minutes while we are reviewing on your application."}
+                  </p>
+                </div>
+                {!ffd2On &&
+                  <div className="ffd1-section" data-testid="ffd1-section">
+                    <button onClick={()=>getFFD2Status()} disabled={!props.enable} className={!props.enable ? "result-btn bg-grey" : "result-btn bg-button"}>
+                      {language === CONSTANTS.LANG_CN ? "查看最終批核結果" : "See final approval result"}
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          :
+          <div className="lottie__container">
+            <Player src={lottieSrc} className="player" loop autoplay />
+            <div className="lottie__body">
+              <div className="lottie__text">
+                {/* {requestUpdate ? <>{language === CONSTANTS.LANG_EN ? CONSTANTS.processing : language === CONSTANTS.LANG_CN?CONSTANTS.processing_CN : CONSTANTS.processing_HK}</> : <>{language === CONSTANTS.LANG_EN ? CONSTANTS.workingOnIt : language === CONSTANTS.LANG_CN?CONSTANTS.workingOnIt_CN : CONSTANTS.workingOnIt_HK}</>} */}
+                {language === CONSTANTS.LANG_EN ? CONSTANTS.processing1 : language === CONSTANTS.LANG_CN?CONSTANTS.processing1_CN : CONSTANTS.processing1_HK}<br/> 
+                {stageId === CONSTANTS.STAGE_NAMES.ACD_1 || stageId === CONSTANTS.STAGE_NAMES.ACD_2 || stageId === CONSTANTS.STAGE_NAMES.ACD_3 || stageId === CONSTANTS.STAGE_NAMES.ACD_4 || stageId === CONSTANTS.STAGE_NAMES.DOC_3 ||stageId === CONSTANTS.STAGE_NAMES.LD_1 ? 
+                  <>
+                    {language === CONSTANTS.LANG_EN ? CONSTANTS.processing3 : language === CONSTANTS.LANG_CN?CONSTANTS.processing3_CN : CONSTANTS.processing3_HK} 
+                  </>
+                  :
+                  <>
+                    {language === CONSTANTS.LANG_EN ? CONSTANTS.processing2 : language === CONSTANTS.LANG_CN?CONSTANTS.processing2_CN : CONSTANTS.processing2_HK} 
+                  </>
+                }
+              </div>
+            </div>
+          </div>
+          }
+        </div>
+
+      }
+
+
+    </>
+  );
+};
+
+export default Spinner;
+
+Please write an test cases using jest and RTL
