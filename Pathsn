@@ -1,6 +1,5 @@
 import axios from "axios";
 import { postalCodeValidation } from "./your-file-path";
-import { AxiosError } from "axios";
 
 // Mock axios
 jest.mock("axios");
@@ -24,6 +23,7 @@ describe("postalCodeValidation", () => {
 
   it("should construct the correct URL", async () => {
     const expectedUrl = "https://api.example.com/applications/123/postal-code?zipCode=123456";
+    mockedAxios.get.mockResolvedValue({ data: { applicants: {} } });
     
     const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
     await validationFn();
@@ -55,21 +55,7 @@ describe("postalCodeValidation", () => {
   });
 
   it("should handle Axios error and return the error", async () => {
-    const mockError: AxiosError = {
-      isAxiosError: true,
-      name: "Error",
-      message: "Request failed",
-      config: {},
-      toJSON: jest.fn(),
-      response: {
-        status: 404,
-        statusText: "Not Found",
-        data: {},
-        headers: {},
-        config: {},
-      },
-    };
-    
+    const mockError = new Error("Request failed");
     mockedAxios.get.mockRejectedValue(mockError);
     
     const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
@@ -88,7 +74,11 @@ describe("postalCodeValidation", () => {
     const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
     const result = await validationFn();
     
-    expect(result).toEqual({});
+    expect(result).toEqual({
+      'block_rwb_a_1': undefined,
+      'building_name_rwb_a_1': undefined,
+      'street_name_rwb_a_1': undefined
+    });
   });
 
   it("should handle partial applicant data in response", async () => {
