@@ -1,26 +1,115 @@
-import axios, { AxiosError } from "axios";
-import { KeyWithAnyModel } from "../../../utils/model/common-model";
+import axios from "axios";
+import { postalCodeValidation } from "./your-file-path";
+import { AxiosError } from "axios";
 
-export const postalCodeValidation = (value:string,channelrefNumber:number,applicants:KeyWithAnyModel):any => {
+// Mock axios
+jest.mock("axios");
+const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+describe("postalCodeValidation", () => {
+  const mockValue = "123456";
+  const mockChannelRefNumber = 123;
+  const mockApplicants = {};
   
-  const application = `${process.env.REACT_APP_RTOB_APPLICATION_END_POINT}`;
-  const baseUrl = `${process.env.REACT_APP_RTOB_BASE_URL}`;
-  const postalCode = `${process.env.REACT_APP_RTOB_SINGPOST}`
-  const url = baseUrl+application+channelrefNumber+postalCode+'?zipCode='+value
-   return async () => {
-       return axios
-        .get(url)
-        .then(async (response:any) => {
-          let tmpApplicants:KeyWithAnyModel = {};
-          tmpApplicants['block_rwb_a_1'] = response.data.applicants['block_rwb_a_1']
-          tmpApplicants['building_name_rwb_a_1'] = response.data.applicants['building_name_rwb_a_1']
-          tmpApplicants['street_name_rwb_a_1'] = response.data.applicants['street_name_rwb_a_1']
-          return Promise.resolve(tmpApplicants);
-        })
-        .catch((error: AxiosError) => {
-          return Promise.resolve(error);
-        });
-    };
-}
+  // Environment variables setup
+  beforeAll(() => {
+    process.env.REACT_APP_RTOB_BASE_URL = "https://api.example.com/";
+    process.env.REACT_APP_RTOB_APPLICATION_END_POINT = "applications/";
+    process.env.REACT_APP_RTOB_SINGPOST = "/postal-code";
+  });
 
-please write an test cases using jest and RTL
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should construct the correct URL", async () => {
+    const expectedUrl = "https://api.example.com/applications/123/postal-code?zipCode=123456";
+    
+    const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
+    await validationFn();
+    
+    expect(mockedAxios.get).toHaveBeenCalledWith(expectedUrl);
+  });
+
+  it("should return transformed applicant data on successful response", async () => {
+    const mockResponse = {
+      data: {
+        applicants: {
+          'block_rwb_a_1': 'Block 123',
+          'building_name_rwb_a_1': 'Example Building',
+          'street_name_rwb_a_1': 'Main Street'
+        }
+      }
+    };
+    
+    mockedAxios.get.mockResolvedValue(mockResponse);
+    
+    const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
+    const result = await validationFn();
+    
+    expect(result).toEqual({
+      'block_rwb_a_1': 'Block 123',
+      'building_name_rwb_a_1': 'Example Building',
+      'street_name_rwb_a_1': 'Main Street'
+    });
+  });
+
+  it("should handle Axios error and return the error", async () => {
+    const mockError: AxiosError = {
+      isAxiosError: true,
+      name: "Error",
+      message: "Request failed",
+      config: {},
+      toJSON: jest.fn(),
+      response: {
+        status: 404,
+        statusText: "Not Found",
+        data: {},
+        headers: {},
+        config: {},
+      },
+    };
+    
+    mockedAxios.get.mockRejectedValue(mockError);
+    
+    const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
+    const result = await validationFn();
+    
+    expect(result).toBe(mockError);
+  });
+
+  it("should handle unexpected response structure", async () => {
+    const mockResponse = {
+      data: {} // Missing applicants field
+    };
+    
+    mockedAxios.get.mockResolvedValue(mockResponse);
+    
+    const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
+    const result = await validationFn();
+    
+    expect(result).toEqual({});
+  });
+
+  it("should handle partial applicant data in response", async () => {
+    const mockResponse = {
+      data: {
+        applicants: {
+          'block_rwb_a_1': 'Block 123',
+          // Missing other fields
+        }
+      }
+    };
+    
+    mockedAxios.get.mockResolvedValue(mockResponse);
+    
+    const validationFn = postalCodeValidation(mockValue, mockChannelRefNumber, mockApplicants);
+    const result = await validationFn();
+    
+    expect(result).toEqual({
+      'block_rwb_a_1': 'Block 123',
+      'building_name_rwb_a_1': undefined,
+      'street_name_rwb_a_1': undefined
+    });
+  });
+});
