@@ -1,301 +1,119 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import Date from './Date'; // Adjust the import path as needed
+import React, { useEffect, useState,useRef } from "react";
+import { useDispatch,useSelector } from "react-redux";
+import { BrowserRouter } from "react-router-dom";
+import "./utils/styles/App.scss";
+import Main from "./router/main";
+import Model from "./shared/components/model/model";
+import Spinner from "./shared/components/spinner/spinner";
+import { KeyWithAnyModel, StoreModel } from "./utils/model/common-model";
+import DynamicModel from "./shared/components/model/dynamic-model";
+import ActivityDetector from "react-activity-detector";
+import IdleTimeOutModel from "./shared/components/model/idle-time-out";
+import trackEvents from "./services/track-events";
+import { submitRequest } from "./modules/dashboard/fields/fields.utils";
+import { store } from "./utils/store/store";
 
-const mockStore = configureStore([]);
+export const App = () => {
+  const loaderSelector = useSelector((state: StoreModel) => state.loader);
+  const errorSelector = useSelector((state: StoreModel) => state.error);
+  const [loaderState, setLoaderState] = useState(null);
+  const [error, setError] = useState([]);
+  const [exceptionList, setExceptionList] = useState<KeyWithAnyModel>([]);
+  const [isIdle, setIsIdle] = useState(false);
+  const [openIdlePopUp, setOpenIdlePopUp] = useState(false);
+  const idleTimeoutRef=useRef<NodeJS.Timeout| null>(null);
+  const dispatch = useDispatch();
 
-describe('Date Component', () => {
-  const mockProps = {
-    data: {
-      logical_field_name: 'date_of_birth',
-      rwb_label_name: 'Date of Birth',
-      mandatory: 'Yes',
-      editable: false
-    },
-    handleCallback: jest.fn()
+  /**
+   * Added to disabled right click options
+   */
+  /* istanbul ignore next */
+  useEffect(() => {
+    window.addEventListener('contextmenu', function (event) {
+      event.preventDefault();
+    });
+    return () => {
+      window.removeEventListener('contextmenu', function (event) {
+        event.preventDefault();
+      });
+    }
+  }, []);
+  useEffect(() => {
+    // to check whether loader is enabled
+    if (loaderSelector && loaderSelector.isFetching) {
+      setLoaderState(loaderSelector.isFetching.isFetching);
+    }
+    // to check whether error is received from api request
+    if (errorSelector && errorSelector.errors) {
+      setError(errorSelector.errors);
+    }
+
+    // To check exceptional handling
+    if (errorSelector && errorSelector.exceptionList) {
+      setExceptionList(errorSelector.exceptionList);
+    }
+    const exceptions:  KeyWithAnyModel = errorSelector.exceptionList;
+    if(errorSelector.errors.length > 0 || (exceptions && exceptions.error_header)){
+      trackEvents.triggerAdobeEvent('formError');
+    }
+   
+    window.addEventListener("unload", function () {
+      trackEvents.triggerAdobeEvent('formAbandonment', 'BrowserClose')
+    })
+  }, [loaderSelector, errorSelector]);
+/* istanbul ignore next */
+  useEffect(()=>{
+    if (isIdle) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      if (!openIdlePopUp) {
+        setOpenIdlePopUp(true);
+      }
+    }
+  },[isIdle]);
+
+  const onIdle = () => {   
+    loaderState === true ? onActive() : setIsIdle(true);
   };
-
-  let store: any;
-
-  beforeEach(() => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            products: [{
-              product_type: 'loan',
-              product_category: 'personal'
-            }],
-            applicants: {
-              'date_of_birth_a_1': '1990-05-15',
-              nationality_a_1: 'SGP',
-              application_sourcing_a_1: '1'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            application_sourcing_a_1: '1'
-          }
+  const onActive = () => {
+    setIsIdle(false);
+  };
+  const handlePopUpClick = () => {
+    setOpenIdlePopUp(false);
+  };
+  const handleBtClick = () => {
+  };
+  return (
+    <>
+      {/* Idle time out */}
+      <ActivityDetector
+        enabled={true}
+        timeout={
+          Number(`${process.env.REACT_APP_RTOB_APP_IDLE_TIMEOUT_DURATION}`) *
+          10000
         }
-      },
-      fielderror: {
-        error: []
-      },
-      agevalidation: {
-        isValid: true
-      }
-    });
+        onIdle={onIdle}
+        onActive={onActive}
+        name="default"
+      />
 
-    // Mock sessionStorage
-    Storage.prototype.getItem = jest.fn(() => '1');
-  });
+      {openIdlePopUp && (
+        <IdleTimeOutModel handlePopUpClick={handlePopUpClick} />
+      )}
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+      <BrowserRouter basename="/">
+        <Main />
+        {exceptionList.length !== 0 && (
+          <DynamicModel errorList={exceptionList} />
+        )}
+        {error.length > 0 ? (
+          <Model name="globalError"  handlebuttonClick={handleBtClick}/>
+        ) : (
+          loaderState && <Spinner />
+        )}
+      </BrowserRouter>
+    </>
+  );
+};
+export default App;
 
-  test('renders without crashing', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('Date of Birth')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('DD')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('MM')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('YYYY')).toBeInTheDocument();
-  });
-
-  test('pre-fills date from store', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByPlaceholderText('DD')).toHaveValue('15');
-    expect(screen.getByPlaceholderText('MM')).toHaveValue('05');
-    expect(screen.getByPlaceholderText('YYYY')).toHaveValue('1990');
-  });
-
-  test('handles day input change', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    const dayInput = screen.getByPlaceholderText('DD');
-    fireEvent.change(dayInput, { target: { value: '20' } });
-    
-    expect(dayInput).toHaveValue('20');
-    expect(mockProps.handleCallback).toHaveBeenCalled();
-  });
-
-  test('auto focuses month after entering 2 digit day', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    const dayInput = screen.getByPlaceholderText('DD');
-    const monthInput = screen.getByPlaceholderText('MM');
-    
-    fireEvent.change(dayInput, { target: { value: '20' } });
-    
-    // Since we can't actually test focus in JSDOM, we can verify the interaction
-    expect(monthInput).toBeInTheDocument();
-  });
-
-  test('shows error for invalid date', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    const dayInput = screen.getByPlaceholderText('DD');
-    const monthInput = screen.getByPlaceholderText('MM');
-    const yearInput = screen.getByPlaceholderText('YYYY');
-    
-    fireEvent.change(dayInput, { target: { value: '35' } });
-    fireEvent.change(monthInput, { target: { value: '13' } });
-    fireEvent.change(yearInput, { target: { value: '2023' } });
-    
-    expect(screen.getByText(/Date of Birth is invalid/)).toBeInTheDocument();
-  });
-
-  test('shows age validation error when applicable', () => {
-    // Update store with product type that has age restrictions
-    const ageRestrictedStore = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            products: [{
-              product_type: 'credit_card',
-              product_category: 'premium'
-            }],
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      },
-      fielderror: {
-        error: []
-      },
-      agevalidation: {
-        isValid: true
-      }
-    });
-
-    render(
-      <Provider store={ageRestrictedStore}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    const dayInput = screen.getByPlaceholderText('DD');
-    const monthInput = screen.getByPlaceholderText('MM');
-    const yearInput = screen.getByPlaceholderText('YYYY');
-    
-    // Enter a date that would make the user too young
-    fireEvent.change(dayInput, { target: { value: '15' } });
-    fireEvent.change(monthInput, { target: { value: '05' } });
-    fireEvent.change(yearInput, { target: { value: '2020' } });
-    
-    expect(screen.getByText(/Date of Birth age must be/)).toBeInTheDocument();
-  });
-
-  test('disables fields when stage is bd-1', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByPlaceholderText('DD')).toBeDisabled();
-    expect(screen.getByPlaceholderText('MM')).toBeDisabled();
-    expect(screen.getByPlaceholderText('YYYY')).toBeDisabled();
-  });
-
-  test('enables fields when not in bd-1 stage', () => {
-    // Update store with different stage
-    const enabledStore = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'other-stage',
-          stageInfo: {
-            products: [{
-              product_type: 'loan',
-              product_category: 'personal'
-            }],
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      },
-      fielderror: {
-        error: []
-      },
-      agevalidation: {
-        isValid: true
-      }
-    });
-
-    render(
-      <Provider store={enabledStore}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByPlaceholderText('DD')).toBeEnabled();
-    expect(screen.getByPlaceholderText('MM')).toBeEnabled();
-    expect(screen.getByPlaceholderText('YYYY')).toBeEnabled();
-  });
-
-  test('shows error when field is mandatory and empty', () => {
-    const errorStore = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'other-stage',
-          stageInfo: {
-            products: [{
-              product_type: 'loan',
-              product_category: 'personal'
-            }],
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      },
-      fielderror: {
-        error: ['date_of_birth']
-      },
-      agevalidation: {
-        isValid: true
-      }
-    });
-
-    render(
-      <Provider store={errorStore}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText(/Date of Birth is required/)).toBeInTheDocument();
-  });
-
-  test('handles passport expiry date validation', () => {
-    const passportProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'pass_exp_dt'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Date {...passportProps} />
-      </Provider>
-    );
-    
-    const dayInput = screen.getByPlaceholderText('DD');
-    const monthInput = screen.getByPlaceholderText('MM');
-    const yearInput = screen.getByPlaceholderText('YYYY');
-    
-    // Enter a past date
-    fireEvent.change(dayInput, { target: { value: '15' } });
-    fireEvent.change(monthInput, { target: { value: '05' } });
-    fireEvent.change(yearInput, { target: { value: '2000' } });
-    
-    expect(screen.getByText(/Passport expiry date cannot be in the past/)).toBeInTheDocument();
-  });
-
-  test('pads single digit day/month with leading zero', () => {
-    render(
-      <Provider store={store}>
-        <Date {...mockProps} />
-      </Provider>
-    );
-    
-    const dayInput = screen.getByPlaceholderText('DD');
-    fireEvent.change(dayInput, { target: { value: '5' } });
-    fireEvent.blur(dayInput);
-    
-    expect(dayInput).toHaveValue('05');
-  });
-});
+please write test cases using jest and RTL
