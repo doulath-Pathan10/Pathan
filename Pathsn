@@ -1,207 +1,215 @@
-import axios from "axios";
-import { sha256 } from "js-sha256";
+import axios from 'axios';
+import { sha256 } from 'js-sha256';
+import { generateSHA256Encrypt, defaultInterceptor, extractValue, injectStore } from './interceptor-utils';
+import { getTokenChno, getUrl, keyToken } from '../utils/common/change.utils';
+import submitService from '../services/submit-service';
 
-import submitService from "../services/submit-service";
-import { getTokenChno, getUrl, keyToken } from "../utils/common/change.utils";
-import { documentClientContext } from "../shared/components/document-upload/document-upload.utils";
+// Mock dependencies
+jest.mock('js-sha256');
+jest.mock('../utils/common/change.utils');
+jest.mock('../services/submit-service');
+jest.mock('axios');
 
-let store: any;
-
-export const injectStore = (_store: any) => {
-  store = _store;
-};
-
-export const generateSHA256Encrypt = (
-  request: any,
-  sessionUid: string,
-  urlEndPoint: any,
-  scClientContextHeaders: any
-) => {
-  const xrtob:any = process.env.REACT_APP_XRTOB;
-  const appRef = getUrl.getChannelRefNo().applicationRefNo;
-  let xrtobWithRefNo = xrtob;
- 
-  let defaultValue = xrtob + sessionUid;
-  /*istanbul ignore else */
-  if (urlEndPoint === "resume") {
-    defaultValue += appRef;
-  } else if (urlEndPoint === "authorize" && getUrl.getParameterByName("products")) {
-    const product = JSON.parse(JSON.stringify(getUrl.getProductInfo()));
-    product.filter((item: any) => {
-      delete item.product_description;
-      delete item.company_category;
-      delete item.product_category_name;
-      return item;
-    });
-    let productInfo = "";
-    product.forEach((data: any) => {
-      const objKeys = Object.keys(data).sort();
-      objKeys.forEach((item: any) => {
-        productInfo += data[item];
-      });
-    });
-    scClientContextHeaders["products"] = sha256(xrtob + productInfo);
-  } else if (urlEndPoint === "customer") {
-    const data = getTokenChno();
-    scClientContextHeaders['tokenKeys'] = sha256(xrtob + keyToken('authorize-keys'));
-    scClientContextHeaders['personKeys'] = sha256(xrtob + keyToken('myinfo-keys'));
-
-    defaultValue += data.channelRefNo + data.code;
-  } else if (urlEndPoint === "create") {
-    defaultValue += getUrl.getChannelRefNo().channelRefNo;
-  } else if (
-    urlEndPoint === "personal" ||
-    urlEndPoint === "apply" ||
-    urlEndPoint === "ngr-offer" ||
-    urlEndPoint === "confirm" ||
-    urlEndPoint === "preserve" ||
-    urlEndPoint === "activate"
-  ) {
-    defaultValue += `${getUrl.getChannelRefNo().channelRefNo}${
-      getUrl.getChannelRefNo().applicationRefNo
-    }`;
-  } else if(urlEndPoint === 'generate') {
-    defaultValue += request.data.mobileNo + request.data.flowType + request.data.applnRefNo;
-    scClientContextHeaders["generate_otp"] = sha256(xrtob + request.data.mobileNo + request.data.flowType + request.data.applnRefNo);
-  } else if(urlEndPoint === 'verify') {
-    defaultValue += request.data['enc-otp'] + request.data['flow-type'] + request.data['key-index'] + request.data['mobile-no'] + request.data['otp-sn'] + request.data['user-id'];
-    scClientContextHeaders["verify_otp"] = sha256(xrtob + request.data['enc-otp'] + request.data['flow-type'] + request.data['key-index'] + request.data['mobile-no'] + request.data['otp-sn'] + request.data['user-id']);
-  }
-  const getToken = getUrl.getParameterByName("SSCode") || getUrl.getParameterByName('transfer-token');
-  if (getToken) {
-    defaultValue += submitService.generateUUID + getToken
-  }
-  if (urlEndPoint === "preserve") {
-    const stage = request.data.application.stage;
-    let stages = "";
-    stages += stage.page_id + stage.stage_id;
-    scClientContextHeaders["stage"] = sha256(
-      xrtobWithRefNo + appRef + getTokenChno().channelRefNo + extractValue(stages)
-    );
-  } else {
-    delete scClientContextHeaders["stage"];
-  }
-  if (urlEndPoint !== 'generate' && urlEndPoint !== 'verify' && request.data && request.data.application) {
-    const application = JSON.parse(JSON.stringify(request.data.application));
-    delete application.stage;
-    scClientContextHeaders["application"] = sha256(
-      xrtob + extractValue(application)
-    );
-  }
-
-  if (urlEndPoint !== 'generate' && urlEndPoint !== 'verify' && request.data && request.data.applicants) {
-    /*istanbul ignore else */
-    if (appRef) {
-      xrtobWithRefNo += appRef;
-    }
-    scClientContextHeaders["applicants"] = sha256(
-      xrtobWithRefNo + getTokenChno().channelRefNo + extractValue(request.data.applicants)
-    );
-  }
-  scClientContextHeaders["authorization"] = sha256(defaultValue);
-  if(urlEndPoint === 'generate' || urlEndPoint === 'verify') {
-    delete scClientContextHeaders["application"];
-    delete scClientContextHeaders["applicants"];
-     /*istanbul ignore else */
-    if(urlEndPoint === 'generate')
-    {
-      delete scClientContextHeaders["verify_otp"];
-    }
-    else if(urlEndPoint === 'verify') {
-      delete scClientContextHeaders["generate_otp"];
-    }
-  } else {
-    delete scClientContextHeaders["generate_otp"];
-    delete scClientContextHeaders["verify_otp"];
-  }
-};
-/** This method used to extract the values from payload list */
-export const extractValue = (data: any) => {
-  let productInfo: string = "";
-  const objKeys = Object.keys(data).sort();
-  objKeys.forEach((item: any) => {
-    productInfo += data[item];
-  });
-  return productInfo;
-};
-
-export const defaultInterceptor = () => {
-  let scClientContextHeaders: any = {
-    Channel: "MOBILE",
-    Country: "SG",
-    Language: "EN",
-    AppName: "RCWB",
-    ClientId: "MOBILE",
-    InstanceCode: "CB_SG",
-    RumDevice: "devicebrowserversion",
-    Source: "rwb",
-    DeviceType: "Desktop",
-    AgentType: "DESKTOP_BROWSER",
-    BrowserAgent: "DESKTOP-BROWSER",
-    IPAddress: "",
+describe('Interceptor Utility', () => {
+  const mockStore = {
+    getState: jest.fn(),
+    dispatch: jest.fn(),
+    subscribe: jest.fn(),
   };
-  
-  let abortController = new AbortController();
-  const timeout = setTimeout(() => {
-    abortController.abort();
-  }, 180000);
 
-  axios.interceptors.request.use(
-    (request) => {
-      let currentEndpoint: any = request.url && request.url.split("/");
-      let uUid = submitService.generateUUID;
-      let header:any;
-      if(!store.getState().stages.activateformData){
-       header = {
-        "Content-Type": "application/json;charset=UTF-8",
-      }}else{
-         header = {
-          "Content-Type": "multipart/form-data",
-        }
-      }
-      if (process.env.REACT_APP_ENVIRONMENT === "uat") {
-        header["Env"] = process.env.REACT_APP_ENVIRONMENT; 
-      }
-      scClientContextHeaders["reqId"] = uUid;
-      if (store.getState().auth.sessionUid !== null) {
-        const sessionUid = store.getState().auth.sessionUid;
-        const urlEndPoint = currentEndpoint[currentEndpoint.length - 1];
-        generateSHA256Encrypt(
-          request,
-          sessionUid,
-          urlEndPoint,
-          scClientContextHeaders
-        );
-        scClientContextHeaders["sessionUID"] = sessionUid;
-      }
-      if (currentEndpoint[currentEndpoint.length - 1] === "customer") {
-        header["requestId"] = uUid;
-
-        if(getUrl.getParameterByName("isMyInfoVirtualNRIC")) {
-          header["virtual"] = "YES";
-        }
-      }
-      if (currentEndpoint[currentEndpoint.length - 2] === "ibank") {
-        const tokenLabel = getUrl.getParameterByName('transfer-token') ? 'transfer-token' : 'code';
-        header[tokenLabel] = getUrl.getParameterByName("SSCode") || getUrl.getParameterByName('transfer-token');
-      }
-      request.headers["SC-CLIENT-CONTEXT"] = !store.getState().stages.activateformData? JSON.stringify(scClientContextHeaders) : JSON.stringify({"ClientId":"iOS","Version":"1.0","RumDevice":"version: 1.7.21; build: 100","Language":"EN","Channel":"MOBILE","Country":"SG","AppName":"RCWBSG","reqId":"6ba9c68d-78b0-4fb9-9428-23f60dbc049f","userId":"1100011","Environment":"HKLPXTRCW04","SessionId":"885bc820-7715-4939-8af9-ec007fc87af5","Host":"https://rcwbsit.sc.com","classification":"TMP","authorization":"c98a0d949fd3deff3bda3b21115490cf"})
-
-      request.headers.set(header);
-
-      return {
-        ...request,
-        signal: abortController.signal,
-      };
-    }
-  );
-
-  axios.interceptors.response.use((res) => {
-    clearTimeout(timeout);
-    return res;
+  beforeAll(() => {
+    injectStore(mockStore);
   });
-};
 
-export default defaultInterceptor;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (sha256 as jest.Mock).mockImplementation((str) => `hashed_${str}`);
+    (submitService.generateUUID as jest.Mock) = 'mock-uuid';
+  });
 
-please write testcases using jest and RTL
+  describe('extractValue', () => {
+    it('should extract and concatenate sorted object values', () => {
+      const input = { b: 'value2', a: 'value1', c: 'value3' };
+      const result = extractValue(input);
+      expect(result).toBe('value1value2value3');
+    });
+
+    it('should handle empty object', () => {
+      const result = extractValue({});
+      expect(result).toBe('');
+    });
+  });
+
+  describe('generateSHA256Encrypt', () => {
+    const mockRequest = {
+      data: {
+        application: { stage: { page_id: 'p1', stage_id: 's1' } },
+        applicants: [{ name: 'John' }],
+      },
+    };
+    const mockSessionUid = 'session123';
+    const mockScClientContextHeaders = {};
+
+    beforeEach(() => {
+      (getUrl.getChannelRefNo as jest.Mock).mockReturnValue({
+        channelRefNo: 'channel123',
+        applicationRefNo: 'app123',
+      });
+      (getTokenChno as jest.Mock).mockReturnValue({
+        channelRefNo: 'channel123',
+        code: 'code123',
+      });
+      (keyToken as jest.Mock).mockReturnValue('token-key');
+      (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
+      (getUrl.getProductInfo as jest.Mock).mockReturnValue([]);
+    });
+
+    it('should generate default authorization hash', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'test', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtobsession123');
+    });
+
+    it('should handle resume endpoint', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'resume', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtobsession123app123');
+    });
+
+    it('should handle authorize endpoint with products', () => {
+      (getUrl.getParameterByName as jest.Mock).mockReturnValue('products');
+      (getUrl.getProductInfo as jest.Mock).mockReturnValue([{ id: 'p1', name: 'Product1' }]);
+      
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'authorize', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['products']).toBeDefined();
+    });
+
+    it('should handle customer endpoint', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'customer', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['tokenKeys']).toBe('hashed_mock-xrtobtoken-key');
+      expect(mockScClientContextHeaders['personKeys']).toBe('hashed_mock-xrtobtoken-key');
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtobsession123channel123code123');
+    });
+
+    it('should handle create endpoint', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'create', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtobsession123channel123');
+    });
+
+    it('should handle personal/apply endpoints', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'personal', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtobsession123channel123app123');
+    });
+
+    it('should handle generate OTP endpoint', () => {
+      const otpRequest = {
+        data: {
+          mobileNo: '12345678',
+          flowType: 'login',
+          applnRefNo: 'app123',
+        },
+      };
+      generateSHA256Encrypt(otpRequest, mockSessionUid, 'generate', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['generate_otp']).toBe('hashed_mock-xrtob12345678loginapp123');
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtob12345678loginapp123');
+    });
+
+    it('should handle verify OTP endpoint', () => {
+      const verifyRequest = {
+        data: {
+          'enc-otp': 'enc123',
+          'flow-type': 'login',
+          'key-index': 'key1',
+          'mobile-no': '12345678',
+          'otp-sn': 'sn1',
+          'user-id': 'user1',
+        },
+      };
+      generateSHA256Encrypt(verifyRequest, mockSessionUid, 'verify', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['verify_otp']).toBe('hashed_mock-xrtobenc123loginkey112345678sn1user1');
+      expect(mockScClientContextHeaders['authorization']).toBe('hashed_mock-xrtobenc123loginkey112345678sn1user1');
+    });
+
+    it('should handle preserve endpoint', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'preserve', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['stage']).toBe('hashed_mock-xrtobapp123channel123p1s1');
+    });
+
+    it('should add application hash when not generate/verify endpoint', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'test', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['application']).toBeDefined();
+    });
+
+    it('should add applicants hash when not generate/verify endpoint', () => {
+      generateSHA256Encrypt(mockRequest, mockSessionUid, 'test', mockScClientContextHeaders);
+      expect(mockScClientContextHeaders['applicants']).toBeDefined();
+    });
+  });
+
+  describe('defaultInterceptor', () => {
+    const mockRequest = {
+      url: 'https://api.example.com/test',
+      headers: {},
+      data: {},
+    };
+
+    beforeEach(() => {
+      mockStore.getState.mockReturnValue({
+        auth: { sessionUid: 'session123' },
+        stages: { activateformData: false },
+      });
+      (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
+      (axios.interceptors.request.use as jest.Mock).mockImplementation((fn) => fn(mockRequest));
+    });
+
+    it('should set default headers', () => {
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](mockRequest);
+      expect(result.headers['Content-Type']).toBe('application/json;charset=UTF-8');
+    });
+
+    it('should set multipart headers for activate form data', () => {
+      mockStore.getState.mockReturnValue({
+        auth: { sessionUid: 'session123' },
+        stages: { activateformData: true },
+      });
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](mockRequest);
+      expect(result.headers['Content-Type']).toBe('multipart/form-data');
+    });
+
+    it('should add environment header for UAT', () => {
+      process.env.REACT_APP_ENVIRONMENT = 'uat';
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](mockRequest);
+      expect(result.headers['Env']).toBe('uat');
+      delete process.env.REACT_APP_ENVIRONMENT;
+    });
+
+    it('should add session headers when sessionUid exists', () => {
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](mockRequest);
+      expect(result.headers['SC-CLIENT-CONTEXT']).toContain('session123');
+    });
+
+    it('should handle customer endpoint with virtual header', () => {
+      const customerRequest = { ...mockRequest, url: 'https://api.example.com/customer' };
+      (getUrl.getParameterByName as jest.Mock).mockReturnValue('true');
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](customerRequest);
+      expect(result.headers['virtual']).toBe('YES');
+    });
+
+    it('should handle ibank endpoint with token', () => {
+      const ibankRequest = { ...mockRequest, url: 'https://api.example.com/ibank/test' };
+      (getUrl.getParameterByName as jest.Mock).mockReturnValue('token123');
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](ibankRequest);
+      expect(result.headers['code']).toBe('token123');
+    });
+
+    it('should set abort signal and timeout', () => {
+      defaultInterceptor();
+      const result = (axios.interceptors.request.use as jest.Mock).mock.calls[0][0](mockRequest);
+      expect(result.signal).toBeDefined();
+    });
+  });
+});
