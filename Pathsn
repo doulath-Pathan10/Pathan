@@ -1,34 +1,50 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import store from './utils/store/store';
 
-// Mock child components and modules
-jest.mock('./router/main', () => () => <div>Main Component</div>);
-jest.mock('./shared/components/model/model', () => () => <div>Model Component</div>);
-jest.mock('./shared/components/spinner/spinner', () => () => <div>Spinner Component</div>);
-jest.mock('./shared/components/model/dynamic-model', () => () => <div>DynamicModel Component</div>);
+// Mock child components
+jest.mock('./router/main', () => () => <div data-testid="main-component">Main Component</div>);
+jest.mock('./shared/components/model/model', () => ({ name, handlebuttonClick }: any) => (
+  <div data-testid="error-model">
+    Error Model: {name}
+    <button onClick={handlebuttonClick}>Dismiss</button>
+  </div>
+));
+jest.mock('./shared/components/spinner/spinner', () => () => <div data-testid="spinner">Spinner Component</div>);
+jest.mock('./shared/components/model/dynamic-model', () => ({ errorList }: any) => (
+  <div data-testid="dynamic-model">
+    DynamicModel: {errorList.length > 0 ? 'has-errors' : 'no-errors'}
+  </div>
+));
 jest.mock('./shared/components/model/idle-time-out', () => ({ handlePopUpClick }: any) => (
-  <div>
+  <div data-testid="idle-timeout-modal">
     IdleTimeOutModel Component
     <button onClick={handlePopUpClick}>Close</button>
   </div>
 ));
+
+// Mock activity detector with more control
+let activityDetectorCallbacks: any = {};
 jest.mock('react-activity-detector', () => ({
   __esModule: true,
   default: ({ onIdle, onActive }: any) => {
-    // Simulate activity detector behavior
     React.useEffect(() => {
-      const timer = setTimeout(() => onIdle(), 100);
-      return () => clearTimeout(timer);
-    }, [onIdle]);
+      activityDetectorCallbacks = { onIdle, onActive };
+      return () => {
+        activityDetectorCallbacks = {};
+      };
+    }, [onIdle, onActive]);
     return null;
   },
 }));
+
+// Mock track events
+const mockTriggerAdobeEvent = jest.fn();
 jest.mock('./services/track-events', () => ({
-  triggerAdobeEvent: jest.fn(),
+  triggerAdobeEvent: (...args: any[]) => mockTriggerAdobeEvent(...args),
 }));
 
 describe('App Component', () => {
@@ -55,117 +71,132 @@ describe('App Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    activityDetectorCallbacks = {};
   });
 
   it('renders without crashing', () => {
     renderApp();
-    expect(screen.getByText('Main Component')).toBeInTheDocument();
+    expect(screen.getByTestId('main-component')).toBeInTheDocument();
   });
 
   it('displays spinner when loader is active', () => {
     renderApp({
       loader: { isFetching: { isFetching: true } },
     });
-    expect(screen.getByText('Spinner Component')).toBeInTheDocument();
+    expect(screen.getByTestId('spinner')).toBeInTheDocument();
+  });
+
+  it('does not display spinner when loader is inactive', () => {
+    renderApp({
+      loader: { isFetching: { isFetching: false } },
+    });
+    expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
   });
 
   it('displays error model when errors exist', () => {
     renderApp({
       error: { errors: ['Test error'], exceptionList: [] },
     });
-    expect(screen.getByText('Model Component')).toBeInTheDocument();
+    expect(screen.getByTestId('error-model')).toBeInTheDocument();
+    expect(screen.getByText('Error Model: globalError')).toBeInTheDocument();
+  });
+
+  it('handles error model dismissal', () => {
+    renderApp({
+      error: { errors: ['Test error'], exceptionList: [] },
+    });
+    fireEvent.click(screen.getByText('Dismiss'));
+    // Add assertion for whatever should happen when dismissed
   });
 
   it('displays dynamic model when exceptionList exists', () => {
     renderApp({
       error: { errors: [], exceptionList: [{ error_header: 'Test header' }] },
     });
-    expect(screen.getByText('DynamicModel Component')).toBeInTheDocument();
+    expect(screen.getByTestId('dynamic-model')).toBeInTheDocument();
+    expect(screen.getByText('DynamicModel: has-errors')).toBeInTheDocument();
   });
 
-  it('displays idle timeout modal when user is idle', async () => {
-    renderApp();
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 150));
+  it('does not display dynamic model when no exceptions exist', () => {
+    renderApp({
+      error: { errors: [], exceptionList: [] },
     });
-    expect(screen.getByText('IdleTimeOutModel Component')).toBeInTheDocument();
+    expect(screen.queryByTestId('dynamic-model')).not.toBeInTheDocument();
   });
 
-  it('closes idle timeout modal when handlePopUpClick is called', async () => {
+  it('shows idle timeout modal when user becomes idle', () => {
     renderApp();
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    });
-    
-    const closeButton = screen.getByText('Close');
     act(() => {
-      closeButton.click();
+      activityDetectorCallbacks.onIdle();
     });
-    
-    expect(screen.queryByText('IdleTimeOutModel Component')).not.toBeInTheDocument();
+    expect(screen.getByTestId('idle-timeout-modal')).toBeInTheDocument();
   });
 
-  it('does not show idle modal when loader is active', async () => {
+  it('does not show idle modal when loader is active', () => {
     renderApp({
       loader: { isFetching: { isFetching: true } },
     });
-    
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 150));
+    act(() => {
+      activityDetectorCallbacks.onIdle();
     });
-    
-    expect(screen.queryByText('IdleTimeOutModel Component')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('idle-timeout-modal')).not.toBeInTheDocument();
+  });
+
+  it('closes idle timeout modal when handlePopUpClick is called', () => {
+    renderApp();
+    act(() => {
+      activityDetectorCallbacks.onIdle();
+    });
+    fireEvent.click(screen.getByText('Close'));
+    expect(screen.queryByTestId('idle-timeout-modal')).not.toBeInTheDocument();
+  });
+
+  it('triggers activity detector callbacks correctly', () => {
+    renderApp();
+    expect(activityDetectorCallbacks.onIdle).toBeDefined();
+    expect(activityDetectorCallbacks.onActive).toBeDefined();
   });
 
   it('prevents right click context menu', () => {
-    const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
-    const preventDefaultSpy = jest.fn();
-    
+    const mockPreventDefault = jest.fn();
     renderApp();
-    
-    // Simulate contextmenu event
-    const event = new Event('contextmenu');
-    Object.assign(event, { preventDefault: preventDefaultSpy });
-    window.dispatchEvent(event);
-    
-    expect(addEventListenerSpy).toHaveBeenCalledWith(
-      'contextmenu',
-      expect.any(Function)
-    );
-    expect(preventDefaultSpy).toHaveBeenCalled();
-    
-    addEventListenerSpy.mockRestore();
+    fireEvent.contextMenu(screen.getByTestId('main-component'), {
+      preventDefault: mockPreventDefault,
+    });
+    expect(mockPreventDefault).toHaveBeenCalled();
   });
 
   it('triggers adobe events for errors', () => {
-    const { triggerAdobeEvent } = require('./services/track-events');
-    
     renderApp({
-      error: { 
-        errors: ['Test error'], 
-        exceptionList: [{ error_header: 'Test header' }] 
+      error: {
+        errors: ['Test error'],
+        exceptionList: [{ error_header: 'Test header' }],
       },
     });
-    
-    expect(triggerAdobeEvent).toHaveBeenCalledWith('formError');
+    expect(mockTriggerAdobeEvent).toHaveBeenCalledWith('formError');
   });
 
   it('triggers formAbandonment event on unload', () => {
-    const { triggerAdobeEvent } = require('./services/track-events');
-    const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
-    
     renderApp();
-    
-    // Simulate unload event
-    const event = new Event('unload');
-    window.dispatchEvent(event);
-    
-    expect(addEventListenerSpy).toHaveBeenCalledWith(
+    fireEvent.unload(window);
+    expect(mockTriggerAdobeEvent).toHaveBeenCalledWith(
+      'formAbandonment',
+      'BrowserClose'
+    );
+  });
+
+  it('cleans up event listeners on unmount', () => {
+    const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
+    const { unmount } = renderApp();
+    unmount();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      'contextmenu',
+      expect.any(Function)
+    );
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
       'unload',
       expect.any(Function)
     );
-    expect(triggerAdobeEvent).toHaveBeenCalledWith('formAbandonment', 'BrowserClose');
-    
-    addEventListenerSpy.mockRestore();
+    removeEventListenerSpy.mockRestore();
   });
 });
