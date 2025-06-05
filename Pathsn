@@ -1,202 +1,207 @@
-import React from 'react';
-import { render, screen, act, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { BrowserRouter } from 'react-router-dom';
-import App from './App';
-import store from './utils/store/store';
+import axios from "axios";
+import { sha256 } from "js-sha256";
 
-// Mock child components
-jest.mock('./router/main', () => () => <div data-testid="main-component">Main Component</div>);
-jest.mock('./shared/components/model/model', () => ({ name, handlebuttonClick }: any) => (
-  <div data-testid="error-model">
-    Error Model: {name}
-    <button onClick={handlebuttonClick}>Dismiss</button>
-  </div>
-));
-jest.mock('./shared/components/spinner/spinner', () => () => <div data-testid="spinner">Spinner Component</div>);
-jest.mock('./shared/components/model/dynamic-model', () => ({ errorList }: any) => (
-  <div data-testid="dynamic-model">
-    DynamicModel: {errorList.length > 0 ? 'has-errors' : 'no-errors'}
-  </div>
-));
-jest.mock('./shared/components/model/idle-time-out', () => ({ handlePopUpClick }: any) => (
-  <div data-testid="idle-timeout-modal">
-    IdleTimeOutModel Component
-    <button onClick={handlePopUpClick}>Close</button>
-  </div>
-));
+import submitService from "../services/submit-service";
+import { getTokenChno, getUrl, keyToken } from "../utils/common/change.utils";
+import { documentClientContext } from "../shared/components/document-upload/document-upload.utils";
 
-// Mock activity detector with more control
-let activityDetectorCallbacks: any = {};
-jest.mock('react-activity-detector', () => ({
-  __esModule: true,
-  default: ({ onIdle, onActive }: any) => {
-    React.useEffect(() => {
-      activityDetectorCallbacks = { onIdle, onActive };
-      return () => {
-        activityDetectorCallbacks = {};
-      };
-    }, [onIdle, onActive]);
-    return null;
-  },
-}));
+let store: any;
 
-// Mock track events
-const mockTriggerAdobeEvent = jest.fn();
-jest.mock('./services/track-events', () => ({
-  triggerAdobeEvent: (...args: any[]) => mockTriggerAdobeEvent(...args),
-}));
+export const injectStore = (_store: any) => {
+  store = _store;
+};
 
-describe('App Component', () => {
-  const renderApp = (state = {}) => {
-    const mockStore = {
-      ...store,
-      getState: () => ({
-        loader: { isFetching: { isFetching: false } },
-        error: { errors: [], exceptionList: [] },
-        ...state,
-      }),
-      dispatch: jest.fn(),
-      subscribe: jest.fn(),
-    };
+export const generateSHA256Encrypt = (
+  request: any,
+  sessionUid: string,
+  urlEndPoint: any,
+  scClientContextHeaders: any
+) => {
+  const xrtob:any = process.env.REACT_APP_XRTOB;
+  const appRef = getUrl.getChannelRefNo().applicationRefNo;
+  let xrtobWithRefNo = xrtob;
+ 
+  let defaultValue = xrtob + sessionUid;
+  /*istanbul ignore else */
+  if (urlEndPoint === "resume") {
+    defaultValue += appRef;
+  } else if (urlEndPoint === "authorize" && getUrl.getParameterByName("products")) {
+    const product = JSON.parse(JSON.stringify(getUrl.getProductInfo()));
+    product.filter((item: any) => {
+      delete item.product_description;
+      delete item.company_category;
+      delete item.product_category_name;
+      return item;
+    });
+    let productInfo = "";
+    product.forEach((data: any) => {
+      const objKeys = Object.keys(data).sort();
+      objKeys.forEach((item: any) => {
+        productInfo += data[item];
+      });
+    });
+    scClientContextHeaders["products"] = sha256(xrtob + productInfo);
+  } else if (urlEndPoint === "customer") {
+    const data = getTokenChno();
+    scClientContextHeaders['tokenKeys'] = sha256(xrtob + keyToken('authorize-keys'));
+    scClientContextHeaders['personKeys'] = sha256(xrtob + keyToken('myinfo-keys'));
 
-    return render(
-      <Provider store={mockStore}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </Provider>
+    defaultValue += data.channelRefNo + data.code;
+  } else if (urlEndPoint === "create") {
+    defaultValue += getUrl.getChannelRefNo().channelRefNo;
+  } else if (
+    urlEndPoint === "personal" ||
+    urlEndPoint === "apply" ||
+    urlEndPoint === "ngr-offer" ||
+    urlEndPoint === "confirm" ||
+    urlEndPoint === "preserve" ||
+    urlEndPoint === "activate"
+  ) {
+    defaultValue += `${getUrl.getChannelRefNo().channelRefNo}${
+      getUrl.getChannelRefNo().applicationRefNo
+    }`;
+  } else if(urlEndPoint === 'generate') {
+    defaultValue += request.data.mobileNo + request.data.flowType + request.data.applnRefNo;
+    scClientContextHeaders["generate_otp"] = sha256(xrtob + request.data.mobileNo + request.data.flowType + request.data.applnRefNo);
+  } else if(urlEndPoint === 'verify') {
+    defaultValue += request.data['enc-otp'] + request.data['flow-type'] + request.data['key-index'] + request.data['mobile-no'] + request.data['otp-sn'] + request.data['user-id'];
+    scClientContextHeaders["verify_otp"] = sha256(xrtob + request.data['enc-otp'] + request.data['flow-type'] + request.data['key-index'] + request.data['mobile-no'] + request.data['otp-sn'] + request.data['user-id']);
+  }
+  const getToken = getUrl.getParameterByName("SSCode") || getUrl.getParameterByName('transfer-token');
+  if (getToken) {
+    defaultValue += submitService.generateUUID + getToken
+  }
+  if (urlEndPoint === "preserve") {
+    const stage = request.data.application.stage;
+    let stages = "";
+    stages += stage.page_id + stage.stage_id;
+    scClientContextHeaders["stage"] = sha256(
+      xrtobWithRefNo + appRef + getTokenChno().channelRefNo + extractValue(stages)
     );
+  } else {
+    delete scClientContextHeaders["stage"];
+  }
+  if (urlEndPoint !== 'generate' && urlEndPoint !== 'verify' && request.data && request.data.application) {
+    const application = JSON.parse(JSON.stringify(request.data.application));
+    delete application.stage;
+    scClientContextHeaders["application"] = sha256(
+      xrtob + extractValue(application)
+    );
+  }
+
+  if (urlEndPoint !== 'generate' && urlEndPoint !== 'verify' && request.data && request.data.applicants) {
+    /*istanbul ignore else */
+    if (appRef) {
+      xrtobWithRefNo += appRef;
+    }
+    scClientContextHeaders["applicants"] = sha256(
+      xrtobWithRefNo + getTokenChno().channelRefNo + extractValue(request.data.applicants)
+    );
+  }
+  scClientContextHeaders["authorization"] = sha256(defaultValue);
+  if(urlEndPoint === 'generate' || urlEndPoint === 'verify') {
+    delete scClientContextHeaders["application"];
+    delete scClientContextHeaders["applicants"];
+     /*istanbul ignore else */
+    if(urlEndPoint === 'generate')
+    {
+      delete scClientContextHeaders["verify_otp"];
+    }
+    else if(urlEndPoint === 'verify') {
+      delete scClientContextHeaders["generate_otp"];
+    }
+  } else {
+    delete scClientContextHeaders["generate_otp"];
+    delete scClientContextHeaders["verify_otp"];
+  }
+};
+/** This method used to extract the values from payload list */
+export const extractValue = (data: any) => {
+  let productInfo: string = "";
+  const objKeys = Object.keys(data).sort();
+  objKeys.forEach((item: any) => {
+    productInfo += data[item];
+  });
+  return productInfo;
+};
+
+export const defaultInterceptor = () => {
+  let scClientContextHeaders: any = {
+    Channel: "MOBILE",
+    Country: "SG",
+    Language: "EN",
+    AppName: "RCWB",
+    ClientId: "MOBILE",
+    InstanceCode: "CB_SG",
+    RumDevice: "devicebrowserversion",
+    Source: "rwb",
+    DeviceType: "Desktop",
+    AgentType: "DESKTOP_BROWSER",
+    BrowserAgent: "DESKTOP-BROWSER",
+    IPAddress: "",
   };
+  
+  let abortController = new AbortController();
+  const timeout = setTimeout(() => {
+    abortController.abort();
+  }, 180000);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    activityDetectorCallbacks = {};
-  });
+  axios.interceptors.request.use(
+    (request) => {
+      let currentEndpoint: any = request.url && request.url.split("/");
+      let uUid = submitService.generateUUID;
+      let header:any;
+      if(!store.getState().stages.activateformData){
+       header = {
+        "Content-Type": "application/json;charset=UTF-8",
+      }}else{
+         header = {
+          "Content-Type": "multipart/form-data",
+        }
+      }
+      if (process.env.REACT_APP_ENVIRONMENT === "uat") {
+        header["Env"] = process.env.REACT_APP_ENVIRONMENT; 
+      }
+      scClientContextHeaders["reqId"] = uUid;
+      if (store.getState().auth.sessionUid !== null) {
+        const sessionUid = store.getState().auth.sessionUid;
+        const urlEndPoint = currentEndpoint[currentEndpoint.length - 1];
+        generateSHA256Encrypt(
+          request,
+          sessionUid,
+          urlEndPoint,
+          scClientContextHeaders
+        );
+        scClientContextHeaders["sessionUID"] = sessionUid;
+      }
+      if (currentEndpoint[currentEndpoint.length - 1] === "customer") {
+        header["requestId"] = uUid;
 
-  it('renders without crashing', () => {
-    renderApp();
-    expect(screen.getByTestId('main-component')).toBeInTheDocument();
-  });
+        if(getUrl.getParameterByName("isMyInfoVirtualNRIC")) {
+          header["virtual"] = "YES";
+        }
+      }
+      if (currentEndpoint[currentEndpoint.length - 2] === "ibank") {
+        const tokenLabel = getUrl.getParameterByName('transfer-token') ? 'transfer-token' : 'code';
+        header[tokenLabel] = getUrl.getParameterByName("SSCode") || getUrl.getParameterByName('transfer-token');
+      }
+      request.headers["SC-CLIENT-CONTEXT"] = !store.getState().stages.activateformData? JSON.stringify(scClientContextHeaders) : JSON.stringify({"ClientId":"iOS","Version":"1.0","RumDevice":"version: 1.7.21; build: 100","Language":"EN","Channel":"MOBILE","Country":"SG","AppName":"RCWBSG","reqId":"6ba9c68d-78b0-4fb9-9428-23f60dbc049f","userId":"1100011","Environment":"HKLPXTRCW04","SessionId":"885bc820-7715-4939-8af9-ec007fc87af5","Host":"https://rcwbsit.sc.com","classification":"TMP","authorization":"c98a0d949fd3deff3bda3b21115490cf"})
 
-  it('displays spinner when loader is active', () => {
-    renderApp({
-      loader: { isFetching: { isFetching: true } },
-    });
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-  });
+      request.headers.set(header);
 
-  it('does not display spinner when loader is inactive', () => {
-    renderApp({
-      loader: { isFetching: { isFetching: false } },
-    });
-    expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-  });
+      return {
+        ...request,
+        signal: abortController.signal,
+      };
+    }
+  );
 
-  it('displays error model when errors exist', () => {
-    renderApp({
-      error: { errors: ['Test error'], exceptionList: [] },
-    });
-    expect(screen.getByTestId('error-model')).toBeInTheDocument();
-    expect(screen.getByText('Error Model: globalError')).toBeInTheDocument();
+  axios.interceptors.response.use((res) => {
+    clearTimeout(timeout);
+    return res;
   });
+};
 
-  it('handles error model dismissal', () => {
-    renderApp({
-      error: { errors: ['Test error'], exceptionList: [] },
-    });
-    fireEvent.click(screen.getByText('Dismiss'));
-    // Add assertion for whatever should happen when dismissed
-  });
+export default defaultInterceptor;
 
-  it('displays dynamic model when exceptionList exists', () => {
-    renderApp({
-      error: { errors: [], exceptionList: [{ error_header: 'Test header' }] },
-    });
-    expect(screen.getByTestId('dynamic-model')).toBeInTheDocument();
-    expect(screen.getByText('DynamicModel: has-errors')).toBeInTheDocument();
-  });
-
-  it('does not display dynamic model when no exceptions exist', () => {
-    renderApp({
-      error: { errors: [], exceptionList: [] },
-    });
-    expect(screen.queryByTestId('dynamic-model')).not.toBeInTheDocument();
-  });
-
-  it('shows idle timeout modal when user becomes idle', () => {
-    renderApp();
-    act(() => {
-      activityDetectorCallbacks.onIdle();
-    });
-    expect(screen.getByTestId('idle-timeout-modal')).toBeInTheDocument();
-  });
-
-  it('does not show idle modal when loader is active', () => {
-    renderApp({
-      loader: { isFetching: { isFetching: true } },
-    });
-    act(() => {
-      activityDetectorCallbacks.onIdle();
-    });
-    expect(screen.queryByTestId('idle-timeout-modal')).not.toBeInTheDocument();
-  });
-
-  it('closes idle timeout modal when handlePopUpClick is called', () => {
-    renderApp();
-    act(() => {
-      activityDetectorCallbacks.onIdle();
-    });
-    fireEvent.click(screen.getByText('Close'));
-    expect(screen.queryByTestId('idle-timeout-modal')).not.toBeInTheDocument();
-  });
-
-  it('triggers activity detector callbacks correctly', () => {
-    renderApp();
-    expect(activityDetectorCallbacks.onIdle).toBeDefined();
-    expect(activityDetectorCallbacks.onActive).toBeDefined();
-  });
-
-  it('prevents right click context menu', () => {
-    const mockPreventDefault = jest.fn();
-    renderApp();
-    fireEvent.contextMenu(screen.getByTestId('main-component'), {
-      preventDefault: mockPreventDefault,
-    });
-    expect(mockPreventDefault).toHaveBeenCalled();
-  });
-
-  it('triggers adobe events for errors', () => {
-    renderApp({
-      error: {
-        errors: ['Test error'],
-        exceptionList: [{ error_header: 'Test header' }],
-      },
-    });
-    expect(mockTriggerAdobeEvent).toHaveBeenCalledWith('formError');
-  });
-
-  it('triggers formAbandonment event on unload', () => {
-    renderApp();
-    fireEvent.unload(window);
-    expect(mockTriggerAdobeEvent).toHaveBeenCalledWith(
-      'formAbandonment',
-      'BrowserClose'
-    );
-  });
-
-  it('cleans up event listeners on unmount', () => {
-    const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
-    const { unmount } = renderApp();
-    unmount();
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'contextmenu',
-      expect.any(Function)
-    );
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'unload',
-      expect.any(Function)
-    );
-    removeEventListenerSpy.mockRestore();
-  });
-});
+please write testcases using jest and RTL
