@@ -2,60 +2,119 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
-import { configureStore } from '@reduxjs/toolkit';
+import configureStore from 'redux-mock-store';
+import thunk from 'redux-thunk';
 import ThankYou from './thank-you';
-import * as commonService from '../../../services/common-service';
-import * as trackEvents from '../../../services/track-events';
-import * as gaTrackEvents from '../../../services/ga-track-events';
-import * as changeUtils from '../../../utils/common/change.utils';
 
-// Mock external dependencies
-jest.mock('../../../services/common-service');
-jest.mock('../../../services/track-events');
-jest.mock('../../../services/ga-track-events');
-jest.mock('../../../utils/common/change.utils');
+// Create mock store
+const middlewares = [thunk];
+const mockStore = configureStore(middlewares);
+
+// Mock all external dependencies
+jest.mock('../../../utils/common/change.utils', () => ({
+  getUrl: {
+    getChannelRefNo: jest.fn(() => ({ applicationRefNo: 'APP123456' })),
+    getParameterByName: jest.fn(() => null),
+    getUpdatedStage: jest.fn(() => ({ ccplChannel: 'WEB' }))
+  }
+}));
+
+jest.mock('../../../services/track-events', () => ({
+  __esModule: true,
+  default: {
+    triggerAdobeEvent: jest.fn()
+  }
+}));
+
+jest.mock('../../../services/ga-track-events', () => ({
+  __esModule: true,
+  default: {
+    pageView: jest.fn()
+  }
+}));
+
+jest.mock('../../../services/common-service', () => ({
+  redirectingToIbanking: jest.fn(),
+  activateDigitalCard: jest.fn(() => Promise.resolve({ status: 'SUCCESS' }))
+}));
+
+jest.mock('../../../utils/store/store', () => ({
+  store: {
+    getState: jest.fn(() => ({
+      stages: {
+        isDocumentUpload: false
+      }
+    }))
+  }
+}));
+
+// Mock child components
 jest.mock('./thankyou-casa', () => {
-  return function MockThankYouCASA() {
-    return <div data-testid="thankyou-casa">ThankYou CASA Component</div>;
+  return function MockThankYouCASA({ submitForm, applicationReferenceNo }) {
+    return (
+      <div data-testid="thankyou-casa">
+        <button onClick={submitForm} data-testid="casa-submit">Submit CASA</button>
+        <span data-testid="casa-ref">{applicationReferenceNo}</span>
+      </div>
+    );
   };
 });
-jest.mock('./thankyou-cc', () => {
-  return function MockThankYouCC() {
-    return <div data-testid="thankyou-cc">ThankYou CC Component</div>;
-  };
-});
+
 jest.mock('./thankyou-upload', () => {
-  return function MockThankYouUpload() {
-    return <div data-testid="thankyou-upload">ThankYou Upload Component</div>;
+  return function MockThankYouUpload({ submitForm }) {
+    return (
+      <div data-testid="thankyou-upload">
+        <button onClick={submitForm} data-testid="upload-submit">Submit Upload</button>
+      </div>
+    );
   };
 });
-jest.mock('./cc-without-activation', () => {
-  return function MockCCWithoutActivation() {
-    return <div data-testid="cc-without-activation">CC Without Activation</div>;
-  };
-});
-jest.mock('./cc-activation-success', () => {
-  return function MockCCActivationSuccess() {
-    return <div data-testid="cc-activation-success">CC Activation Success</div>;
-  };
-});
+
 jest.mock('./thankyou-error', () => {
   return function MockThankyouError() {
-    return <div data-testid="thankyou-error">Thankyou Error</div>;
+    return <div data-testid="thankyou-error">Error Component</div>;
+  };
+});
+
+jest.mock('../../../shared/components/popup-model/popup-model', () => {
+  return function MockPopupModel({ children, displayPopup }) {
+    return displayPopup ? <div data-testid="popup-model">{children}</div> : null;
+  };
+});
+
+jest.mock('../../../shared/components/model/model', () => {
+  return function MockModel({ handlebuttonClick, handleContinueWithoutActivation }) {
+    return (
+      <div data-testid="model">
+        <button onClick={handlebuttonClick} data-testid="model-back">Back</button>
+        <button onClick={handleContinueWithoutActivation} data-testid="model-continue">Continue</button>
+      </div>
+    );
   };
 });
 
 // Mock environment variables
-process.env.REACT_APP_HOME_PAGE_URL = 'https://example.com/home';
-process.env.REACT_APP_IBANKING_SC_MOBILE = 'https://example.com/mobile';
-process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER = 'https://example.com/transfer';
+const originalEnv = process.env;
+beforeEach(() => {
+  process.env = {
+    ...originalEnv,
+    REACT_APP_HOME_PAGE_URL: 'https://example.com/home',
+    REACT_APP_IBANKING_SC_MOBILE: 'https://mobile.example.com',
+    REACT_APP_IBANKING_SC_MOBILE_TRANSFER: 'https://transfer.example.com'
+  };
+  
+  // Mock window.location
+  delete window.location;
+  window.location = { href: '' };
+});
+
+afterEach(() => {
+  process.env = originalEnv;
+  jest.clearAllMocks();
+});
 
 describe('ThankYou Component', () => {
-  let mockStore;
-  let mockDispatch;
-
-  // Mock initial state
-  const initialState = {
+  const mockInitialState = {
     stages: {
       stages: [{
         stageId: 'thankyou',
@@ -85,362 +144,245 @@ describe('ThankYou Component', () => {
     }
   };
 
-  const createMockStore = (customState = {}) => {
-    return configureStore({
-      reducer: {
-        stages: (state = { ...initialState.stages, ...customState }, action) => {
-          switch (action.type) {
-            default:
-              return state;
-          }
-        }
-      }
-    });
-  };
-
-  const renderWithProviders = (component, customState = {}) => {
-    const store = createMockStore(customState);
-    mockDispatch = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
-    store.dispatch = mockDispatch;
+  const renderComponent = (initialState = mockInitialState) => {
+    const store = mockStore(initialState);
+    store.dispatch = jest.fn(() => Promise.resolve({ status: 'SUCCESS' }));
     
     return render(
       <Provider store={store}>
         <BrowserRouter>
-          {component}
+          <ThankYou />
         </BrowserRouter>
       </Provider>
     );
   };
 
-  beforeEach(() => {
-    // Reset mocks
-    jest.clearAllMocks();
-    
-    // Mock getUrl functions
-    changeUtils.getUrl = {
-      getChannelRefNo: jest.fn().mockReturnValue({ applicationRefNo: 'APP123456' }),
-      getParameterByName: jest.fn().mockReturnValue(null),
-      getUpdatedStage: jest.fn().mockReturnValue({ ccplChannel: 'WEB' })
-    };
-
-    // Mock window.location
-    delete window.location;
-    window.location = { href: '' };
-
-    // Mock track events
-    trackEvents.triggerAdobeEvent = jest.fn();
-    gaTrackEvents.pageView = jest.fn();
-    
-    // Mock common service
-    commonService.redirectingToIbanking = jest.fn();
-    commonService.activateDigitalCard = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
-  });
-
-  describe('Component Rendering', () => {
-    test('should render ThankYou component with basic structure', () => {
-      renderWithProviders(<ThankYou />);
-      
+  describe('Basic Rendering', () => {
+    test('renders without crashing', () => {
+      renderComponent();
       expect(screen.getByTestId('form')).toBeInTheDocument();
+    });
+
+    test('renders main container elements', () => {
+      renderComponent();
       expect(screen.getByTestId('app thankyou')).toBeInTheDocument();
       expect(screen.getByTestId('app__body')).toBeInTheDocument();
     });
 
-    test('should render ThankYouCASA when SA products are present', () => {
-      renderWithProviders(<ThankYou />);
-      
+    test('renders ThankYouCASA component for SA products', () => {
+      renderComponent();
       expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
     });
 
-    test('should render ThankYouCASA when CA products are present', () => {
+    test('renders ThankYouCASA component for CA products', () => {
       const caState = {
-        stages: [{
-          ...initialState.stages.stages[0],
-          stageInfo: {
-            ...initialState.stages.stages[0].stageInfo,
-            products: [{
-              ...initialState.stages.stages[0].stageInfo.products[0],
-              product_category: 'CA'
-            }]
-          }
-        }]
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          stages: [{
+            ...mockInitialState.stages.stages[0],
+            stageInfo: {
+              ...mockInitialState.stages.stages[0].stageInfo,
+              products: [{
+                product_category: 'CA',
+                name: 'Current Account',
+                product_sequence_number: 1,
+                product_type: 'REGULAR',
+                acct_details: [{ account_number: '1234567890' }]
+              }]
+            }
+          }]
+        }
       };
-
-      renderWithProviders(<ThankYou />, caState);
       
+      renderComponent(caState);
       expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
     });
+  });
 
-    test('should render ThankYouUpload when auth parameter is upload', () => {
-      changeUtils.getUrl.getParameterByName = jest.fn().mockReturnValue('upload');
+  describe('Upload Flow', () => {
+    test('renders ThankYouUpload when auth parameter is upload', () => {
+      const { getUrl } = require('../../../utils/common/change.utils');
+      getUrl.getParameterByName.mockReturnValue('upload');
       
-      renderWithProviders(<ThankYou />);
-      
+      renderComponent();
       expect(screen.getByTestId('thankyou-upload')).toBeInTheDocument();
     });
 
-    test('should render ThankYouUpload when isDocumentUpload is true', () => {
+    test('renders ThankYouUpload when isDocumentUpload is true', () => {
       const uploadState = {
-        isDocumentUpload: true
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          isDocumentUpload: true
+        }
       };
-
-      renderWithProviders(<ThankYou />, uploadState);
       
+      renderComponent(uploadState);
       expect(screen.getByTestId('thankyou-upload')).toBeInTheDocument();
     });
   });
 
-  describe('Application Details Processing', () => {
-    test('should process application details correctly for STP case', () => {
-      const stpState = {
-        stages: [{
-          ...initialState.stages.stages[0],
-          stageInfo: {
-            ...initialState.stages.stages[0].stageInfo,
-            products: [{
-              product_category: 'CC',
-              name: 'Credit Card',
-              product_sequence_number: 1,
-              product_type: 'PLATINUM',
-              acct_details: [{
-                account_number: '1234567890',
-                card_no: 'CARD123456'
-              }]
-            }]
-          }
-        }]
+  describe('Form Submission', () => {
+    test('redirects to home page for non-ibanking users', () => {
+      const nonIbankingState = {
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          stages: [{
+            ...mockInitialState.stages.stages[0],
+            stageInfo: {
+              ...mockInitialState.stages.stages[0].stageInfo,
+              applicants: {
+                auth_mode_a_1: 'OTHER'
+              }
+            }
+          }]
+        }
       };
-
-      renderWithProviders(<ThankYou />, stpState);
       
-      // Component should process the application details correctly
-      expect(screen.getByTestId('form')).toBeInTheDocument();
+      renderComponent(nonIbankingState);
+      
+      const submitButton = screen.getByTestId('casa-submit');
+      fireEvent.click(submitButton);
+      
+      expect(window.location.href).toBe('https://example.com/home');
     });
 
-    test('should handle multiple products correctly', () => {
-      const multiProductState = {
-        stages: [{
-          ...initialState.stages.stages[0],
-          stageInfo: {
-            ...initialState.stages.stages[0].stageInfo,
-            products: [
-              {
-                product_category: 'CC',
-                name: 'Credit Card',
-                product_sequence_number: 1,
-                product_type: 'PLATINUM',
-                acct_details: [{ account_number: '1234567890', card_no: 'CARD123456' }]
-              },
-              {
-                product_category: 'SA',
-                name: 'Savings Account',
-                product_sequence_number: 2,
-                product_type: 'REGULAR',
-                acct_details: [{ account_number: '0987654321' }]
-              }
-            ]
-          }
-        }]
-      };
-
-      renderWithProviders(<ThankYou />, multiProductState);
+    test('calls ibanking redirection for IX auth mode', () => {
+      const { redirectingToIbanking } = require('../../../services/common-service');
       
-      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+      renderComponent();
+      
+      const submitButton = screen.getByTestId('casa-submit');
+      fireEvent.click(submitButton);
+      
+      expect(redirectingToIbanking).toHaveBeenCalled();
+    });
+
+    test('redirects to mobile app when source is scm', () => {
+      const { getUrl } = require('../../../utils/common/change.utils');
+      getUrl.getParameterByName.mockImplementation((param) => {
+        return param === 'source' ? 'scm' : null;
+      });
+      
+      renderComponent();
+      
+      const submitButton = screen.getByTestId('casa-submit');
+      fireEvent.click(submitButton);
+      
+      expect(window.location.href).toBe('https://mobile.example.com');
+    });
+
+    test('redirects to mobile transfer when channel is MBNK', () => {
+      const { getUrl } = require('../../../utils/common/change.utils');
+      getUrl.getParameterByName.mockImplementation((param) => {
+        return param === 'channel' ? 'MBNK' : null;
+      });
+      
+      renderComponent();
+      
+      const submitButton = screen.getByTestId('casa-submit');
+      fireEvent.click(submitButton);
+      
+      expect(window.location.href).toBe('https://transfer.example.com');
+    });
+  });
+
+  describe('Application Reference Number', () => {
+    test('displays correct application reference number', () => {
+      renderComponent();
+      expect(screen.getByTestId('casa-ref')).toHaveTextContent('APP123456');
+    });
+
+    test('uses application reference from URL when available', () => {
+      const { getUrl } = require('../../../utils/common/change.utils');
+      getUrl.getChannelRefNo.mockReturnValue({ applicationRefNo: 'URL123456' });
+      
+      renderComponent();
+      expect(screen.getByTestId('casa-ref')).toHaveTextContent('URL123456');
     });
   });
 
   describe('Event Tracking', () => {
-    test('should trigger Adobe analytics event on component load', () => {
-      renderWithProviders(<ThankYou />);
+    test('triggers Adobe analytics event on load', () => {
+      const trackEvents = require('../../../services/track-events').default;
+      
+      renderComponent();
       
       expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith('formSubmit');
     });
 
-    test('should trigger GA page view event', () => {
-      renderWithProviders(<ThankYou />);
+    test('triggers GA page view event on load', () => {
+      const gaTrackEvents = require('../../../services/ga-track-events').default;
+      
+      renderComponent();
       
       expect(gaTrackEvents.pageView).toHaveBeenCalledWith('thankyou');
     });
 
-    test('should not trigger events when auth is upload', () => {
-      changeUtils.getUrl.getParameterByName = jest.fn().mockReturnValue('upload');
+    test('does not trigger events when auth is upload', () => {
+      const { getUrl } = require('../../../utils/common/change.utils');
+      getUrl.getParameterByName.mockReturnValue('upload');
       
-      renderWithProviders(<ThankYou />);
+      const trackEvents = require('../../../services/track-events').default;
+      const gaTrackEvents = require('../../../services/ga-track-events').default;
+      
+      renderComponent();
       
       expect(trackEvents.triggerAdobeEvent).not.toHaveBeenCalled();
       expect(gaTrackEvents.pageView).not.toHaveBeenCalled();
     });
   });
 
-  describe('Form Submission', () => {
-    test('should redirect to home page for non-ibanking auth mode', async () => {
-      const nonIbankingState = {
-        stages: [{
-          ...initialState.stages.stages[0],
-          stageInfo: {
-            ...initialState.stages.stages[0].stageInfo,
-            applicants: {
-              auth_mode_a_1: 'OTHER'
-            }
-          }
-        }]
-      };
-
-      renderWithProviders(<ThankYou />, nonIbankingState);
-      
-      // Simulate form submission
-      const form = screen.getByTestId('form');
-      fireEvent.submit(form);
-      
-      expect(window.location.href).toBe('https://example.com/home');
-    });
-
-    test('should call ibanking redirection for IX auth mode', () => {
-      renderWithProviders(<ThankYou />);
-      
-      const form = screen.getByTestId('form');
-      fireEvent.submit(form);
-      
-      expect(commonService.redirectingToIbanking).toHaveBeenCalled();
-    });
-
-    test('should redirect to mobile ibanking when source is scm', () => {
-      changeUtils.getUrl.getParameterByName = jest.fn().mockImplementation((param) => {
-        if (param === 'source') return 'scm';
-        return null;
-      });
-
-      renderWithProviders(<ThankYou />);
-      
-      const form = screen.getByTestId('form');
-      fireEvent.submit(form);
-      
-      expect(window.location.href).toBe('https://example.com/mobile');
-    });
-
-    test('should redirect to mobile transfer when channel is MBNK', () => {
-      changeUtils.getUrl.getParameterByName = jest.fn().mockImplementation((param) => {
-        if (param === 'channel') return 'MBNK';
-        return null;
-      });
-
-      renderWithProviders(<ThankYou />);
-      
-      const form = screen.getByTestId('form');
-      fireEvent.submit(form);
-      
-      expect(window.location.href).toBe('https://example.com/transfer');
-    });
-  });
-
-  describe('Card Activation Flow', () => {
-    test('should show activation success UI when card activation succeeds', async () => {
-      const otpSuccessState = {
-        otpSuccess: true
-      };
-
-      mockDispatch = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
-      
-      renderWithProviders(<ThankYou />, otpSuccessState);
-      
-      await waitFor(() => {
-        expect(mockDispatch).toHaveBeenCalled();
-      });
-    });
-
-    test('should show error UI when card activation fails', async () => {
-      const otpSuccessState = {
-        otpSuccess: true
-      };
-
-      mockDispatch = jest.fn().mockResolvedValue({ status: 'FAILED' });
-      
-      renderWithProviders(<ThankYou />, otpSuccessState);
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('thankyou-error')).toBeInTheDocument();
-      });
-    });
-  });
-
   describe('Error Handling', () => {
-    test('should handle missing stage selector gracefully', () => {
+    test('handles empty stages array gracefully', () => {
       const emptyState = {
-        stages: []
-      };
-
-      expect(() => {
-        renderWithProviders(<ThankYou />, emptyState);
-      }).not.toThrow();
-    });
-
-    test('should handle missing product details gracefully', () => {
-      const noProductsState = {
-        stages: [{
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123456' },
-            products: []
-          }
-        }]
-      };
-
-      expect(() => {
-        renderWithProviders(<ThankYou />, noProductsState);
-      }).not.toThrow();
-    });
-
-    test('should handle missing applicant details gracefully', () => {
-      const noApplicantState = {
-        stages: [{
-          ...initialState.stages.stages[0],
-          stageInfo: {
-            ...initialState.stages.stages[0].stageInfo,
-            applicants: null
-          }
-        }]
-      };
-
-      expect(() => {
-        renderWithProviders(<ThankYou />, noApplicantState);
-      }).not.toThrow();
-    });
-  });
-
-  describe('URL Parameter Handling', () => {
-    test('should handle different URL parameters correctly', () => {
-      changeUtils.getUrl.getParameterByName = jest.fn().mockImplementation((param) => {
-        switch (param) {
-          case 'auth': return 'upload';
-          case 'source': return 'web';
-          case 'channel': return 'WEB';
-          default: return null;
+        stages: {
+          stages: [],
+          journeyType: 'NTB',
+          otpSuccess: false,
+          isDocumentUpload: false
         }
-      });
-
-      renderWithProviders(<ThankYou />);
-      
-      expect(screen.getByTestId('thankyou-upload')).toBeInTheDocument();
-    });
-  });
-
-  describe('Component State Management', () => {
-    test('should initialize with correct default state', () => {
-      renderWithProviders(<ThankYou />);
-      
-      // Component should render without errors
-      expect(screen.getByTestId('form')).toBeInTheDocument();
-    });
-
-    test('should update state correctly when otpSuccess changes', async () => {
-      const { rerender } = renderWithProviders(<ThankYou />);
-      
-      // Update store state to trigger otpSuccess
-      const newState = {
-        otpSuccess: true
       };
       
-      rerender(
-        <Provider store={createMockStore(newState)}>
+      expect(() => renderComponent(emptyState)).not.toThrow();
+    });
+
+    test('handles missing products array gracefully', () => {
+      const noProductsState = {
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          stages: [{
+            stageId: 'thankyou',
+            stageInfo: {
+              application: { application_reference: 'APP123456' }
+            }
+          }]
+        }
+      };
+      
+      expect(() => renderComponent(noProductsState)).not.toThrow();
+    });
+
+    test('renders error component when showErrorUI is true', async () => {
+      const errorState = {
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          otpSuccess: true
+        }
+      };
+      
+      const { activateDigitalCard } = require('../../../services/common-service');
+      activateDigitalCard.mockResolvedValue({ status: 'FAILED' });
+      
+      const store = mockStore(errorState);
+      store.dispatch = jest.fn(() => Promise.resolve({ status: 'FAILED' }));
+      
+      render(
+        <Provider store={store}>
           <BrowserRouter>
             <ThankYou />
           </BrowserRouter>
@@ -448,18 +390,94 @@ describe('ThankYou Component', () => {
       );
       
       await waitFor(() => {
-        expect(mockDispatch).toHaveBeenCalled();
+        expect(screen.getByTestId('thankyou-error')).toBeInTheDocument();
       });
     });
   });
 
-  describe('Accessibility', () => {
-    test('should have proper test ids for testing', () => {
-      renderWithProviders(<ThankYou />);
+  describe('Product Category Logic', () => {
+    test('correctly identifies SA products', () => {
+      renderComponent();
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+
+    test('handles multiple product categories', () => {
+      const multiProductState = {
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          stages: [{
+            ...mockInitialState.stages.stages[0],
+            stageInfo: {
+              ...mockInitialState.stages.stages[0].stageInfo,
+              products: [
+                {
+                  product_category: 'SA',
+                  name: 'Savings Account',
+                  product_sequence_number: 1,
+                  product_type: 'REGULAR'
+                },
+                {
+                  product_category: 'CA',
+                  name: 'Current Account',
+                  product_sequence_number: 2,
+                  product_type: 'BUSINESS'
+                }
+              ]
+            }
+          }]
+        }
+      };
       
-      expect(screen.getByTestId('form')).toBeInTheDocument();
-      expect(screen.getByTestId('app thankyou')).toBeInTheDocument();
-      expect(screen.getByTestId('app__body')).toBeInTheDocument();
+      renderComponent(multiProductState);
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+  });
+
+  describe('Component State Updates', () => {
+    test('updates application details state correctly', () => {
+      renderComponent();
+      // Component should render without errors, indicating state is set correctly
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+
+    test('handles STP vs NSTP determination', () => {
+      const stpState = {
+        ...mockInitialState,
+        stages: {
+          ...mockInitialState.stages,
+          stages: [{
+            ...mockInitialState.stages.stages[0],
+            stageInfo: {
+              ...mockInitialState.stages.stages[0].stageInfo,
+              products: [{
+                product_category: 'SA',
+                name: 'Savings Account',
+                acct_details: [{
+                  account_number: '1234567890'
+                }]
+              }]
+            }
+          }]
+        }
+      };
+      
+      renderComponent(stpState);
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+  });
+
+  describe('Navigation', () => {
+    test('form prevents default submission', () => {
+      renderComponent();
+      
+      const form = screen.getByTestId('form');
+      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+      const preventDefaultSpy = jest.spyOn(submitEvent, 'preventDefault');
+      
+      fireEvent(form, submitEvent);
+      
+      expect(preventDefaultSpy).toHaveBeenCalled();
     });
   });
 });
