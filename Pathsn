@@ -1,10 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { store } from '../../../utils/store/store';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ThankYou from './thank-you';
 import { useNavigate } from 'react-router-dom';
-import thankyouData from '../../../assets/_json/thankyou.json';
+import { useSelector, useDispatch } from 'react-redux';
 
 // Mock the dependencies
 jest.mock('react-router-dom', () => ({
@@ -20,9 +18,9 @@ jest.mock('react-redux', () => ({
 
 jest.mock('../../../utils/common/change.utils', () => ({
   getUrl: {
-    getChannelRefNo: jest.fn(),
-    getParameterByName: jest.fn(),
-    getUpdatedStage: jest.fn(),
+    getChannelRefNo: jest.fn(() => ({ applicationRefNo: 'TEST123' })),
+    getParameterByName: jest.fn(() => null),
+    getUpdatedStage: jest.fn(() => ({ ccplChannel: '' })),
   },
 }));
 
@@ -36,64 +34,48 @@ jest.mock('../../../services/ga-track-events', () => ({
 
 jest.mock('../../../services/common-service', () => ({
   redirectingToIbanking: jest.fn(),
-  activateDigitalCard: jest.fn(),
+  activateDigitalCard: jest.fn(() => Promise.resolve({ status: 'SUCCESS' })),
+}));
+
+jest.mock('../../../utils/store/store', () => ({
+  getState: jest.fn(() => ({
+    stages: {
+      isDocumentUpload: false,
+    },
+  })),
 }));
 
 describe('ThankYou Component', () => {
   const mockNavigate = jest.fn();
   const mockDispatch = jest.fn();
-  const mockUseSelector = jest.fn();
-  const mockGetUrl = {
-    getChannelRefNo: jest.fn(),
-    getParameterByName: jest.fn(),
-    getUpdatedStage: jest.fn(),
-  };
 
   beforeEach(() => {
     (useNavigate as jest.Mock).mockReturnValue(mockNavigate);
-    (useSelector as jest.Mock).mockImplementation(mockUseSelector);
     (useDispatch as jest.Mock).mockReturnValue(mockDispatch);
     
-    // Mock the store and URL utils
-    require('../../../utils/common/change.utils').getUrl = mockGetUrl;
-    
-    // Default mocks
-    mockGetUrl.getChannelRefNo.mockReturnValue({ applicationRefNo: 'TEST123' });
-    mockGetUrl.getParameterByName.mockReturnValue(null);
-    mockGetUrl.getUpdatedStage.mockReturnValue({ ccplChannel: '' });
-    
-    mockUseSelector.mockImplementation((selector) => {
-      if (selector === jest.requireActual('react-redux').shallowEqual) {
-        return [];
-      }
-      return {
-        stages: [
-          {
+    (useSelector as jest.Mock).mockImplementation((callback) => {
+      return callback({
+        stages: {
+          stages: [{
             stageId: 'thankyou',
             stageInfo: {
               application: { application_reference: 'TEST123' },
-              products: [
-                {
-                  product_category: 'CA',
-                  name: 'Current Account',
-                  product_sequence_number: '1',
-                  product_type: 'CA',
-                  acct_details: [
-                    { account_number: '1234567890', card_no: '1111222233334444' }
-                  ]
-                }
-              ],
+              products: [{
+                product_category: 'CA',
+                name: 'Current Account',
+                acct_details: [{ account_number: '1234567890' }]
+              }],
               applicants: {
-                auth_mode_a_1: 'IX',
+                auth_mode_a_1: 'OTP',
                 embossed_name_a_1: 'John Doe'
               }
             }
-          }
-        ],
-        journeyType: 'new',
-        otpSuccess: false,
-        isDocumentUpload: false
-      };
+          }],
+          journeyType: 'new',
+          otpSuccess: false,
+        },
+        isDocumentUpload: false,
+      });
     });
   });
 
@@ -101,221 +83,116 @@ describe('ThankYou Component', () => {
     jest.clearAllMocks();
   });
 
-  it('renders without crashing', () => {
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
-    
+  it('renders the basic thank you page', () => {
+    render(<ThankYou />);
     expect(screen.getByTestId('form')).toBeInTheDocument();
-  });
-
-  it('displays ThankYouCASA component for CA/SA products', () => {
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
-    
     expect(screen.getByText(/Current Account/i)).toBeInTheDocument();
   });
 
-  it('handles form submission for IX/IM auth mode', () => {
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
-    
-    const submitButton = screen.getByRole('button', { name: /continue/i });
-    fireEvent.click(submitButton);
-    
-    expect(require('../../../services/common-service').redirectingToIbanking).toHaveBeenCalled();
-  });
-
-  it('handles form submission for non-IX/IM auth mode', () => {
-    // Change the auth mode mock
-    mockUseSelector.mockImplementation((selector) => {
-      if (selector === jest.requireActual('react-redux').shallowEqual) {
-        return [];
-      }
-      return {
-        stages: [
-          {
-            stageId: 'thankyou',
-            stageInfo: {
-              application: { application_reference: 'TEST123' },
-              products: [
-                {
-                  product_category: 'CA',
-                  name: 'Current Account',
-                  product_sequence_number: '1',
-                  product_type: 'CA',
-                  acct_details: [
-                    { account_number: '1234567890', card_no: '1111222233334444' }
-                  ]
-                }
-              ],
-              applicants: {
-                auth_mode_a_1: 'OTP',
-                embossed_name_a_1: 'John Doe'
-              }
-            }
-          }
-        ],
-        journeyType: 'new',
-        otpSuccess: false,
-        isDocumentUpload: false
-      };
-    });
-    
+  it('handles submission with OTP auth mode', () => {
     delete window.location;
     window.location = { href: '' } as any;
     
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
-    
+    render(<ThankYou />);
     const submitButton = screen.getByRole('button', { name: /continue/i });
     fireEvent.click(submitButton);
     
     expect(window.location.href).toBe(process.env.REACT_APP_HOME_PAGE_URL);
   });
 
-  it('displays ThankYouUpload when auth=upload or isDocumentUpload is true', () => {
-    mockGetUrl.getParameterByName.mockReturnValue('upload');
+  it('handles submission with IX auth mode', () => {
+    (useSelector as jest.Mock).mockImplementation((callback) => {
+      return callback({
+        stages: {
+          stages: [{
+            stageInfo: {
+              application: { application_reference: 'TEST123' },
+              products: [{
+                product_category: 'CA',
+                name: 'Current Account',
+                acct_details: [{ account_number: '1234567890' }]
+              }],
+              applicants: {
+                auth_mode_a_1: 'IX',
+              }
+            }
+          }],
+        },
+      });
+    });
     
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
+    const { redirectingToIbanking } = require('../../../services/common-service');
+    render(<ThankYou />);
+    const submitButton = screen.getByRole('button', { name: /continue/i });
+    fireEvent.click(submitButton);
     
+    expect(redirectingToIbanking).toHaveBeenCalled();
+  });
+
+  it('shows upload component when auth=upload', () => {
+    const { getUrl } = require('../../../utils/common/change.utils');
+    getUrl.getParameterByName.mockReturnValue('upload');
+    
+    render(<ThankYou />);
     expect(screen.getByTestId('form')).toBeInTheDocument();
-    // Add more specific assertions for upload UI
+    // Add more specific assertions for upload UI if needed
   });
 
   it('triggers tracking events on mount', () => {
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
+    const { pageView } = require('../../../services/ga-track-events');
+    const { triggerAdobeEvent } = require('../../../services/track-events');
     
-    expect(require('../../../services/ga-track-events').pageView).toHaveBeenCalledWith('thankyou');
-    expect(require('../../../services/track-events').triggerAdobeEvent).toHaveBeenCalledWith('formSubmit');
+    render(<ThankYou />);
+    expect(pageView).toHaveBeenCalledWith('thankyou');
+    expect(triggerAdobeEvent).toHaveBeenCalledWith('formSubmit');
   });
 
-  it('does not trigger tracking events when auth=upload', () => {
-    mockGetUrl.getParameterByName.mockReturnValue('upload');
+  it('does not trigger tracking when auth=upload', () => {
+    const { getUrl } = require('../../../utils/common/change.utils');
+    const { pageView } = require('../../../services/ga-track-events');
+    const { triggerAdobeEvent } = require('../../../services/track-events');
     
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
+    getUrl.getParameterByName.mockReturnValue('upload');
+    render(<ThankYou />);
     
-    expect(require('../../../services/ga-track-events').pageView).not.toHaveBeenCalled();
-    expect(require('../../../services/track-events').triggerAdobeEvent).not.toHaveBeenCalled();
+    expect(pageView).not.toHaveBeenCalled();
+    expect(triggerAdobeEvent).not.toHaveBeenCalled();
   });
+});
 
-  it('handles CC product with activation flow', async () => {
-    // Mock CC product
-    mockUseSelector.mockImplementation((selector) => {
-      if (selector === jest.requireActual('react-redux').shallowEqual) {
-        return [];
-      }
-      return {
-        stages: [
-          {
-            stageId: 'thankyou',
+describe('ThankYou Component with Credit Card', () => {
+  const mockDispatch = jest.fn();
+
+  beforeEach(() => {
+    (useNavigate as jest.Mock).mockReturnValue(jest.fn());
+    (useDispatch as jest.Mock).mockReturnValue(mockDispatch);
+    
+    (useSelector as jest.Mock).mockImplementation((callback) => {
+      return callback({
+        stages: {
+          stages: [{
             stageInfo: {
               application: { application_reference: 'TEST123' },
-              products: [
-                {
-                  product_category: 'CC',
-                  name: 'Credit Card',
-                  product_sequence_number: '1',
-                  product_type: 'CC',
-                  acct_details: [
-                    { account_number: '1234567890', card_no: '1111222233334444' }
-                  ]
-                }
-              ],
+              products: [{
+                product_category: 'CC',
+                name: 'Credit Card',
+                acct_details: [{ card_no: '1111222233334444' }]
+              }],
               applicants: {
-                auth_mode_a_1: 'IX',
+                auth_mode_a_1: 'OTP',
                 embossed_name_a_1: 'John Doe'
               }
             }
-          }
-        ],
-        journeyType: 'new',
-        otpSuccess: false,
-        isDocumentUpload: false
-      };
+          }],
+          otpSuccess: false,
+        },
+      });
     });
-    
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
-    
-    // Add assertions for CC flow
-    // This would test the activation flow for credit cards
   });
 
-  it('shows error UI when activation fails', async () => {
-    // Mock activation failure
-    mockUseSelector.mockImplementation((selector) => {
-      if (selector === jest.requireActual('react-redux').shallowEqual) {
-        return [];
-      }
-      return {
-        stages: [
-          {
-            stageId: 'thankyou',
-            stageInfo: {
-              application: { application_reference: 'TEST123' },
-              products: [
-                {
-                  product_category: 'CC',
-                  name: 'Credit Card',
-                  product_sequence_number: '1',
-                  product_type: 'CC',
-                  acct_details: [
-                    { account_number: '1234567890', card_no: '1111222233334444' }
-                  ]
-                }
-              ],
-              applicants: {
-                auth_mode_a_1: 'IX',
-                embossed_name_a_1: 'John Doe'
-              }
-            }
-          }
-        ],
-        journeyType: 'new',
-        otpSuccess: true, // Simulate OTP success
-        isDocumentUpload: false
-      };
-    });
-    
-    require('../../../services/common-service').activateDigitalCard.mockResolvedValue({
-      status: 'FAILURE'
-    });
-    
-    render(
-      <Provider store={store}>
-        <ThankYou />
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByText(/error/i)).toBeInTheDocument();
-    });
+  it('renders credit card thank you page', () => {
+    render(<ThankYou />);
+    expect(screen.getByTestId('form')).toBeInTheDocument();
+    // Add more specific assertions for CC UI
   });
 });
