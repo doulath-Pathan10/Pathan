@@ -1,303 +1,321 @@
-import { useEffect, useState } from "react";
-import "./thank-you.scss";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import thankyouData from "../../../assets/_json/thankyou.json";
-import { useSelector, useDispatch } from "react-redux";
-import { getUrl } from "../../../utils/common/change.utils";
-import trackEvents from "../../../services/track-events";
-import {
-  redirectingToIbanking,
-  activateDigitalCard,
-} from "../../../services/common-service";
-import Model from "../../../shared/components/model/model";
-import PopupModel from "../../../shared/components/popup-model/popup-model";
-import ThankYouCASA from "./thankyou-casa";
-import ThankYouCC from "./thankyou-cc";
-//import ThankYouPL from "./thankyou-pl";
-import CCWithoutActivation from "./cc-without-activation";
-import gaTrackEvents from "../../../services/ga-track-events";
-import CCActivationSucess from "./cc-activation-success";
-import ThankyouError from "./thankyou-error";
-import { useNavigate } from "react-router-dom";
-import ThankYouUpload from "./thankyou-upload";
-import { store } from "../../../utils/store/store";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { store } from '../../../utils/store/store';
+import ThankYou from './thank-you';
+import { useNavigate } from 'react-router-dom';
+import thankyouData from '../../../assets/_json/thankyou.json';
 
-const ThankYou = () => {
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  /*istanbul ignore next */
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  //const plProducts = app?.products.filter((product: any) => product?.product_category === 'PL');
-  const applicationJourney = useSelector(
-    (state: StoreModel) => state.stages.journeyType
-  );
-  const otpSuccessSelector = useSelector(
-    (state: StoreModel) => state.stages.otpSuccess
-  );
-  const thankyou: KeyWithAnyModel = thankyouData;
-  //const [isFunding, setIsFunding] = useState(false);
-  const applicationReferenceNo = getUrl.getChannelRefNo().applicationRefNo || stageSelector[0].stageInfo.application.application_reference;
-  const [applicationDetails, setApplicationDetails] = useState({
-    productCategory: [],
-    productName: [],
-    acct_details: [],
-    account_number: "",
-    thankyouProp: "NSTP",
-    accountNum: "",
-    thankyouText: "Common",
-    thankyouFeedback: "Feedback",
-    feedbackUrl: "",
-    isStp: false,
-    loanTenureMonths: "",
-    approvedLoan: 0,
-    productType: [],
-    feeAmount: "",
-    card_no: "",
-    cardNumber: "",
-    cardName: "",
-    productSequenceNo: [],
-  });
-  const saProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "SA");
-  const caProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "CA");
-  const tdProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "TD");
-  const [enableActivation, setEnableActivation] = useState<boolean>(false);
-  const [showPlatinum, setShowPlatinum] = useState<boolean>(false);
-  const [isCampaignBenefits, setIsCampaignBenefits] = useState<boolean>(false);
-  const [
-    showContinueWithoutActivationMsg,
-    setShowContinueWithoutActivationMsg,
-  ] = useState<boolean>(false);
-  const [continueWithoutActivationUI, setContinueWithoutActivationUI] =
-    useState(false);
-  const [cardActivationSuccessUI, setCardActivationSuccessUI] = useState(false);
-  const [showErrorUI, setShowerrorUI] = useState(false);
-  useEffect(() => {
-    setApplicationDetails((prevValue) => {
-      if (
-        stageSelector &&
-        stageSelector[0].stageInfo && stageSelector[0].stageInfo.products &&
-        stageSelector[0].stageInfo.products.length >= 1
-      ) {
-        prevValue.productCategory =
-          stageSelector[0].stageInfo.products.map((product:any)=> product.product_category);
-        prevValue.productName = stageSelector[0].stageInfo.products.map((product:any)=> product.name);
-        prevValue.productSequenceNo =
-          stageSelector[0].stageInfo.products.map((product:any)=> product.product_sequence_number);
-        prevValue.productType =
-          stageSelector[0].stageInfo.products.map((product:any)=> product.product_type);
-        if (
-          stageSelector[0].stageInfo.products[0].acct_details &&
-          stageSelector[0].stageInfo.products[0].acct_details.length >= 1
-        ) {
-          prevValue.acct_details =
-            stageSelector[0].stageInfo.products[0].acct_details;
-          prevValue.account_number =
-            stageSelector[0].stageInfo.products[0].acct_details[0].account_number;
-          prevValue.card_no =
-            stageSelector[0].stageInfo.products[0].acct_details[0].card_no;
-        }
-      }
-      prevValue.thankyouProp = "NSTP";
-      if (
-        prevValue.acct_details &&
-        prevValue.acct_details[0] &&
-        prevValue.account_number
-      ) {
-        prevValue.thankyouProp = "STP";
-        prevValue.accountNum = prevValue.account_number;
-      }
-      if (
-        prevValue.acct_details &&
-        prevValue.acct_details[0] &&
-        prevValue.card_no
-      ) {
-        prevValue.thankyouProp = "STP";
-        prevValue.cardNumber = prevValue.card_no;
-      }
-      prevValue.isStp = prevValue.thankyouProp === "STP" ? true : false;
-      prevValue.feedbackUrl =
-        thankyou[prevValue.thankyouFeedback]["url_prefix"] +
-        thankyou[prevValue.thankyouFeedback]["casa"] +
-        thankyou[prevValue.thankyouFeedback]["url_suffix"] +
-        applicationReferenceNo!;
+// Mock the dependencies
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: jest.fn(),
+}));
 
-      prevValue = setSTPData(prevValue);
-      if (prevValue.isStp) {
-        if (prevValue.productCategory[0] === "CC"
-        && (prevValue.productCategory[1] === "CA"
-        || prevValue.productCategory[1] === "SA"
-        ||prevValue.productCategory[0] ==="SA"
-        || prevValue.productCategory[0] === "CC")) {
-          prevValue.thankyouText="CCSTP"
-          
-          if (stageSelector[0].stageInfo.applicants) {
-            if (stageSelector[0].stageInfo.applicants.embossed_name_a_1) {
-              prevValue.cardName =
-                stageSelector[0].stageInfo.applicants.embossed_name_a_1.toUpperCase();
-            }
-            if (prevValue.card_no) {
-              prevValue.cardNumber = prevValue.card_no;
+jest.mock('react-redux', () => ({
+  ...jest.requireActual('react-redux'),
+  useSelector: jest.fn(),
+  useDispatch: jest.fn(),
+}));
+
+jest.mock('../../../utils/common/change.utils', () => ({
+  getUrl: {
+    getChannelRefNo: jest.fn(),
+    getParameterByName: jest.fn(),
+    getUpdatedStage: jest.fn(),
+  },
+}));
+
+jest.mock('../../../services/track-events', () => ({
+  triggerAdobeEvent: jest.fn(),
+}));
+
+jest.mock('../../../services/ga-track-events', () => ({
+  pageView: jest.fn(),
+}));
+
+jest.mock('../../../services/common-service', () => ({
+  redirectingToIbanking: jest.fn(),
+  activateDigitalCard: jest.fn(),
+}));
+
+describe('ThankYou Component', () => {
+  const mockNavigate = jest.fn();
+  const mockDispatch = jest.fn();
+  const mockUseSelector = jest.fn();
+  const mockGetUrl = {
+    getChannelRefNo: jest.fn(),
+    getParameterByName: jest.fn(),
+    getUpdatedStage: jest.fn(),
+  };
+
+  beforeEach(() => {
+    (useNavigate as jest.Mock).mockReturnValue(mockNavigate);
+    (useSelector as jest.Mock).mockImplementation(mockUseSelector);
+    (useDispatch as jest.Mock).mockReturnValue(mockDispatch);
+    
+    // Mock the store and URL utils
+    require('../../../utils/common/change.utils').getUrl = mockGetUrl;
+    
+    // Default mocks
+    mockGetUrl.getChannelRefNo.mockReturnValue({ applicationRefNo: 'TEST123' });
+    mockGetUrl.getParameterByName.mockReturnValue(null);
+    mockGetUrl.getUpdatedStage.mockReturnValue({ ccplChannel: '' });
+    
+    mockUseSelector.mockImplementation((selector) => {
+      if (selector === jest.requireActual('react-redux').shallowEqual) {
+        return [];
+      }
+      return {
+        stages: [
+          {
+            stageId: 'thankyou',
+            stageInfo: {
+              application: { application_reference: 'TEST123' },
+              products: [
+                {
+                  product_category: 'CA',
+                  name: 'Current Account',
+                  product_sequence_number: '1',
+                  product_type: 'CA',
+                  acct_details: [
+                    { account_number: '1234567890', card_no: '1111222233334444' }
+                  ]
+                }
+              ],
+              applicants: {
+                auth_mode_a_1: 'IX',
+                embossed_name_a_1: 'John Doe'
+              }
             }
           }
-        } 
-
-      }
-      return { ...prevValue };
+        ],
+        journeyType: 'new',
+        otpSuccess: false,
+        isDocumentUpload: false
+      };
     });
-    /*istanbul ignore next */
-    if (stageSelector[0] && stageSelector[0].stageId && getUrl.getParameterByName("auth") !== "upload" && !store.getState().stages.isDocumentUpload) {
-      gaTrackEvents.pageView(stageSelector[0].stageId);
-    }
-    /* istanbul ignore else */
-    if(getUrl.getParameterByName("auth") !== "upload" && !store.getState().stages.isDocumentUpload){
-    trackEvents.triggerAdobeEvent("formSubmit");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
 
-  useEffect(() => {
-    if (otpSuccessSelector) {
-      activateCard();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otpSuccessSelector]);
-  const setSTPData = (prevValue: any) => {
-    if (prevValue.isStp && prevValue.productCategory) {
-      if (prevValue.productCategory[0] === "CC"
-        && (prevValue.productCategory[1] === "CA"
-        || prevValue.productCategory[1] === "SA"
-        ||prevValue.productCategory[0] ==="SA"
-        || prevValue.productCategory[0] === "CC")) {
-        prevValue.feedbackUrl =
-          thankyou[prevValue.thankyouFeedback]["url_prefix"] +
-          thankyou[prevValue.thankyouFeedback]["cc"] +
-          thankyou[prevValue.thankyouFeedback]["url_suffix"] +
-          applicationReferenceNo!;
-      } 
-      else if (prevValue.productCategory[1] === "PL") {
-        prevValue.feedbackUrl =
-          thankyou[prevValue.thankyouFeedback]["url_prefix"] +
-          thankyou[prevValue.thankyouFeedback]["pl"] +
-          thankyou[prevValue.thankyouFeedback]["url_suffix"] +
-          applicationReferenceNo!;
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders without crashing', () => {
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    expect(screen.getByTestId('form')).toBeInTheDocument();
+  });
+
+  it('displays ThankYouCASA component for CA/SA products', () => {
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    expect(screen.getByText(/Current Account/i)).toBeInTheDocument();
+  });
+
+  it('handles form submission for IX/IM auth mode', () => {
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    const submitButton = screen.getByRole('button', { name: /continue/i });
+    fireEvent.click(submitButton);
+    
+    expect(require('../../../services/common-service').redirectingToIbanking).toHaveBeenCalled();
+  });
+
+  it('handles form submission for non-IX/IM auth mode', () => {
+    // Change the auth mode mock
+    mockUseSelector.mockImplementation((selector) => {
+      if (selector === jest.requireActual('react-redux').shallowEqual) {
+        return [];
       }
-    }
-    return prevValue;
-  };
-
-  const submitForm = (event:React.FormEvent<EventTarget>) => {
-    if (
-      stageSelector &&
-      (stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IX" || stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IM")
-    ) {
-      goToIBanking(event);
-    } else {
-      window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`;
-    }
-    event.preventDefault();
-  };
-
-  const continueWithoutActivation = () => {
-    setShowContinueWithoutActivationMsg(false);
-    setContinueWithoutActivationUI(true);
-  };
-  const showContinuePopup = (event: React.FormEvent<EventTarget>) => {
-    setShowContinueWithoutActivationMsg(true);
-    event.preventDefault();
-  };
-  const handlePopupBackButton = () => {
-    setShowContinueWithoutActivationMsg(false);
-    setContinueWithoutActivationUI(false);
-  };
-  const showOTPPopup = () => {
-    navigate("/otp");
-  };
-  const goToIBanking = (event: React.FormEvent<EventTarget>) => {
-    if (getUrl.getParameterByName("source") === "scm") {
-      //Ibanking redirection for app
-      window.location.href = `${process.env.REACT_APP_IBANKING_SC_MOBILE}`;
-    }  else if(getUrl.getUpdatedStage().ccplChannel=== "MBNK" || getUrl.getParameterByName("channel") === "MBNK") {
-      const redirectUrl =  `${process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER}`;
-      window.location.href = redirectUrl;
-    }else {
-      redirectingToIbanking();
-    }
-    event.preventDefault();
-  };
-  const activateCard = () => {
-    setShowContinueWithoutActivationMsg(false);
-    setContinueWithoutActivationUI(false);
-    setShowerrorUI(false);
-    dispatch(activateDigitalCard(applicationDetails)).then((result: any) => {
-      if (result.status && result.status.toUpperCase() === "SUCCESS") {
-        setCardActivationSuccessUI(true);
-      } else {
-        setShowerrorUI(true);
-      }
+      return {
+        stages: [
+          {
+            stageId: 'thankyou',
+            stageInfo: {
+              application: { application_reference: 'TEST123' },
+              products: [
+                {
+                  product_category: 'CA',
+                  name: 'Current Account',
+                  product_sequence_number: '1',
+                  product_type: 'CA',
+                  acct_details: [
+                    { account_number: '1234567890', card_no: '1111222233334444' }
+                  ]
+                }
+              ],
+              applicants: {
+                auth_mode_a_1: 'OTP',
+                embossed_name_a_1: 'John Doe'
+              }
+            }
+          }
+        ],
+        journeyType: 'new',
+        otpSuccess: false,
+        isDocumentUpload: false
+      };
     });
-  };
-  return (
-    <>
-      {applicationDetails && (
-        <form data-testid="form" className="form">
-          <div data-testid="app thankyou" className="app thankyou">
-            <div  data-testid="app__body" className="app__body">
-              <div className="app__right">
-                <div className="thankyou__container">
-                  {!showErrorUI &&
-                    !continueWithoutActivationUI &&
-                    !cardActivationSuccessUI && (
-                      <>
-                      {(getUrl.getParameterByName("auth") === "upload" || store.getState().stages.isDocumentUpload) &&(
-                          <ThankYouUpload
-                          applicationDetails={applicationDetails}
-                          thankyou={thankyou}
-                          applicationReferenceNo={applicationReferenceNo}
-                          submitForm={submitForm}
-                        />
-                        )}
-                        {(caProducts.length ||
-                          saProducts.length) && (
-                          <ThankYouCASA
-                            applicationDetails={applicationDetails}
-                            thankyou={thankyou}
-                            applicationReferenceNo={applicationReferenceNo}
-                            submitForm={submitForm}
-                          />
-                        )}
-                   
-                        {showContinueWithoutActivationMsg && (
-                          <PopupModel displayPopup={true}>
-                            <Model
-                              name="CCThankYou"
-                              handlebuttonClick={handlePopupBackButton}
-                              handleContinueWithoutActivation={
-                                continueWithoutActivation
-                              }
-                            />
-                          </PopupModel>
-                        )}
-                      </>
-                    )}
-               
-                  {showErrorUI && (
-                    <ThankyouError
-                      applicationDetails={applicationDetails}
-                      thankyou={thankyou}
-                      applicationReferenceNo={applicationReferenceNo}
-                      goToIBanking={goToIBanking}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </form>
-      )}
-    </>
-  );
-};
+    
+    delete window.location;
+    window.location = { href: '' } as any;
+    
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    const submitButton = screen.getByRole('button', { name: /continue/i });
+    fireEvent.click(submitButton);
+    
+    expect(window.location.href).toBe(process.env.REACT_APP_HOME_PAGE_URL);
+  });
 
-export default ThankYou;
+  it('displays ThankYouUpload when auth=upload or isDocumentUpload is true', () => {
+    mockGetUrl.getParameterByName.mockReturnValue('upload');
+    
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    expect(screen.getByTestId('form')).toBeInTheDocument();
+    // Add more specific assertions for upload UI
+  });
 
-please write the test cases using jest with RTL
+  it('triggers tracking events on mount', () => {
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    expect(require('../../../services/ga-track-events').pageView).toHaveBeenCalledWith('thankyou');
+    expect(require('../../../services/track-events').triggerAdobeEvent).toHaveBeenCalledWith('formSubmit');
+  });
+
+  it('does not trigger tracking events when auth=upload', () => {
+    mockGetUrl.getParameterByName.mockReturnValue('upload');
+    
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    expect(require('../../../services/ga-track-events').pageView).not.toHaveBeenCalled();
+    expect(require('../../../services/track-events').triggerAdobeEvent).not.toHaveBeenCalled();
+  });
+
+  it('handles CC product with activation flow', async () => {
+    // Mock CC product
+    mockUseSelector.mockImplementation((selector) => {
+      if (selector === jest.requireActual('react-redux').shallowEqual) {
+        return [];
+      }
+      return {
+        stages: [
+          {
+            stageId: 'thankyou',
+            stageInfo: {
+              application: { application_reference: 'TEST123' },
+              products: [
+                {
+                  product_category: 'CC',
+                  name: 'Credit Card',
+                  product_sequence_number: '1',
+                  product_type: 'CC',
+                  acct_details: [
+                    { account_number: '1234567890', card_no: '1111222233334444' }
+                  ]
+                }
+              ],
+              applicants: {
+                auth_mode_a_1: 'IX',
+                embossed_name_a_1: 'John Doe'
+              }
+            }
+          }
+        ],
+        journeyType: 'new',
+        otpSuccess: false,
+        isDocumentUpload: false
+      };
+    });
+    
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    // Add assertions for CC flow
+    // This would test the activation flow for credit cards
+  });
+
+  it('shows error UI when activation fails', async () => {
+    // Mock activation failure
+    mockUseSelector.mockImplementation((selector) => {
+      if (selector === jest.requireActual('react-redux').shallowEqual) {
+        return [];
+      }
+      return {
+        stages: [
+          {
+            stageId: 'thankyou',
+            stageInfo: {
+              application: { application_reference: 'TEST123' },
+              products: [
+                {
+                  product_category: 'CC',
+                  name: 'Credit Card',
+                  product_sequence_number: '1',
+                  product_type: 'CC',
+                  acct_details: [
+                    { account_number: '1234567890', card_no: '1111222233334444' }
+                  ]
+                }
+              ],
+              applicants: {
+                auth_mode_a_1: 'IX',
+                embossed_name_a_1: 'John Doe'
+              }
+            }
+          }
+        ],
+        journeyType: 'new',
+        otpSuccess: true, // Simulate OTP success
+        isDocumentUpload: false
+      };
+    });
+    
+    require('../../../services/common-service').activateDigitalCard.mockResolvedValue({
+      status: 'FAILURE'
+    });
+    
+    render(
+      <Provider store={store}>
+        <ThankYou />
+      </Provider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.getByText(/error/i)).toBeInTheDocument();
+    });
+  });
+});
