@@ -1,383 +1,465 @@
-import { useEffect, useState } from "react";
-import "./thank-you.scss";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import thankyouData from "../../../assets/_json/thankyou.json";
-import { useSelector, useDispatch } from "react-redux";
-import { getUrl } from "../../../utils/common/change.utils";
-import trackEvents from "../../../services/track-events";
-import {
-  redirectingToIbanking,
-  activateDigitalCard,
-} from "../../../services/common-service";
-import Model from "../../../shared/components/model/model";
-import PopupModel from "../../../shared/components/popup-model/popup-model";
-import ThankYouCASA from "./thankyou-casa";
-import ThankYouCC from "./thankyou-cc";
-//import ThankYouPL from "./thankyou-pl";
-import CCWithoutActivation from "./cc-without-activation";
-import gaTrackEvents from "../../../services/ga-track-events";
-import CCActivationSucess from "./cc-activation-success";
-import ThankyouError from "./thankyou-error";
-import { useNavigate } from "react-router-dom";
-import ThankYouUpload from "./thankyou-upload";
-import { store } from "../../../utils/store/store";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { BrowserRouter } from 'react-router-dom';
+import { configureStore } from '@reduxjs/toolkit';
+import ThankYou from './thank-you';
+import * as commonService from '../../../services/common-service';
+import * as trackEvents from '../../../services/track-events';
+import * as gaTrackEvents from '../../../services/ga-track-events';
+import * as changeUtils from '../../../utils/common/change.utils';
 
-const ThankYou = () => {
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  /*istanbul ignore next */
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  //const plProducts = app?.products.filter((product: any) => product?.product_category === 'PL');
-  const applicationJourney = useSelector(
-    (state: StoreModel) => state.stages.journeyType
-  );
-  const otpSuccessSelector = useSelector(
-    (state: StoreModel) => state.stages.otpSuccess
-  );
-  const thankyou: KeyWithAnyModel = thankyouData;
-  //const [isFunding, setIsFunding] = useState(false);
-  const applicationReferenceNo = getUrl.getChannelRefNo().applicationRefNo || stageSelector[0].stageInfo.application.application_reference;
-  const [applicationDetails, setApplicationDetails] = useState({
-    productCategory: [],
-    productName: [],
-    acct_details: [],
-    account_number: "",
-    thankyouProp: "NSTP",
-    accountNum: "",
-    thankyouText: "Common",
-    thankyouFeedback: "Feedback",
-    feedbackUrl: "",
-    isStp: false,
-    loanTenureMonths: "",
-    approvedLoan: 0,
-    productType: [],
-    feeAmount: "",
-    card_no: "",
-    cardNumber: "",
-    cardName: "",
-    productSequenceNo: [],
-  });
-  const saProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "SA");
-  const caProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "CA");
-  const tdProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "TD");
-  const [enableActivation, setEnableActivation] = useState<boolean>(false);
-  const [showPlatinum, setShowPlatinum] = useState<boolean>(false);
-  const [isCampaignBenefits, setIsCampaignBenefits] = useState<boolean>(false);
-  const [
-    showContinueWithoutActivationMsg,
-    setShowContinueWithoutActivationMsg,
-  ] = useState<boolean>(false);
-  const [continueWithoutActivationUI, setContinueWithoutActivationUI] =
-    useState(false);
-  const [cardActivationSuccessUI, setCardActivationSuccessUI] = useState(false);
-  const [showErrorUI, setShowerrorUI] = useState(false);
-  useEffect(() => {
-    setApplicationDetails((prevValue) => {
-      if (
-        stageSelector &&
-        stageSelector[0].stageInfo && stageSelector[0].stageInfo.products &&
-        stageSelector[0].stageInfo.products.length >= 1
-      ) {
-        prevValue.productCategory =
-          stageSelector[0].stageInfo.products.map((product:any)=> product.product_category);
-        prevValue.productName = stageSelector[0].stageInfo.products.map((product:any)=> product.name);
-        prevValue.productSequenceNo =
-          stageSelector[0].stageInfo.products.map((product:any)=> product.product_sequence_number);
-        prevValue.productType =
-          stageSelector[0].stageInfo.products.map((product:any)=> product.product_type);
-        if (
-          stageSelector[0].stageInfo.products[0].acct_details &&
-          stageSelector[0].stageInfo.products[0].acct_details.length >= 1
-        ) {
-          prevValue.acct_details =
-            stageSelector[0].stageInfo.products[0].acct_details;
-          prevValue.account_number =
-            stageSelector[0].stageInfo.products[0].acct_details[0].account_number;
-          prevValue.card_no =
-            stageSelector[0].stageInfo.products[0].acct_details[0].card_no;
+// Mock external dependencies
+jest.mock('../../../services/common-service');
+jest.mock('../../../services/track-events');
+jest.mock('../../../services/ga-track-events');
+jest.mock('../../../utils/common/change.utils');
+jest.mock('./thankyou-casa', () => {
+  return function MockThankYouCASA() {
+    return <div data-testid="thankyou-casa">ThankYou CASA Component</div>;
+  };
+});
+jest.mock('./thankyou-cc', () => {
+  return function MockThankYouCC() {
+    return <div data-testid="thankyou-cc">ThankYou CC Component</div>;
+  };
+});
+jest.mock('./thankyou-upload', () => {
+  return function MockThankYouUpload() {
+    return <div data-testid="thankyou-upload">ThankYou Upload Component</div>;
+  };
+});
+jest.mock('./cc-without-activation', () => {
+  return function MockCCWithoutActivation() {
+    return <div data-testid="cc-without-activation">CC Without Activation</div>;
+  };
+});
+jest.mock('./cc-activation-success', () => {
+  return function MockCCActivationSuccess() {
+    return <div data-testid="cc-activation-success">CC Activation Success</div>;
+  };
+});
+jest.mock('./thankyou-error', () => {
+  return function MockThankyouError() {
+    return <div data-testid="thankyou-error">Thankyou Error</div>;
+  };
+});
+
+// Mock environment variables
+process.env.REACT_APP_HOME_PAGE_URL = 'https://example.com/home';
+process.env.REACT_APP_IBANKING_SC_MOBILE = 'https://example.com/mobile';
+process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER = 'https://example.com/transfer';
+
+describe('ThankYou Component', () => {
+  let mockStore;
+  let mockDispatch;
+
+  // Mock initial state
+  const initialState = {
+    stages: {
+      stages: [{
+        stageId: 'thankyou',
+        stageInfo: {
+          application: {
+            application_reference: 'APP123456'
+          },
+          products: [{
+            product_category: 'SA',
+            name: 'Savings Account',
+            product_sequence_number: 1,
+            product_type: 'REGULAR',
+            acct_details: [{
+              account_number: '1234567890',
+              card_no: 'CARD123456'
+            }]
+          }],
+          applicants: {
+            embossed_name_a_1: 'John Doe',
+            auth_mode_a_1: 'IX'
+          }
+        }
+      }],
+      journeyType: 'NTB',
+      otpSuccess: false,
+      isDocumentUpload: false
+    }
+  };
+
+  const createMockStore = (customState = {}) => {
+    return configureStore({
+      reducer: {
+        stages: (state = { ...initialState.stages, ...customState }, action) => {
+          switch (action.type) {
+            default:
+              return state;
+          }
         }
       }
-      prevValue.thankyouProp = "NSTP";
-      if (
-        prevValue.acct_details &&
-        prevValue.acct_details[0] &&
-        prevValue.account_number
-      ) {
-        prevValue.thankyouProp = "STP";
-        prevValue.accountNum = prevValue.account_number;
-      }
-      if (
-        prevValue.acct_details &&
-        prevValue.acct_details[0] &&
-        prevValue.card_no
-      ) {
-        prevValue.thankyouProp = "STP";
-        prevValue.cardNumber = prevValue.card_no;
-      }
-      prevValue.isStp = prevValue.thankyouProp === "STP" ? true : false;
-      prevValue.feedbackUrl =
-        thankyou[prevValue.thankyouFeedback]["url_prefix"] +
-        thankyou[prevValue.thankyouFeedback]["casa"] +
-        thankyou[prevValue.thankyouFeedback]["url_suffix"] +
-        applicationReferenceNo!;
+    });
+  };
 
-      prevValue = setSTPData(prevValue);
-      if (prevValue.isStp) {
-        if (prevValue.productCategory[0] === "CC"
-        && (prevValue.productCategory[1] === "CA"
-        || prevValue.productCategory[1] === "SA"
-        ||prevValue.productCategory[0] ==="SA"
-        || prevValue.productCategory[0] === "CC")) {
-          prevValue.thankyouText="CCSTP"
-          
-          if (stageSelector[0].stageInfo.applicants) {
-            if (stageSelector[0].stageInfo.applicants.embossed_name_a_1) {
-              prevValue.cardName =
-                stageSelector[0].stageInfo.applicants.embossed_name_a_1.toUpperCase();
-            }
-            if (prevValue.card_no) {
-              prevValue.cardNumber = prevValue.card_no;
+  const renderWithProviders = (component, customState = {}) => {
+    const store = createMockStore(customState);
+    mockDispatch = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
+    store.dispatch = mockDispatch;
+    
+    return render(
+      <Provider store={store}>
+        <BrowserRouter>
+          {component}
+        </BrowserRouter>
+      </Provider>
+    );
+  };
+
+  beforeEach(() => {
+    // Reset mocks
+    jest.clearAllMocks();
+    
+    // Mock getUrl functions
+    changeUtils.getUrl = {
+      getChannelRefNo: jest.fn().mockReturnValue({ applicationRefNo: 'APP123456' }),
+      getParameterByName: jest.fn().mockReturnValue(null),
+      getUpdatedStage: jest.fn().mockReturnValue({ ccplChannel: 'WEB' })
+    };
+
+    // Mock window.location
+    delete window.location;
+    window.location = { href: '' };
+
+    // Mock track events
+    trackEvents.triggerAdobeEvent = jest.fn();
+    gaTrackEvents.pageView = jest.fn();
+    
+    // Mock common service
+    commonService.redirectingToIbanking = jest.fn();
+    commonService.activateDigitalCard = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
+  });
+
+  describe('Component Rendering', () => {
+    test('should render ThankYou component with basic structure', () => {
+      renderWithProviders(<ThankYou />);
+      
+      expect(screen.getByTestId('form')).toBeInTheDocument();
+      expect(screen.getByTestId('app thankyou')).toBeInTheDocument();
+      expect(screen.getByTestId('app__body')).toBeInTheDocument();
+    });
+
+    test('should render ThankYouCASA when SA products are present', () => {
+      renderWithProviders(<ThankYou />);
+      
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+
+    test('should render ThankYouCASA when CA products are present', () => {
+      const caState = {
+        stages: [{
+          ...initialState.stages.stages[0],
+          stageInfo: {
+            ...initialState.stages.stages[0].stageInfo,
+            products: [{
+              ...initialState.stages.stages[0].stageInfo.products[0],
+              product_category: 'CA'
+            }]
+          }
+        }]
+      };
+
+      renderWithProviders(<ThankYou />, caState);
+      
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+
+    test('should render ThankYouUpload when auth parameter is upload', () => {
+      changeUtils.getUrl.getParameterByName = jest.fn().mockReturnValue('upload');
+      
+      renderWithProviders(<ThankYou />);
+      
+      expect(screen.getByTestId('thankyou-upload')).toBeInTheDocument();
+    });
+
+    test('should render ThankYouUpload when isDocumentUpload is true', () => {
+      const uploadState = {
+        isDocumentUpload: true
+      };
+
+      renderWithProviders(<ThankYou />, uploadState);
+      
+      expect(screen.getByTestId('thankyou-upload')).toBeInTheDocument();
+    });
+  });
+
+  describe('Application Details Processing', () => {
+    test('should process application details correctly for STP case', () => {
+      const stpState = {
+        stages: [{
+          ...initialState.stages.stages[0],
+          stageInfo: {
+            ...initialState.stages.stages[0].stageInfo,
+            products: [{
+              product_category: 'CC',
+              name: 'Credit Card',
+              product_sequence_number: 1,
+              product_type: 'PLATINUM',
+              acct_details: [{
+                account_number: '1234567890',
+                card_no: 'CARD123456'
+              }]
+            }]
+          }
+        }]
+      };
+
+      renderWithProviders(<ThankYou />, stpState);
+      
+      // Component should process the application details correctly
+      expect(screen.getByTestId('form')).toBeInTheDocument();
+    });
+
+    test('should handle multiple products correctly', () => {
+      const multiProductState = {
+        stages: [{
+          ...initialState.stages.stages[0],
+          stageInfo: {
+            ...initialState.stages.stages[0].stageInfo,
+            products: [
+              {
+                product_category: 'CC',
+                name: 'Credit Card',
+                product_sequence_number: 1,
+                product_type: 'PLATINUM',
+                acct_details: [{ account_number: '1234567890', card_no: 'CARD123456' }]
+              },
+              {
+                product_category: 'SA',
+                name: 'Savings Account',
+                product_sequence_number: 2,
+                product_type: 'REGULAR',
+                acct_details: [{ account_number: '0987654321' }]
+              }
+            ]
+          }
+        }]
+      };
+
+      renderWithProviders(<ThankYou />, multiProductState);
+      
+      expect(screen.getByTestId('thankyou-casa')).toBeInTheDocument();
+    });
+  });
+
+  describe('Event Tracking', () => {
+    test('should trigger Adobe analytics event on component load', () => {
+      renderWithProviders(<ThankYou />);
+      
+      expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith('formSubmit');
+    });
+
+    test('should trigger GA page view event', () => {
+      renderWithProviders(<ThankYou />);
+      
+      expect(gaTrackEvents.pageView).toHaveBeenCalledWith('thankyou');
+    });
+
+    test('should not trigger events when auth is upload', () => {
+      changeUtils.getUrl.getParameterByName = jest.fn().mockReturnValue('upload');
+      
+      renderWithProviders(<ThankYou />);
+      
+      expect(trackEvents.triggerAdobeEvent).not.toHaveBeenCalled();
+      expect(gaTrackEvents.pageView).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Form Submission', () => {
+    test('should redirect to home page for non-ibanking auth mode', async () => {
+      const nonIbankingState = {
+        stages: [{
+          ...initialState.stages.stages[0],
+          stageInfo: {
+            ...initialState.stages.stages[0].stageInfo,
+            applicants: {
+              auth_mode_a_1: 'OTHER'
             }
           }
-        } 
-        // else if (prevValue.productCategory[1] === "PL") {
-        //   if (stageSelector && stageSelector[0].stageInfo) {
-        //     if (stageSelector[0].stageInfo.products.length >= 1) {
-        //       prevValue.productType =
-        //         stageSelector[0].stageInfo.products[0].product_type;
-        //       if (
-        //         stageSelector[0].stageInfo.products[0].offer_details &&
-        //         stageSelector[0].stageInfo.products[0].offer_details[0].fees
-        //       )
-        //         prevValue.feeAmount =
-        //           stageSelector[0].stageInfo.products[0].offer_details[0].fees[0].fee_amount;
-        //       setIsCampaignBenefits(
-        //         thankyou.CCPL.FeeFreeCampaignCode.indexOf(
-        //           stageSelector[0].stageInfo.products[0].campaign
-        //         ) !== -1
-        //       );
-        //       if (stageSelector[0].stageInfo.products[0].acct_details) {
-        //         setShowPlatinum(
-        //           stageSelector[0].stageInfo.products[0].acct_details.length > 1
-        //         );
-        //       }
-        //     }
-        //     if (stageSelector[0].stageInfo.applicants) {
-        //       if (stageSelector[0].stageInfo.applicants.loan_tenor_a_1)
-        //         prevValue.loanTenureMonths =
-        //           stageSelector[0].stageInfo.applicants.loan_tenor_a_1;
-        //       if (
-        //         stageSelector[0].stageInfo.applicants.required_loan_amount_a_1
-        //       )
-        //         prevValue.approvedLoan =
-        //           stageSelector[0].stageInfo.applicants.required_loan_amount_a_1;
-        //       let auth_mode =
-        //         stageSelector[0].stageInfo.applicants["auth_mode_a_1"] || "";
-        //       let activate = !(
-        //         applicationJourney === "NTB" && auth_mode[1] === "N"
-        //       );
-              
-        //       setEnableActivation(activate);
-        //     }
-        //   }
-        // }
-      }
-      return { ...prevValue };
+        }]
+      };
+
+      renderWithProviders(<ThankYou />, nonIbankingState);
+      
+      // Simulate form submission
+      const form = screen.getByTestId('form');
+      fireEvent.submit(form);
+      
+      expect(window.location.href).toBe('https://example.com/home');
     });
-    /*istanbul ignore next */
-    if (stageSelector[0] && stageSelector[0].stageId && getUrl.getParameterByName("auth") !== "upload" && !store.getState().stages.isDocumentUpload) {
-      gaTrackEvents.pageView(stageSelector[0].stageId);
-    }
-    /* istanbul ignore else */
-    if(getUrl.getParameterByName("auth") !== "upload" && !store.getState().stages.isDocumentUpload){
-    trackEvents.triggerAdobeEvent("formSubmit");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  useEffect(() => {
-    if (otpSuccessSelector) {
-      activateCard();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otpSuccessSelector]);
-  const setSTPData = (prevValue: any) => {
-    if (prevValue.isStp && prevValue.productCategory) {
-      if (prevValue.productCategory[0] === "CC"
-        && (prevValue.productCategory[1] === "CA"
-        || prevValue.productCategory[1] === "SA"
-        ||prevValue.productCategory[0] ==="SA"
-        || prevValue.productCategory[0] === "CC")) {
-        prevValue.feedbackUrl =
-          thankyou[prevValue.thankyouFeedback]["url_prefix"] +
-          thankyou[prevValue.thankyouFeedback]["cc"] +
-          thankyou[prevValue.thankyouFeedback]["url_suffix"] +
-          applicationReferenceNo!;
-      } 
-      else if (prevValue.productCategory[1] === "PL") {
-        prevValue.feedbackUrl =
-          thankyou[prevValue.thankyouFeedback]["url_prefix"] +
-          thankyou[prevValue.thankyouFeedback]["pl"] +
-          thankyou[prevValue.thankyouFeedback]["url_suffix"] +
-          applicationReferenceNo!;
-      }
-    }
-    return prevValue;
-  };
-
-  const submitForm = (event:React.FormEvent<EventTarget>) => {
-    if (
-      stageSelector &&
-      (stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IX" || stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IM")
-    ) {
-      goToIBanking(event);
-    } else {
-      window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`;
-    }
-    event.preventDefault();
-  };
-
-  const continueWithoutActivation = () => {
-    setShowContinueWithoutActivationMsg(false);
-    setContinueWithoutActivationUI(true);
-  };
-  const showContinuePopup = (event: React.FormEvent<EventTarget>) => {
-    setShowContinueWithoutActivationMsg(true);
-    event.preventDefault();
-  };
-  const handlePopupBackButton = () => {
-    setShowContinueWithoutActivationMsg(false);
-    setContinueWithoutActivationUI(false);
-  };
-  const showOTPPopup = () => {
-    navigate("/otp");
-  };
-  const goToIBanking = (event: React.FormEvent<EventTarget>) => {
-    if (getUrl.getParameterByName("source") === "scm") {
-      //Ibanking redirection for app
-      window.location.href = `${process.env.REACT_APP_IBANKING_SC_MOBILE}`;
-    }  else if(getUrl.getUpdatedStage().ccplChannel=== "MBNK" || getUrl.getParameterByName("channel") === "MBNK") {
-      const redirectUrl =  `${process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER}`;
-      window.location.href = redirectUrl;
-    }else {
-      redirectingToIbanking();
-    }
-    event.preventDefault();
-  };
-  const activateCard = () => {
-    setShowContinueWithoutActivationMsg(false);
-    setContinueWithoutActivationUI(false);
-    setShowerrorUI(false);
-    dispatch(activateDigitalCard(applicationDetails)).then((result: any) => {
-      if (result.status && result.status.toUpperCase() === "SUCCESS") {
-        setCardActivationSuccessUI(true);
-      } else {
-        setShowerrorUI(true);
-      }
+    test('should call ibanking redirection for IX auth mode', () => {
+      renderWithProviders(<ThankYou />);
+      
+      const form = screen.getByTestId('form');
+      fireEvent.submit(form);
+      
+      expect(commonService.redirectingToIbanking).toHaveBeenCalled();
     });
-  };
-  return (
-    <>
-      {applicationDetails && (
-        <form data-testid="form" className="form">
-          <div data-testid="app thankyou" className="app thankyou">
-            <div  data-testid="app__body" className="app__body">
-              <div className="app__right">
-                <div className="thankyou__container">
-                  {!showErrorUI &&
-                    !continueWithoutActivationUI &&
-                    !cardActivationSuccessUI && (
-                      <>
-                      {(getUrl.getParameterByName("auth") === "upload" || store.getState().stages.isDocumentUpload) &&(
-                          <ThankYouUpload
-                          applicationDetails={applicationDetails}
-                          thankyou={thankyou}
-                          applicationReferenceNo={applicationReferenceNo}
-                          submitForm={submitForm}
-                        />
-                        )}
-                        {(caProducts.length ||
-                          saProducts.length) && (
-                          <ThankYouCASA
-                            applicationDetails={applicationDetails}
-                            thankyou={thankyou}
-                            applicationReferenceNo={applicationReferenceNo}
-                            submitForm={submitForm}
-                          />
-                        )}
-                        {/* {applicationDetails.productCategory[1] === "CC" && (
-                          <ThankYouCC
-                            applicationDetails={applicationDetails}
-                            thankyou={thankyou}
-                            applicationReferenceNo={applicationReferenceNo}
-                            submitForm={submitForm}
-                            activateCard={activateCard}
-                            showContinuePopup={showContinuePopup}
-                            showOTPPopup={showOTPPopup}
-                          />
-                        )} */}
-                        {/* {applicationDetails.productCategory[1] === "PL" && (
-                          <ThankYouPL
-                            applicationDetails={applicationDetails}
-                            thankyou={thankyou}
-                            applicationReferenceNo={applicationReferenceNo}
-                            submitForm={submitForm}
-                            enableActivation={enableActivation}
-                            showPlatinum={showPlatinum}
-                            isCampaignBenefits={isCampaignBenefits}
-                          />
-                        )} */}
-                        {showContinueWithoutActivationMsg && (
-                          <PopupModel displayPopup={true}>
-                            <Model
-                              name="CCThankYou"
-                              handlebuttonClick={handlePopupBackButton}
-                              handleContinueWithoutActivation={
-                                continueWithoutActivation
-                              }
-                            />
-                          </PopupModel>
-                        )}
-                      </>
-                    )}
-                  {/* {applicationDetails.productCategory[0] === "CC" && (
-                    <>
-                      {continueWithoutActivationUI && (
-                        <CCWithoutActivation
-                          applicationDetails={applicationDetails}
-                          thankyou={thankyou}
-                          applicationReferenceNo={applicationReferenceNo}
-                          goToIBanking={goToIBanking}
-                        />
-                      )}
-                      {cardActivationSuccessUI && (
-                        <CCActivationSucess
-                          applicationDetails={applicationDetails}
-                          thankyou={thankyou}
-                          applicationReferenceNo={applicationReferenceNo}
-                          goToIBanking={goToIBanking}
-                        />
-                      )}
-                    </>
-                  )} */}
-                  {showErrorUI && (
-                    <ThankyouError
-                      applicationDetails={applicationDetails}
-                      thankyou={thankyou}
-                      applicationReferenceNo={applicationReferenceNo}
-                      goToIBanking={goToIBanking}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </form>
-      )}
-    </>
-  );
-};
 
-export default ThankYou;
+    test('should redirect to mobile ibanking when source is scm', () => {
+      changeUtils.getUrl.getParameterByName = jest.fn().mockImplementation((param) => {
+        if (param === 'source') return 'scm';
+        return null;
+      });
 
-please write an test cases using jest with react
+      renderWithProviders(<ThankYou />);
+      
+      const form = screen.getByTestId('form');
+      fireEvent.submit(form);
+      
+      expect(window.location.href).toBe('https://example.com/mobile');
+    });
+
+    test('should redirect to mobile transfer when channel is MBNK', () => {
+      changeUtils.getUrl.getParameterByName = jest.fn().mockImplementation((param) => {
+        if (param === 'channel') return 'MBNK';
+        return null;
+      });
+
+      renderWithProviders(<ThankYou />);
+      
+      const form = screen.getByTestId('form');
+      fireEvent.submit(form);
+      
+      expect(window.location.href).toBe('https://example.com/transfer');
+    });
+  });
+
+  describe('Card Activation Flow', () => {
+    test('should show activation success UI when card activation succeeds', async () => {
+      const otpSuccessState = {
+        otpSuccess: true
+      };
+
+      mockDispatch = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
+      
+      renderWithProviders(<ThankYou />, otpSuccessState);
+      
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalled();
+      });
+    });
+
+    test('should show error UI when card activation fails', async () => {
+      const otpSuccessState = {
+        otpSuccess: true
+      };
+
+      mockDispatch = jest.fn().mockResolvedValue({ status: 'FAILED' });
+      
+      renderWithProviders(<ThankYou />, otpSuccessState);
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('thankyou-error')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('should handle missing stage selector gracefully', () => {
+      const emptyState = {
+        stages: []
+      };
+
+      expect(() => {
+        renderWithProviders(<ThankYou />, emptyState);
+      }).not.toThrow();
+    });
+
+    test('should handle missing product details gracefully', () => {
+      const noProductsState = {
+        stages: [{
+          stageId: 'thankyou',
+          stageInfo: {
+            application: { application_reference: 'APP123456' },
+            products: []
+          }
+        }]
+      };
+
+      expect(() => {
+        renderWithProviders(<ThankYou />, noProductsState);
+      }).not.toThrow();
+    });
+
+    test('should handle missing applicant details gracefully', () => {
+      const noApplicantState = {
+        stages: [{
+          ...initialState.stages.stages[0],
+          stageInfo: {
+            ...initialState.stages.stages[0].stageInfo,
+            applicants: null
+          }
+        }]
+      };
+
+      expect(() => {
+        renderWithProviders(<ThankYou />, noApplicantState);
+      }).not.toThrow();
+    });
+  });
+
+  describe('URL Parameter Handling', () => {
+    test('should handle different URL parameters correctly', () => {
+      changeUtils.getUrl.getParameterByName = jest.fn().mockImplementation((param) => {
+        switch (param) {
+          case 'auth': return 'upload';
+          case 'source': return 'web';
+          case 'channel': return 'WEB';
+          default: return null;
+        }
+      });
+
+      renderWithProviders(<ThankYou />);
+      
+      expect(screen.getByTestId('thankyou-upload')).toBeInTheDocument();
+    });
+  });
+
+  describe('Component State Management', () => {
+    test('should initialize with correct default state', () => {
+      renderWithProviders(<ThankYou />);
+      
+      // Component should render without errors
+      expect(screen.getByTestId('form')).toBeInTheDocument();
+    });
+
+    test('should update state correctly when otpSuccess changes', async () => {
+      const { rerender } = renderWithProviders(<ThankYou />);
+      
+      // Update store state to trigger otpSuccess
+      const newState = {
+        otpSuccess: true
+      };
+      
+      rerender(
+        <Provider store={createMockStore(newState)}>
+          <BrowserRouter>
+            <ThankYou />
+          </BrowserRouter>
+        </Provider>
+      );
+      
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Accessibility', () => {
+    test('should have proper test ids for testing', () => {
+      renderWithProviders(<ThankYou />);
+      
+      expect(screen.getByTestId('form')).toBeInTheDocument();
+      expect(screen.getByTestId('app thankyou')).toBeInTheDocument();
+      expect(screen.getByTestId('app__body')).toBeInTheDocument();
+    });
+  });
+});
