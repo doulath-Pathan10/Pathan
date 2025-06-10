@@ -1,23 +1,63 @@
-import { Routes, Route } from "react-router-dom";
-import Dashboard from "../modules/dashboard/dashboard";
-import ThankYou from "../modules/dashboard/thank-you/thank-you";
-import PendingApplication from "../modules/dashboard/pending-resume-application/pending-resume-application";
-import FlowSelection from "../modules/dashboard/fields/flowSelection";
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import Main from './Main';
+import Dashboard from '../modules/dashboard/dashboard';
+import ThankYou from '../modules/dashboard/thank-you/thank-you';
+import PendingApplication from '../modules/dashboard/pending-resume-application/pending-resume-application';
+import FlowSelection from '../modules/dashboard/fields/flowSelection';
 
-const Main = () => {
-  return (
-    <>
-      <Routes>
-        <Route path="super-short-form" element={<Dashboard />}></Route>
-        <Route path="sg/selectflow" element={<FlowSelection/>}></Route>
-        <Route path="sg/thankyou" element={<ThankYou />}></Route>
-        <Route path="pending-application" element={<PendingApplication />}></Route>
-        <Route path="/*" element={<Dashboard />}></Route>
-      </Routes>
-    </>
-  );
-};
+// Mock the child components to simplify testing
+jest.mock('../modules/dashboard/dashboard', () => () => <div>Dashboard Component</div>);
+jest.mock('../modules/dashboard/thank-you/thank-you', () => () => <div>ThankYou Component</div>);
+jest.mock('../modules/dashboard/pending-resume-application/pending-resume-application', () => () => <div>PendingApplication Component</div>);
+jest.mock('../modules/dashboard/fields/flowSelection', () => () => <div>FlowSelection Component</div>);
 
-export default Main;
+describe('Main Component', () => {
+  const renderWithRouter = (initialRoute = '/') => {
+    return render(
+      <MemoryRouter initialEntries={[initialRoute]}>
+        <Main />
+      </MemoryRouter>
+    );
+  };
 
-Please write unit test cases using jest with RTL
+  it('renders Dashboard component for super-short-form route', () => {
+    renderWithRouter('/super-short-form');
+    expect(screen.getByText('Dashboard Component')).toBeInTheDocument();
+  });
+
+  it('renders FlowSelection component for sg/selectflow route', () => {
+    renderWithRouter('/sg/selectflow');
+    expect(screen.getByText('FlowSelection Component')).toBeInTheDocument();
+  });
+
+  it('renders ThankYou component for sg/thankyou route', () => {
+    renderWithRouter('/sg/thankyou');
+    expect(screen.getByText('ThankYou Component')).toBeInTheDocument();
+  });
+
+  it('renders PendingApplication component for pending-application route', () => {
+    renderWithRouter('/pending-application');
+    expect(screen.getByText('PendingApplication Component')).toBeInTheDocument();
+  });
+
+  it('renders Dashboard component as fallback for unknown routes', () => {
+    renderWithRouter('/unknown-route');
+    expect(screen.getByText('Dashboard Component')).toBeInTheDocument();
+  });
+
+  it('renders Dashboard component for root route', () => {
+    renderWithRouter('/');
+    expect(screen.getByText('Dashboard Component')).toBeInTheDocument();
+  });
+
+  it('matches snapshot for super-short-form route', () => {
+    const { asFragment } = renderWithRouter('/super-short-form');
+    expect(asFragment()).toMatchSnapshot();
+  });
+
+  it('matches snapshot for sg/selectflow route', () => {
+    const { asFragment } = renderWithRouter('/sg/selectflow');
+    expect(asFragment()).toMatchSnapshot();
+  });
+});
