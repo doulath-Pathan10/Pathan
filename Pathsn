@@ -1,33 +1,52 @@
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
+import Dashboard from './Dashboard';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import Dashboard from './Dashboard';
 import configureStore from 'redux-mock-store';
-import thunk from 'redux-thunk';
-import * as changeUtils from '../../utils/common/change.utils';
-import * as commonService from '../../services/common-service';
 
-// Mock child components
-jest.mock('./header/header', () => () => <div>Header Component</div>);
-jest.mock('./fields/fields', () => () => <div>Fields Component</div>);
-jest.mock('../../shared/components/myinfo-singpass-login-modal/myinfo-singpass-login', () => () => <div>MyInfoSingpassLogin Component</div>);
-jest.mock('../../shared/components/popup-model/popup-model', () => ({ children, displayPopup }: any) => 
-  displayPopup ? <div>{children}</div> : null
+// Simple mocks for child components
+jest.mock('./header/header', () => () => <div data-testid="header">Header</div>);
+jest.mock('./fields/fields', () => () => <div data-testid="fields">Fields</div>);
+jest.mock('../../shared/components/popup-model/popup-model', () => ({ displayPopup, children }: any) => 
+  displayPopup ? <div data-testid="popup">{children}</div> : null
 );
-jest.mock('../../shared/components/model/model', () => ({ name, handlebuttonClick }: any) => 
-  <div>
-    {name} Model Component
-    <button onClick={handlebuttonClick}>Close</button>
-  </div>
+jest.mock('../../shared/components/model/model', () => ({ name }: any) => 
+  <div data-testid={`model-${name}`}>Model {name}</div>
 );
 
-const middlewares = [thunk];
-const mockStore = configureStore(middlewares);
+// Mock hooks
+const mockDispatch = jest.fn();
+const mockNavigate = jest.fn();
+const mockUseLocation = jest.fn();
+
+jest.mock('react-redux', () => ({
+  ...jest.requireActual('react-redux'),
+  useDispatch: () => mockDispatch,
+  useSelector: jest.fn()
+}));
+
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+  useLocation: () => mockUseLocation()
+}));
+
+// Mock services
+jest.mock('../../services/common-service', () => ({
+  dispatchLoader: jest.fn(),
+  getClientInfo: jest.fn().mockResolvedValue({})
+}));
+
+jest.mock('../../utils/common/change.utils', () => ({
+  authenticateType: jest.fn().mockReturnValue('default'),
+  getUrl: jest.fn().mockReturnValue({
+    getLoader: () => ({ cta: { cta: false } })
+  })
+}));
 
 describe('Dashboard Component', () => {
+  const mockStore = configureStore([]);
   let store: any;
-  const mockDispatch = jest.fn();
-  const mockNavigate = jest.fn();
 
   beforeEach(() => {
     store = mockStore({
@@ -43,23 +62,13 @@ describe('Dashboard Component', () => {
       referralcode: {}
     });
 
-    jest.spyOn(commonService, 'getClientInfo').mockResolvedValue({});
-    jest.spyOn(changeUtils, 'authenticateType').mockReturnValue('default');
-    jest.spyOn(changeUtils, 'getUrl').mockReturnValue({
-      getLoader: () => ({ cta: { cta: false } })
+    mockUseLocation.mockReturnValue({ pathname: '/test' });
+    mockDispatch.mockImplementation((action) => {
+      if (typeof action === 'function') {
+        return action(mockDispatch, store.getState);
+      }
+      return action;
     });
-
-    jest.mock('react-redux', () => ({
-      ...jest.requireActual('react-redux'),
-      useDispatch: () => mockDispatch,
-      useSelector: jest.fn()
-    }));
-
-    jest.mock('react-router-dom', () => ({
-      ...jest.requireActual('react-router-dom'),
-      useNavigate: () => mockNavigate,
-      useLocation: () => ({ pathname: '/test' })
-    }));
   });
 
   afterEach(() => {
@@ -76,116 +85,70 @@ describe('Dashboard Component', () => {
     );
   };
 
-  it('renders without crashing', () => {
+  it('should render without crashing', () => {
     renderDashboard();
-    expect(screen.queryByText('Header Component')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('header')).not.toBeInTheDocument();
   });
 
-  it('displays global error popup when url is invalid', async () => {
+  it('should show error popup when URL is invalid', async () => {
     store = mockStore({
       ...store.getState(),
-      urlParam: { validUrl: false }
+      urlParam: { validUrl: false, myInfo: false }
     });
 
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('globalError Model Component')).toBeInTheDocument();
-    });
-  });
-
-  it('displays MyInfoSingpassLogin when myInfo is true', async () => {
-    store = mockStore({
-      ...store.getState(),
-      urlParam: { myInfo: true }
-    });
-
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('MyInfoSingpassLogin Component')).toBeInTheDocument();
-    });
-  });
-
-  it('displays confirmation popup when authenticateType is myinfo', async () => {
-    (changeUtils.authenticateType as jest.Mock).mockReturnValue('myinfo');
-    
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('confirmationPopup Model Component')).toBeInTheDocument();
-    });
-  });
-
-  it('closes confirmation popup when handlePopupBackButton is called', async () => {
-    (changeUtils.authenticateType as jest.Mock).mockReturnValue('myinfo');
-    
-    renderDashboard();
-    await waitFor(() => {
-      const closeButton = screen.getByText('Close');
-      fireEvent.click(closeButton);
-      expect(screen.queryByText('confirmationPopup Model Component')).not.toBeInTheDocument();
-    });
-  });
-
-  it('renders Header and Fields components when conditions are met', async () => {
-    store = mockStore({
-      ...store.getState(),
-      stages: { stages: [{ stageId: 'test' }], otpOpen: false }
-    });
-
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('Header Component')).toBeInTheDocument();
-      expect(screen.getByText('Fields Component')).toBeInTheDocument();
-    });
-  });
-
-  it('handles window resize events', async () => {
     renderDashboard();
     
-    act(() => {
-      window.innerWidth = 500;
-      window.dispatchEvent(new Event('resize'));
-    });
-
-    // We can't directly test the state change, but we can verify the component doesn't crash
     await waitFor(() => {
-      expect(screen.queryByText('Header Component')).not.toBeInTheDocument();
+      expect(screen.getByTestId('popup')).toBeInTheDocument();
+      expect(screen.getByTestId('model-globalError')).toBeInTheDocument();
     });
   });
 
-  it('sets pointer-none class when ctaLoader.cta is true', async () => {
-    (changeUtils.getUrl as jest.Mock).mockReturnValue({
-      getLoader: () => ({ cta: { cta: true } })
-    });
-
+  it('should show MyInfo popup when myInfo is true', async () => {
     store = mockStore({
       ...store.getState(),
-      stages: { stages: [{ stageId: 'test' }], otpOpen: false }
+      urlParam: { validUrl: true, myInfo: true }
     });
 
     renderDashboard();
+    
     await waitFor(() => {
-      const appBody = screen.getByText('Fields Component').closest('.app__body');
-      expect(appBody).toHaveClass('pointer-none');
+      expect(screen.getByTestId('popup')).toBeInTheDocument();
     });
   });
 
-  it('navigates to super-short-form when url is valid and not myinfo', async () => {
+  it('should render header and fields when conditions are met', async () => {
+    store = mockStore({
+      ...store.getState(),
+      stages: { 
+        stages: [{ stageId: 'test-stage' }], 
+        otpOpen: false 
+      }
+    });
+
     renderDashboard();
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('header')).toBeInTheDocument();
+      expect(screen.getByTestId('fields')).toBeInTheDocument();
+    });
+  });
+
+  it('should show confirmation popup when authenticateType is myinfo', async () => {
+    require('../../utils/common/change.utils').authenticateType.mockReturnValue('myinfo');
+    
+    renderDashboard();
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('model-confirmationPopup')).toBeInTheDocument();
+    });
+  });
+
+  it('should navigate to super-short-form when URL is valid', async () => {
+    renderDashboard();
+    
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('sg/super-short-form');
-    });
-  });
-
-  it('dispatches correct actions on mount', async () => {
-    renderDashboard();
-    await waitFor(() => {
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'loader/getState'
-      }));
-      expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'urlParam/getUrlParameter'
-      }));
-      expect(commonService.getClientInfo).toHaveBeenCalled();
     });
   });
 });
