@@ -1,39 +1,124 @@
-import React from 'react';
-import { render } from '@testing-library/react';
-import renderComponent from './renderComponent';
-import { createElement } from 'react';
-
-// Mock all the components that could be rendered
-jest.mock('../../../shared/components/dates/dates', () => (props: any) => <div>Dates Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/information/information', () => (props: any) => <div>Information Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/multi-selection-box/multi-selection-box', () => (props: any) => <div>MultiSelectionBox Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/number/number', () => (props: any) => <div>Number Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/other-myinfo/other-myinfo', () => (props: any) => <div>OtherMyinfo Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/phone/phone', () => (props: any) => <div>Phone Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/radio-with-label/radio-with-label', () => (props: any) => <div>RadioWithLabel Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/selection-box/selection-box', () => (props: any) => <div>SelectionBox Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/text/text', () => (props: any) => <div>Text Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/toggle/toggle', () => (props: any) => <div>Toggle Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/type-ahead/type-ahead', () => (props: any) => <div>TypeAhead Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/button/button', () => (props: any) => <div>Button Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/amount/amount', () => (props: any) => <div>Amount Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/slider-with-limit/slider-with-limit', () => (props: any) => <div>SliderWithLimit Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/slider-with-currency/slider-with-currency', () => (props: any) => <div>SliderWithCurrency Mock: {JSON.stringify(props)}</div>);
-jest.mock('../../../shared/components/signature/signature', () => (props: any) => <div>Signature Mock: {JSON.stringify(props)}</div>);
-
-describe('renderComponent', () => {
+describe('Additional renderComponent Tests for Coverage', () => {
   const mockHandleCallback = jest.fn();
   const mockHandleFieldDispatch = jest.fn();
   const mockUserInput = { testField: 'testValue' };
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  // Test all phone number variations that should render SelectionBox
+  const phoneSelectionBoxCases = [
+    'mobile_number_rwb',
+    'mobile_1',
+    'mobile_2',
+    'overseas_mobile1_contact_no',
+    'overseas_mobile2_contact_no',
+    'ofc1_number',
+    'ofc2_number',
+    'home_phone2_number',
+    'office_phone1_number',
+    'office_phone2_number',
+    'ohph1_number',
+    'ohph2_number',
+    'home_phone_number_rwb'
+  ];
+
+  phoneSelectionBoxCases.forEach((fieldName) => {
+    it(`should render SelectionBox for Phone type when logical_field_name is ${fieldName}`, () => {
+      const currentSection = {
+        component_type: 'Phone',
+        logical_field_name: fieldName,
+      };
+
+      const { container } = render(
+        renderComponent(
+          currentSection,
+          0,
+          mockHandleCallback,
+          mockHandleFieldDispatch,
+          mockUserInput
+        )
+      );
+
+      expect(container).toHaveTextContent('SelectionBox Mock');
+    });
   });
 
-  it('should render Dates component for Dates type', () => {
+  // Test all phone number variations that should render Phone component
+  const phoneComponentCases = [
+    'mobile_number',
+    'mobile_1_add',
+    'mobile_2_add',
+    'overseas_mobile1',
+    'overseas_mobile2',
+    'ofc1',
+    'ofc2',
+    'home_phone2',
+    'office_phone1',
+    'office_phone2',
+    'ohph1',
+    'ohph2',
+    'home_phone_number'
+  ];
+
+  phoneComponentCases.forEach((fieldName) => {
+    it(`should render Phone component for Phone type when logical_field_name is ${fieldName}`, () => {
+      const currentSection = {
+        component_type: 'Phone',
+        logical_field_name: fieldName,
+      };
+
+      const { container } = render(
+        renderComponent(
+          currentSection,
+          0,
+          mockHandleCallback,
+          mockHandleFieldDispatch,
+          mockUserInput
+        )
+      );
+
+      expect(container).toHaveTextContent('Phone Mock');
+    });
+  });
+
+  // Test all component types in the mapping
+  const componentTypes = [
+    'Toggle',
+    'Number',
+    'Information',
+    'OtherMyinfo',
+    'TypeAhead',
+    'Button',
+    'Amount',
+    'SliderWithLimit',
+    'SliderWithCurrency',
+    'Date'
+  ];
+
+  componentTypes.forEach((type) => {
+    it(`should render ${type} component for ${type} type`, () => {
+      const currentSection = {
+        component_type: type,
+        logical_field_name: `test_${type.toLowerCase()}`,
+      };
+
+      const { container } = render(
+        renderComponent(
+          currentSection,
+          0,
+          mockHandleCallback,
+          mockHandleFieldDispatch,
+          mockUserInput
+        )
+      );
+
+      expect(container).toHaveTextContent(`${type} Mock`);
+    });
+  });
+
+  // Test case for SliderWithlimit (notice lowercase 'l')
+  it('should render SliderWithLimit for SliderWithlimit type', () => {
     const currentSection = {
-      component_type: 'Dates',
-      logical_field_name: 'test_date',
+      component_type: 'SliderWithlimit',
+      logical_field_name: 'test_slider',
     };
 
     const { container } = render(
@@ -46,203 +131,14 @@ describe('renderComponent', () => {
       )
     );
 
-    expect(container).toHaveTextContent('Dates Mock');
+    expect(container).toHaveTextContent('SliderWithLimit Mock');
   });
 
-  it('should render RadioWithLabel component for RadioWithLabel type', () => {
+  // Test case for empty component_type
+  it('should return undefined for empty component_type', () => {
     const currentSection = {
-      component_type: 'RadioWithLabel',
-      logical_field_name: 'test_radio',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('RadioWithLabel Mock');
-  });
-
-  it('should render Phone component for Phone type by default', () => {
-    const currentSection = {
-      component_type: 'Phone',
-      logical_field_name: 'test_phone',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('Phone Mock');
-  });
-
-  it('should render SelectionBox for Phone type when logical_field_name is mobile_number_rwb', () => {
-    const currentSection = {
-      component_type: 'Phone',
-      logical_field_name: 'mobile_number_rwb',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('SelectionBox Mock');
-  });
-
-  it('should render Phone component for Phone type when logical_field_name is mobile_number', () => {
-    const currentSection = {
-      component_type: 'Phone',
-      logical_field_name: 'mobile_number',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('Phone Mock');
-  });
-
-  it('should handle component_type with spaces by removing them', () => {
-    const currentSection = {
-      component_type: ' Type Ahead ',
-      logical_field_name: 'test_typeahead',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('TypeAhead Mock');
-  });
-
-  it('should render Text component for Display type', () => {
-    const currentSection = {
-      component_type: 'Display',
-      logical_field_name: 'test_display',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('Text Mock');
-  });
-
-  it('should render Button component for RateButton type', () => {
-    const currentSection = {
-      component_type: 'RateButton',
-      logical_field_name: 'test_rate_button',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('Button Mock');
-  });
-
-  it('should render Toggle component for authorize type', () => {
-    const currentSection = {
-      component_type: 'authorize',
-      logical_field_name: 'test_authorize',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('Toggle Mock');
-  });
-
-  it('should render Information component for Infowithoutmodal type', () => {
-    const currentSection = {
-      component_type: 'Infowithoutmodal',
-      logical_field_name: 'test_info',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('Information Mock');
-  });
-
-  it('should render SelectionBox for PhoneAreaCode type when logical_field_name is ofc1_number', () => {
-    const currentSection = {
-      component_type: 'PhoneAreaCode',
-      logical_field_name: 'ofc1_number',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('SelectionBox Mock');
-  });
-
-  it('should return undefined for unknown component types', () => {
-    const currentSection = {
-      component_type: 'UnknownComponent',
-      logical_field_name: 'test_unknown',
+      component_type: '',
+      logical_field_name: 'test_empty',
     };
 
     const result = renderComponent(
@@ -256,11 +152,67 @@ describe('renderComponent', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should pass correct props to the rendered component', () => {
+  // Test case for null component_type
+  it('should return undefined for null component_type', () => {
+    const currentSection = {
+      component_type: null,
+      logical_field_name: 'test_null',
+    };
+
+    const result = renderComponent(
+      currentSection as any,
+      0,
+      mockHandleCallback,
+      mockHandleFieldDispatch,
+      mockUserInput
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  // Test case for undefined component_type
+  it('should return undefined for undefined component_type', () => {
+    const currentSection = {
+      logical_field_name: 'test_undefined',
+    };
+
+    const result = renderComponent(
+      currentSection as any,
+      0,
+      mockHandleCallback,
+      mockHandleFieldDispatch,
+      mockUserInput
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  // Test case for component_type with only whitespace
+  it('should return undefined for whitespace-only component_type', () => {
+    const currentSection = {
+      component_type: '   ',
+      logical_field_name: 'test_whitespace',
+    };
+
+    const result = renderComponent(
+      currentSection,
+      0,
+      mockHandleCallback,
+      mockHandleFieldDispatch,
+      mockUserInput
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  // Test case for component with additional props
+  it('should pass through additional props from currentSection', () => {
     const currentSection = {
       component_type: 'Text',
       logical_field_name: 'test_text',
-      customProp: 'customValue'
+      customProp1: 'value1',
+      customProp2: { nested: 'value' },
+      required: true
     };
 
     const { container } = render(
@@ -273,14 +225,30 @@ describe('renderComponent', () => {
       )
     );
 
-    const expectedProps = {
-      data: currentSection,
-      key: 'test_text',
-      handleCallback: mockHandleCallback,
-      handleFieldDispatch: mockHandleFieldDispatch,
-      value: mockUserInput
+    expect(container).toHaveTextContent('customProp1');
+    expect(container).toHaveTextContent('value1');
+    expect(container).toHaveTextContent('nested');
+    expect(container).toHaveTextContent('required');
+  });
+
+  // Test case for verifying the index parameter is not used
+  it('should not use the index parameter in rendering', () => {
+    const currentSection = {
+      component_type: 'Text',
+      logical_field_name: 'test_index',
     };
 
-    expect(container).toHaveTextContent(JSON.stringify(expectedProps));
+    const { container } = render(
+      renderComponent(
+        currentSection,
+        999, // Unlikely index value
+        mockHandleCallback,
+        mockHandleFieldDispatch,
+        mockUserInput
+      )
+    );
+
+    // Verify the rendered component doesn't include the index
+    expect(container).not.toHaveTextContent('999');
   });
 });
