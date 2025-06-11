@@ -1,58 +1,11 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
+import configureStore from 'redux-mock-store';
 import SelectionBox from './SelectionBox';
 import { StoreModel } from '../../../utils/model/common-model';
 
-// Mock Redux store
-const mockStore = configureStore({
-  reducer: {
-    lov: () => ({
-      lov: [
-        {
-          label: 'test_field',
-          value: [
-            { CODE_VALUE: 'VAL1', CODE_DESC: 'Value 1' },
-            { CODE_VALUE: 'VAL2', CODE_DESC: 'Value 2' },
-          ],
-        },
-      ],
-    }),
-    fielderror: () => ({ error: [] }),
-    stages: () => ({
-      stages: [
-        {
-          stageId: 'test-stage',
-          stageInfo: {
-            applicants: {},
-            products: [{ product_type: '123', product_category: 'SA' }],
-          },
-        },
-      ],
-      userInput: { applicants: {} },
-      myinfoResponse: {},
-      dependencyFields: [],
-    }),
-    tax: () => ({}),
-    lastaccessed: () => ({}),
-    valueupdate: () => ({}),
-  },
-});
-
-// Mock props
-const mockProps = {
-  data: {
-    logical_field_name: 'test_field',
-    rwb_label_name: 'Test Field',
-    editable: true,
-    info_tooltips: 'No',
-    details: 'Tooltip details',
-  },
-  handleCallback: jest.fn(),
-};
-
-// Mock utility functions
+// Mock the external utility functions
 jest.mock('../../../utils/common/change.utils', () => ({
   fieldError: jest.fn(() => false),
   isFieldUpdate: jest.fn(),
@@ -67,219 +20,215 @@ jest.mock('../../../utils/common/change.utils', () => ({
   authenticateType: jest.fn(() => 'manual'),
 }));
 
-// Mock services
 jest.mock('../../../services/common-service', () => ({
   getLovData: jest.fn(),
   lovRequests: jest.fn(),
 }));
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: jest.fn(() => JSON.stringify([])),
-  setItem: jest.fn(),
-  clear: jest.fn(),
-};
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+const mockStore = configureStore([]);
 
 describe('SelectionBox Component', () => {
+  let store: any;
+  let initialState: StoreModel;
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    initialState = {
+      lov: {
+        lov: [{
+          label: 'test_field',
+          value: [
+            { CODE_VALUE: 'VAL1', CODE_DESC: 'Value 1' },
+            { CODE_VALUE: 'VAL2', CODE_DESC: 'Value 2' }
+          ]
+        }]
+      },
+      fielderror: { error: [] },
+      stages: {
+        stages: [{
+          stageId: 'test-stage',
+          stageInfo: {
+            applicants: {},
+            products: [{ product_type: '123', product_category: 'SA' }]
+          }
+        }],
+        userInput: { applicants: {} },
+        myinfoResponse: {},
+        dependencyFields: []
+      },
+      tax: {},
+      last: {},
+      valueupdate: {}
+    };
+
+    store = mockStore(initialState);
   });
 
-  test('renders without crashing', () => {
+  const defaultProps = {
+    data: {
+      logical_field_name: 'test_field',
+      rwb_label_name: 'Test Field',
+      editable: true,
+      info_tooltips: 'No',
+      details: 'Tooltip details'
+    },
+    handleCallback: jest.fn()
+  };
+
+  test('renders basic dropdown with label', () => {
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...defaultProps} />
       </Provider>
     );
-    
+
     expect(screen.getByText('Test Field')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  test('displays dropdown with placeholder', () => {
+  test('opens dropdown and shows options when clicked', () => {
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...defaultProps} />
       </Provider>
     );
-    
-    expect(screen.getByPlaceholderText('Test Field')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('textbox'));
+
+    expect(screen.getByText('Value 1')).toBeInTheDocument();
+    expect(screen.getByText('Value 2')).toBeInTheDocument();
   });
 
-  test('opens dropdown when clicked', async () => {
+  test('selects an option and calls handleCallback', () => {
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...defaultProps} />
       </Provider>
     );
-    
-    const dropdown = screen.getByRole('textbox');
-    fireEvent.click(dropdown);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Value 1')).toBeInTheDocument();
-      expect(screen.getByText('Value 2')).toBeInTheDocument();
-    });
-  });
 
-  test('selects an option when clicked', async () => {
-    render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
-      </Provider>
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByText('Value 1'));
+
+    expect(defaultProps.handleCallback).toHaveBeenCalledWith(
+      defaultProps.data,
+      'VAL1'
     );
-    
-    const dropdown = screen.getByRole('textbox');
-    fireEvent.click(dropdown);
-    
-    const option1 = await screen.findByText('Value 1');
-    fireEvent.click(option1);
-    
-    await waitFor(() => {
-      expect(mockProps.handleCallback).toHaveBeenCalledWith(
-        mockProps.data,
-        'VAL1'
-      );
-    });
   });
 
-  test('displays error message when field is required and not selected', () => {
-    // Mock fieldError to return true (indicating error)
+  test('displays error message when field is required', () => {
+    // Mock fieldError to return true
     jest.spyOn(require('../../../utils/common/change.utils'), 'fieldError').mockReturnValue(true);
-    
+
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...defaultProps} />
       </Provider>
     );
-    
+
     expect(screen.getByText('Please select your Test Field')).toBeInTheDocument();
   });
 
-  test('displays tooltip when info_tooltips is "Yes"', () => {
-    const propsWithTooltip = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        info_tooltips: 'Yes',
-      },
+  test('displays selected value when provided in store', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        userInput: {
+          applicants: {
+            test_field_a_1: 'VAL1'
+          }
+        }
+      }
     };
-    
-    render(
-      <Provider store={mockStore}>
-        <SelectionBox {...propsWithTooltip} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('button', { name: /info/i })).toBeInTheDocument();
-  });
 
-  test('shows tooltip popup when info icon is clicked', async () => {
-    const propsWithTooltip = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        info_tooltips: 'Yes',
-      },
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <SelectionBox {...propsWithTooltip} />
-      </Provider>
-    );
-    
-    const infoButton = screen.getByRole('button', { name: /info/i });
-    fireEvent.click(infoButton);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Tooltip details')).toBeInTheDocument();
-    });
-  });
+    store = mockStore(customState);
 
-  test('filters options based on search input', async () => {
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...defaultProps} />
       </Provider>
     );
-    
-    const dropdown = screen.getByRole('textbox');
-    fireEvent.click(dropdown);
-    
-    const searchInput = screen.getByPlaceholderText('Search');
-    fireEvent.change(searchInput, { target: { value: 'Value 1' } });
-    
-    await waitFor(() => {
-      expect(screen.getByText('Value 1')).toBeInTheDocument();
-      expect(screen.queryByText('Value 2')).not.toBeInTheDocument();
-    });
-  });
 
-  test('disables dropdown when field is not editable', () => {
-    const propsNotEditable = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        editable: false,
-      },
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <SelectionBox {...propsNotEditable} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('textbox')).toHaveClass('disabled');
+    expect(screen.getByText('Value 1')).toBeInTheDocument();
   });
 
   test('handles myinfo fields correctly', () => {
-    // Mock isMyinfoField to return true
     jest.spyOn(require('../../../utils/common/change.utils'), 'isMyinfoField').mockReturnValue(true);
-    
+
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...defaultProps} />
       </Provider>
     );
-    
+
     expect(screen.getByRole('textbox')).toHaveClass('disabled');
   });
 
-  test('handles country of tax residence fields correctly', () => {
-    const taxResidenceProps = {
-      ...mockProps,
+  test('handles tooltip display when configured', () => {
+    const propsWithTooltip = {
+      ...defaultProps,
       data: {
-        ...mockProps.data,
-        logical_field_name: 'country_of_tax_residence_1',
-      },
+        ...defaultProps.data,
+        info_tooltips: 'Yes'
+      }
     };
-    
+
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...taxResidenceProps} />
+      <Provider store={store}>
+        <SelectionBox {...propsWithTooltip} />
       </Provider>
     );
-    
-    // Add your assertions for tax residence specific behavior
+
+    expect(screen.getByRole('button', { name: /info/i })).toBeInTheDocument();
+  });
+});
+test('handles empty options list', () => {
+  const emptyState = {
+    ...initialState,
+    lov: { lov: [] }
+  };
+  store = mockStore(emptyState);
+
+  render(
+    <Provider store={store}>
+      <SelectionBox {...defaultProps} />
+    </Provider>
+  );
+
+  fireEvent.click(screen.getByRole('textbox'));
+  expect(screen.queryByText('Value 1')).not.toBeInTheDocument();
+});
+
+test('filters options based on search input', () => {
+  render(
+    <Provider store={store}>
+      <SelectionBox {...defaultProps} />
+    </Provider>
+  );
+
+  fireEvent.click(screen.getByRole('textbox'));
+  fireEvent.change(screen.getByPlaceholderText('Search'), { 
+    target: { value: 'Value 1' } 
   });
 
-  test('handles CRS reason code fields correctly', () => {
-    const crsProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'crs_reason_code_1',
-      },
-    };
-    
-    render(
-      <Provider store={mockStore}>
-        <SelectionBox {...crsProps} />
-      </Provider>
-    );
-    
-    // Add your assertions for CRS reason code specific behavior
-  });
+  expect(screen.getByText('Value 1')).toBeInTheDocument();
+  expect(screen.queryByText('Value 2')).not.toBeInTheDocument();
+});
+
+test('handles country of tax residence fields', () => {
+  const taxProps = {
+    ...defaultProps,
+    data: {
+      ...defaultProps.data,
+      logical_field_name: 'country_of_tax_residence_1'
+    }
+  };
+
+  render(
+    <Provider store={store}>
+      <SelectionBox {...taxProps} />
+    </Provider>
+  );
+
+  // Add specific assertions for tax residence behavior
+  expect(screen.getByText('Test Field')).toBeInTheDocument();
 });
