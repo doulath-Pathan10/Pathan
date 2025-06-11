@@ -1,483 +1,1446 @@
-import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import { MemoryRouter } from 'react-router-dom';
-import ThankYou from './ThankYou';
-import { StoreModel } from '../../../utils/model/common-model';
+import { useEffect, useLayoutEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  KeyWithAnyModel,
+  LovInputModel,
+  LovInputValModel,
+  StoreModel,
+} from "../../../utils/model/common-model";
+import "./selection-box.scss";
+import {
+  fieldError,
+  isFieldUpdate,
+  isMyinfoField,
+  fieldIdAppend,
+  getUrl,
+authenticateType,
+} from "../../../utils/common/change.utils";
+import { fieldErrorAction } from "../../../utils/store/field-error-slice";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import { taxAction } from "../../../utils/store/tax-slice";
+import { ValueUpdateAction } from "../../../utils/store/value-update-slice";
+import { lastAction } from "../../../utils/store/last-accessed-slice";
+import errorMsg from "../../../assets/_json/error.json";
+import Model from "../model/model";
+import { getLovData, lovRequests } from "../../../services/common-service";
+import { store } from "../../../utils/store/store";
 
-// Mock components with more detailed implementations
-jest.mock('./thankyou-casa', () => ({ applicationDetails, submitForm }: any) => (
-  <div>
-    ThankYouCASA Mock
-    <button onClick={submitForm}>Submit CASA</button>
-    <div>{JSON.stringify(applicationDetails)}</div>
-  </div>
-));
+const SelectionBox = (props: KeyWithAnyModel) => {
+  const [errorsMessage, setErrorsMsg] = useState<any>("");
+  const [errors, setErrors] = useState(false);
+const productInfo:any = getUrl.getProductInfo();
+  const lovSelector = useSelector((state: StoreModel) => state.lov);
+  const [selectedOption, setSelectedOption] = useState<Array<LovInputValModel>>(
+    []
+  );
+  const fieldErrorSelector = useSelector(
+    (state: StoreModel) => state.fielderror.error
+  );
+  const storeValues = useSelector((state: StoreModel) => state);
+  const [updatedValues, setUpdatedValues] = useState(storeValues);
 
-jest.mock('./thankyou-upload', () => ({ applicationDetails, submitForm }: any) => (
-  <div>
-    ThankYouUpload Mock
-    <button onClick={submitForm}>Submit Upload</button>
-    <div>{JSON.stringify(applicationDetails)}</div>
-  </div>
-));
+  useEffect(() => {
+    setUpdatedValues(storeValues);
+  }, [storeValues]);
+  const taxSelector =useSelector((state:StoreModel)=>state.tax);
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const userInputSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput
+  );
+  const applicantsSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput.applicants
+  );
+  const myInfoResponseSelector = useSelector(
+    (state: StoreModel) => state.stages.myinfoResponse
+  );
+  const [show, hide] = useState(false);
+  const [isMyinfo, setIsMyinfo] = useState(false);
+  const [selectedValue, setSelectedValue] = useState<Array<LovInputValModel>>(
+    []
+  );
+  const [search, setSearch] = useState("");
+  const [showCrsReason,setShowCrsReason]= useState(true)
+  const dispatch = useDispatch();
+  const dependencyFieldsSelector = useSelector(
+    (state: StoreModel) => state.stages.dependencyFields
+  );
+  const productCode = stageSelector[0].stageInfo.products[0].product_type;
+  const [showInfoPopup, setShowInfoPopup] = useState(false);
+  const [visibility, setVisibility] = useState(true);
+  const [showFields, setShowFields] = useState(true);
+  const repeatCount = stageSelector[0].stageInfo?.applicants.no_of_accounts_rwb_a_1? stageSelector[0].stageInfo?.applicants.no_of_accounts_rwb_a_1:1;
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const isPerExist =store.getState().stages.stages[0].stageInfo.applicants?.per_existing_line2_a_1? true :false;
+ 
+  
+  useEffect(() => {
+    const data = isMyinfoField(
+      myInfoResponseSelector,
+      props.data.logical_field_name
+    );
+    setIsMyinfo(data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myInfoResponseSelector]);
 
-jest.mock('../../../shared/components/popup-model/popup-model', () => ({ children, displayPopup }: any) => 
-  displayPopup ? <div data-testid="popup">{children}</div> : null);
+   let isCountryTaxResideancyField: boolean = false;
+  let logicalFieldSplittedArray = props.data.logical_field_name.split("_");
+  /*istanbul ignore else*/
+  if (
+    logicalFieldSplittedArray &&
+    logicalFieldSplittedArray.length > 4 &&
+    logicalFieldSplittedArray[0] === "country" &&
+    logicalFieldSplittedArray[2] === "tax"
+  ) {
+    isCountryTaxResideancyField = true;
+  }
 
-jest.mock('../../../shared/components/model/model', () => ({ 
-  name, 
-  handlebuttonClick, 
-  handleContinueWithoutActivation 
-}: any) => (
-  <div data-testid="model">
-    {name} Mock
-    <button onClick={handlebuttonClick}>Back Button</button>
-    <button onClick={handleContinueWithoutActivation}>Continue Without Activation</button>
-  </div>
-));
+  let isCrs_reason_codeField: boolean = false;
+  /*istanbul ignore else*/
+  if (
+    props.data.logical_field_name &&
+    props.data.logical_field_name.substring(0, 15) === "crs_reason_code"
+  ) {
+    isCrs_reason_codeField = true;
+  }
+ useEffect(() => {
+   let currentFieldLovRes: Array<KeyWithAnyModel> = lovSelector.lov.filter(
+      (res: LovInputModel) => {
+        return (
+          res.label ===
+          (isCountryTaxResideancyField
+            ? "country_of_tax_residence"
+            : isCrs_reason_codeField
+            ? "crs_reason_code"
+            : props.data.logical_field_name)
+        );
+      }
+    );
+    /*istanbul ignore else*/
+  if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_2") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_2",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_3") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_3",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_4") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_4",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_5") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_5",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_6") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_6",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_7") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_7",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "purpose_of_account_rwb_8") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "purpose_of_account_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "purpose_of_account_rwb_8",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_2") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_2",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_3") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_3",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_4") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_4",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_5") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_5",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_6") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_6",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_7") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_7",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "account_level_mailing_address_8") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "account_level_mailing_address") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "account_level_mailing_address_8",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_2") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_2",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_3") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_3",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_4") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_4",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_5") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_5",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_6") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_6",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_7") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_7",
+          value: (original as any).value
+        }];
+      }
+    }
+    /*istanbul ignore else*/
+    if (currentFieldLovRes.length === 0 && props.data.logical_field_name === "debit_card_request_rwb_8") {
+      const original = lovSelector.lov.find((res: LovInputModel) => res.label === "debit_card_request_rwb") ;
+      /*istanbul ignore else*/
+      if (original) {
+        currentFieldLovRes = [{
+          label: "debit_card_request_rwb_8",
+          value: (original as any).value
+        }];
+      }
+    }
+    let preSelectedCode: string | null = null;
+    // DOB-202716: Default POA to “Savings” but allow client to edit when needed. For Wealth$aver,Bonus$aver,eSaver,JumpStart
+    const poa_ProductCodes = ["153", "338", "514", "507"];
 
-// Mock services with more control
-const mockTriggerAdobeEvent = jest.fn();
-const mockPageView = jest.fn();
-const mockRedirectingToIbanking = jest.fn();
-const mockActivateDigitalCard = jest.fn();
+    const userInputResponse =
+      userInputSelector.applicants[fieldIdAppend(props)];
+      /*istanbul ignore else*/
+    if (poa_ProductCodes.indexOf(productCode) !== -1) {
+      /*istanbul ignore else*/
+      if (
+        props.data.logical_field_name === "purpose_of_account" &&
+        !(
+          stageSelector[0].stageInfo.applicants[fieldIdAppend(props)] ||
+          userInputResponse
+        )
+      ) {
+        preSelectedCode = "SB";
+      }
+    }
+    let fieldValue = "";
+    if (userInputResponse) {
+      fieldValue = userInputResponse;
+    }
+   else {
+      const updatedStageStore = getUrl.getUpdatedStage();
+      const stageApplicant = updatedStageStore.updatedStageInputs.find(
+        (ref: any) => ref && ref.stageId === stageSelector[0].stageId
+      );
+      /*istanbul ignore else*/
+      if (stageApplicant) {
+        if (
+          stageApplicant.applicants[fieldIdAppend(props)] !== undefined &&
+          stageApplicant.applicants[fieldIdAppend(props)] !== null&&
+          stageApplicant.applicants[fieldIdAppend(props)] !== ""
+        ) {
+          fieldValue = stageApplicant.applicants[fieldIdAppend(props)];
+        } 
+        else if (
+          stageSelector[0].stageInfo.applicants[fieldIdAppend(props)]
+        ) {
+          fieldValue =
+            stageSelector[0].stageInfo.applicants[fieldIdAppend(props)];
+        }
+      } else {
+        fieldValue =
+          stageSelector[0].stageInfo.applicants[fieldIdAppend(props)];
+      }
+    }
+/*istanbul ignore else*/
+    if (fieldValue) {
+      preSelectedCode = fieldValue;
+    }
+/*istanbul ignore else*/
+    if (currentFieldLovRes.length > 0) {
+      let dropDownData: any = JSON.parse(
+        JSON.stringify(currentFieldLovRes[0].value)
+      );
+      if(props.data.logical_field_name.startsWith('country_of_tax_residence_')
+      && userInputSelector.applicants['country_of_tax_residence_a_1']
+      && userInputSelector.applicants['country_of_tax_residence_a_1'] === 'SG'){
+         dropDownData = dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE !=='SG')
+      }else if(props.data.logical_field_name.startsWith('country_of_tax_residence_')
+      && userInputSelector.applicants['country_of_tax_residence_a_1']
+      && userInputSelector.applicants['country_of_tax_residence_a_1'] !== 'SG'){
+        dropDownData = [...dropDownData,{CODE_VALUE: "SG", CODE_DESC: "Singapore"}];
+}
+      else if(props.data.logical_field_name==="ownership_status"
+      &&(productInfo[1].product_category==="CA" ||productInfo[1].product_category==="SA")){
+        dropDownData = dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE !=="GO"&&item.CODE_VALUE !=="LO"&&item.CODE_VALUE !=="BA"&&item.CODE_VALUE !=="OT")
+      }
+      // mailing address drop down value residential address display at personal detail page-bd-2
+      else if(props.data.logical_field_name==="mailing_address_rwb"){
+        let existingData: any = userInputSelector.applicants["select_alt_addresses_a_1"]
+        if(existingData !== undefined && existingData !== null) {
+          const selectedCodes: any = existingData.split(',');
+          dropDownData = dropDownData.filter((item: any) => selectedCodes.includes(item.CODE_VALUE) || item.CODE_VALUE === "RES");
+        }else{
+          dropDownData =dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE !=='OFF' &&  item.CODE_VALUE !=='PER' && item.CODE_VALUE !=='AL1' && item.CODE_VALUE !=='AL2' && item.CODE_VALUE !=='AL3' && item.CODE_VALUE !=='AL4' && item.CODE_VALUE !=='AL5')
+        }
+      }
+      else if(props.data.logical_field_name==="account_level_mailing_address"||props.data.logical_field_name==="account_level_mailing_address_2"||
+      props.data.logical_field_name==="account_level_mailing_address_3"||props.data.logical_field_name==="account_level_mailing_address_4"||props.data.logical_field_name==="account_level_mailing_address_5"||
+      props.data.logical_field_name==="account_level_mailing_address_6"||props.data.logical_field_name==="account_level_mailing_address_7"||props.data.logical_field_name==="account_level_mailing_address_8"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants
+        /*istanbul ignore else*/
+        if(existingData.select_alt_addresses_a_1 !== undefined && existingData.select_alt_addresses_a_1 !== "" && existingData.select_alt_addresses_a_1 !== null) {
+          const selectedCodes = existingData.select_alt_addresses_a_1.split(',');
+          if ( store.getState().stages.stages[0].stageInfo.applicants?.ofc_postal_code_a_1){
+            dropDownData = dropDownData.filter((item: any) => selectedCodes.includes(item.CODE_VALUE) || item.CODE_VALUE === "OFF" || item.CODE_VALUE === "RES");
+            }else{
+                dropDownData = dropDownData.filter((item: any) => selectedCodes.includes(item.CODE_VALUE) || item.CODE_VALUE === "RES");
+              }
+            }else{           
+              if ( store.getState().stages.stages[0].stageInfo.applicants?.ofc_postal_code_a_1){
+                dropDownData =dropDownData.filter((item:LovInputValModel)=>  item.CODE_VALUE !=='PER' && item.CODE_VALUE !=='AL1' && item.CODE_VALUE !=='AL2' && item.CODE_VALUE !=='AL3' && item.CODE_VALUE !=='AL4' && item.CODE_VALUE !=='AL5')
+                }
+                else if((getUrl.getJourneyType()==="NTC"||getUrl.getJourneyType()==="NTC") &&isPerExist){
+                  dropDownData =dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE !=='OFF'&& item.CODE_VALUE !=='AL1' && item.CODE_VALUE !=='AL2' && item.CODE_VALUE !=='AL3' && item.CODE_VALUE !=='AL4' && item.CODE_VALUE !=='AL5')
+                }
+                else{
+                    dropDownData =dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE !=='OFF' &&  item.CODE_VALUE !=='PER' && item.CODE_VALUE !=='AL1' && item.CODE_VALUE !=='AL2' && item.CODE_VALUE !=='AL3' && item.CODE_VALUE !=='AL4' && item.CODE_VALUE !=='AL5')
+                  }
+        }
+      }
+      let preVal: Array<LovInputValModel> = [];
+      dropDownData.map((item: LovInputValModel) => {
+        if (props.data.logical_field_name === 'other_bank_name' && item.CODE_DESC === preSelectedCode) {
+          item["checked"] = true;
+          preVal.push(item);
+        }
+       else if (item.CODE_VALUE === preSelectedCode) {
+          item["checked"] = true;
+          preVal.push(item);
+        } else {
+          item["checked"] = false;
+        }
+        return item;
+      });
+      /*istanbul ignore else*/
+      if(props.data.logical_field_name === "mobile_1" || props.data.logical_field_name === "mobile_2" || props.data.logical_field_name === "overseas_mobile1_contact_no" ||
+      props.data.logical_field_name === "overseas_mobile2_contact_no" || props.data.logical_field_name === "ofc1_number" || props.data.logical_field_name === "ofc2_number" || props.data.logical_field_name === "home_phone2_number" ||
+      props.data.logical_field_name === "office_phone1_number" || props.data.logical_field_name === "office_phone2_number" || props.data.logical_field_name === "ohph1_number" || props.data.logical_field_name === "ohph2_number"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        /*istanbul ignore else*/
+        if(existingData[props.data.logical_field_name + '_a_1'] !== undefined && existingData[props.data.logical_field_name + '_a_1'] !== "" && existingData[props.data.logical_field_name + '_a_1'] !== null) {
+        preVal = dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE === existingData[props.data.logical_field_name + '_a_1']);
+        }
+      }
+      /*istanbul ignore else*/
+      if(props.data.logical_field_name === "ofc_country"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        if(existingData.ofc_existing_country_a_1){
+          preVal = dropDownData.filter((item:LovInputValModel)=> item.CODE_VALUE === existingData.ofc_existing_country_a_1);
+        }
+      }
+      setSelectedOption(dropDownData);
+      /*istanbul ignore else*/
+      if(props.data.logical_field_name !== "account_currency_rwb_2"){
+        setSelectedValue(preVal);
+      }
+      
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    lovSelector.lov,
+    props.data.logical_field_name,
+    dependencyFieldsSelector,
+    userInputSelector.applicants['country_of_tax_residence_a_1'],
+   userInputSelector.applicants["select_alt_addresses_a_1"],
+  ]);
 
-jest.mock('../../../services/track-events', () => ({
-  triggerAdobeEvent: () => mockTriggerAdobeEvent(),
-}));
+  useEffect(() => {
+    setErrors(fieldError(fieldErrorSelector, props));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldErrorSelector]);
 
-jest.mock('../../../services/ga-track-events', () => ({
-  pageView: () => mockPageView(),
-}));
+  const dropdownHandler = (event: React.MouseEvent<any>) => {
+    event.currentTarget.firstChild.focus();
+    hide(true);
+  };
 
-jest.mock('../../../services/common-service', () => ({
-  redirectingToIbanking: () => mockRedirectingToIbanking(),
-  activateDigitalCard: () => mockActivateDigitalCard(),
-}));
+  const close = () => {
+    hide(false);
+  };
 
-// Mock URL utilities with more flexibility
-const mockGetParameterByName = jest.fn();
-const mockGetUpdatedStage = jest.fn();
-const mockGetChannelRefNo = jest.fn();
+  const placeHolderText = (fieldName: string) => {
+    if (fieldName === "purpose_of_account") {
+      return "Select the purpose of the account";
+    }else if(fieldName === "mobile_number_rwb" || fieldName === "mobile_1" || fieldName === "mobile_2" || fieldName === "overseas_mobile1_contact_no" ||
+    fieldName === "overseas_mobile2_contact_no" || fieldName === "ofc1_number" || fieldName === "ofc2_number" || fieldName === "home_phone2_number" ||
+    fieldName === "office_phone1_number" || fieldName === "office_phone2_number" || fieldName === "ohph1_number" || fieldName === "ohph2_number" || fieldName === "home_phone_number_rwb"){
+      return "";
+    } else {
+      return props.data.rwb_label_name;
+    }
+  };
 
-jest.mock('../../../utils/common/change.utils', () => ({
-  getUrl: {
-    getParameterByName: () => mockGetParameterByName(),
-    getUpdatedStage: () => mockGetUpdatedStage(),
-    getChannelRefNo: () => mockGetChannelRefNo(),
-  },
-}));
+  const addUserInput = (data: LovInputValModel) => {
+    const previousSelectedOption = [...selectedOption];
 
-// Mock store with more scenarios
-const mockStoreGetState = jest.fn();
+    const valueChange = previousSelectedOption.some(
+      (item) => item.CODE_VALUE === data.CODE_VALUE && data.checked === false
+    );
+    /*istanbul ignore else*/
+    if (valueChange) {
+      dispatch(
+        ValueUpdateAction.getChangeUpdate({
+          id: stageSelector[0].stageId,
+          changes: true,
+        })
+      );
+    }
+    const updatedSelectedOption = previousSelectedOption.map(
+      (item: LovInputValModel) => {
+        if (item.CODE_DESC === data["CODE_DESC"]) {
+          item["checked"] = true;
+        } else {
+          item["checked"] = false;
+        }
+        return item;
+      }
+    );
+    setSelectedOption(updatedSelectedOption);
 
-jest.mock('../../../utils/store/store', () => ({
-  store: {
-    getState: () => mockStoreGetState(),
-  },
-}));
+    let value: Array<LovInputValModel> = [data];
+    setSelectedValue(value);
+    /*istanbul ignore else*/
+    if(selectedValue.length === 0){
+      setErrorsMsg(false)
+    }
 
-describe('ThankYou Component - Additional Tests', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    // Default mock implementations
-    mockGetParameterByName.mockReturnValue(null);
-    mockGetUpdatedStage.mockReturnValue({ ccplChannel: '' });
-    mockGetChannelRefNo.mockReturnValue({ applicationRefNo: 'APP123' });
-    mockActivateDigitalCard.mockResolvedValue({ status: 'SUCCESS' });
-    mockStoreGetState.mockReturnValue({ 
-      stages: { 
-        isDocumentUpload: false,
-        journeyType: 'test',
-        otpSuccess: false,
-        stages: [] 
-      } 
+    hide(false);
+  };
+
+  const removeSelectedValues = (
+    event: React.MouseEvent<HTMLDivElement, MouseEvent>,
+    data: LovInputValModel
+  ) => {
+    event.stopPropagation();
+    event.isPropagationStopped();
+
+    const previousSelectedValue = [...selectedValue];
+    let fieldIndex = previousSelectedValue.findIndex(
+      (item: LovInputValModel) => item.CODE_VALUE === data["CODE_VALUE"]
+    );
+    /*istanbul ignore else*/
+    if (fieldIndex === 0 && !["mobile_number_rwb", "mobile_1", "mobile_2", "overseas_mobile1_contact_no", "overseas_mobile2_contact_no", "ofc1_number", "ofc2_number", "home_phone2_number", "office_phone1_number", "office_phone2_number", "ohph1_number", "ohph2_number","home_phone_number_rwb"].includes(props.data.logical_field_name)) {
+      if(props.data.logical_field_name === "job_title" || props.data.logical_field_name === "nature_of_employer"&&props.data.logical_field_name !=="no_of_accounts_rwb"){
+        setErrorsMsg(`${errorMsg.selectionbox} ${props.data.rwb_label_name}`);
+      }else if(props.data.logical_field_name === "ofc_country" && stageSelector[0].stageId === "bd-3") {
+        setErrorsMsg("");
+        dispatch(fieldErrorAction.removeMandatoryFields(["ofc_postal_code"]));
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["ofc_postal_code","ofc_country", "ofc_block", "ofc_building_name", "ofc_street_name", "ofc_unit_no"],
+            newFields: [],
+            value:''
+          })
+        );
+        const updateApplicants = JSON.parse(JSON.stringify(stageSelector[0].stageInfo));
+        for (let key in applicantsSelector) {
+          if(applicantsSelector[key]!=="" ){
+            updateApplicants.applicants[key] = applicantsSelector[key];
+        }  
+        }
+        updateApplicants.applicants["job_title_a_1"] = "";
+        updateApplicants.applicants["name_of_employer_a_1"] = "";
+        updateApplicants.applicants["nature_of_employer_a_1"] = "";
+        updateApplicants.applicants["name_of_business_a_1"] = "";
+        updateApplicants.applicants["ofc_country_a_1"] = "";
+        updateApplicants.applicants["ofc_postal_code_a_1"] = "";
+        updateApplicants.applicants["ofc_block_a_1"] = "";
+        updateApplicants.applicants["ofc_building_name_a_1"] = "";
+        updateApplicants.applicants["ofc_unit_no_a_1"] = "";
+        updateApplicants.applicants["ofc_street_name_a_1"] = "";
+        dispatch(
+          stagesAction.getStage({
+            id: "setApplicantList",
+            formConfig: updateApplicants.applicants
+          })
+        );
+      }else{
+        //Personal details page ownership status not a mandatory field and remove validation message here
+        /*istanbul ignore else*/
+        if(props.data.logical_field_name !== "ownership_status_rwb"&&props.data.logical_field_name !=="no_of_accounts_rwb"){
+          setErrorsMsg(`${errorMsg.selectionbox} ${props.data.rwb_label_name}`);
+        }
+      }
+      /*istanbul ignore else*/
+      if (props.data.logical_field_name === "no_of_tax_residency_country") {
+        dispatch(taxAction.resetTaxField([]));
+        dispatch(taxAction.addTaxFiled("no_of_tax_residency_country"));
+      }
+    }
+    /*istanbul ignore else*/
+    if (fieldIndex !== -1) {
+      previousSelectedValue.splice(fieldIndex, 1);
+    }
+    /*istanbul ignore else*/
+    if (previousSelectedValue.length===0 ) {
+      
+    }
+    setSelectedValue(previousSelectedValue);
+
+    const previousSelectedOption = [...selectedOption];
+    const result = previousSelectedOption.map((item: LovInputValModel) => {
+      /*istanbul ignore else*/
+      if (item.CODE_VALUE === data["CODE_VALUE"]) {
+        item["checked"] = !item["checked"];
+      }
+      return item;
     });
-    
-    process.env.REACT_APP_HOME_PAGE_URL = 'https://example.com';
-    process.env.REACT_APP_IBANKING_SC_MOBILE = 'https://ibank.example.com/mobile';
-    process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER = 'https://ibank.example.com/mobile/transfer';
-  });
-
-  const renderWithStore = (store: any) => {
-    return render(
-      <Provider store={store}>
-        <MemoryRouter>
-          <ThankYou />
-        </MemoryRouter>
-      </Provider>
+    setSelectedOption(result);
+    dispatch(
+      ValueUpdateAction.getChangeUpdate({
+        id: stageSelector[0].stageId,
+        changes: previousSelectedValue.length > 0 ? true : false,
+      })
     );
   };
 
-  const createMockStore = (overrides = {}) => {
-    return configureStore({
-      reducer: {
-        stages: () => ({ 
-          stages: [
-            {
-              stageId: 'thankyou',
-              stageInfo: {
-                application: { application_reference: 'APP123' },
-                products: [
-                  { 
-                    product_category: 'SA',
-                    name: 'Savings Account',
-                    product_sequence_number: '1',
-                    product_type: 'SAVINGS',
-                    acct_details: [{ account_number: '1234567890' }]
-                  }
-                ],
-                applicants: {
-                  auth_mode_a_1: 'IX',
-                  embossed_name_a_1: 'John Doe'
-                }
-              }
-            }
-          ],
-          journeyType: 'test',
-          otpSuccess: false,
-          isDocumentUpload: false,
-          ...overrides
-        }),
-      },
-    });
+  useEffect(() => {
+    setErrors(false);
+
+    const val =
+      selectedValue &&
+      selectedValue.reduce((prev: Array<string>, acc: LovInputValModel) => {
+        if(props.data.logical_field_name === 'other_bank_name'){
+            prev.push(acc.CODE_DESC);
+          }
+          else {
+            prev.push(acc.CODE_VALUE);
+          }
+        return prev;
+      }, []);
+    props.handleCallback(props.data, val.toString());
+    /*istanbul ignore else*/
+    if (!(stageSelector[0].stageId === "ssf-2" && getUrl.getJourneyType())) {
+      if (
+        (val.length > 0 || props.data.logical_field_name === "marital_status") &&
+        (stageSelector[0].stageInfo.applicants[
+          props.data.logical_field_name + "_a_1"
+        ] ||
+          getUrl.getUserInputs()[props.data.logical_field_name + "_a_1"])
+      ) {
+        const defVal =
+          val.toString() ||
+          getUrl.getUserInputs()[props.data.logical_field_name + "_a_1"] ||
+          stageSelector[0].stageInfo.applicants[
+            props.data.logical_field_name + "_a_1"
+          ] ||
+          "";
+
+        dispatch(isFieldUpdate(props, defVal, props.data.logical_field_name));
+      } else {
+        if (
+          val.length > 0 &&
+          (props.data.logical_field_name === "account_currency" ||
+            props.data.logical_field_name === "account_currency_9" ||
+            props.data.logical_field_name ==="education_level" ||
+            props.data.logical_field_name === "ownership_status"
+            ||props.data.logical_field_name==="country_of_birth")
+        ) {
+          dispatch(
+            isFieldUpdate(props, val.toString(), props.data.logical_field_name)
+          );
+        } else if (
+          props.data.logical_field_name !== "account_currency" &&
+          props.data.logical_field_name !== "account_currency_9" &&
+          props.data.logical_field_name !== "ownership_status" &&
+          props.data.logical_field_name !=="education_level"&&
+          props.data.logical_field_name!=="country_of_birth"
+        ) {
+          dispatch(
+            isFieldUpdate(props, val.toString(), props.data.logical_field_name)
+          );
+        }
+      }
+    }
+    if (props.data.logical_field_name === "crs_reason_code") {
+      dispatch(stagesAction.updateTaxToggle());
+    } else if (
+      props.data.logical_field_name.substring(0, 15) === "crs_reason_code" &&
+      props.data.logical_field_name.length > 16
+    ) {
+      dispatch(stagesAction.updateAddTaxToggle());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedValue]);
+
+  const removeTaxField = () => {
+    dispatch(taxAction.removeTaxField(props.data.logical_field_name));
+    let seqNo = props.data.logical_field_name.split("_")[4];
+    let tax_id_no_logical_name = "tax_id_no_" + seqNo;
+    dispatch(
+      fieldErrorAction.removeMandatoryFields([
+        props.data.logical_field_name,
+        tax_id_no_logical_name,
+        "crs_reason_code_" + seqNo,
+        "crs_comments_" + seqNo,
+      ])
+    );
+    dispatch(
+      stagesAction.removeAddToggleField({
+        removeFields: [
+          props.data.logical_field_name,
+          tax_id_no_logical_name,
+          "crs_reason_code_" + seqNo,
+          "crs_comments_" + seqNo,
+        ],
+        newFields: [],
+      })
+    );
   };
-
-  it('handles TD products', async () => {
-    const store = createMockStore({
-      stages: [
+  const focusHandler = (
+    fieldName: string,
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    dispatch(lastAction.getField(fieldName));
+  };
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="bd-2"){
+    dispatch(
+      stagesAction.removeAddToggleField({
+        removeFields: ["banca_ins_request_1"],
+        newFields: [],
+      })
+    )}
+      },[])
+  useEffect(()=>{
+ /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-1"){
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["banca_ins_request_2",
+          "country_of_tax_residence",
+          "crs_comments",
+          "crs_reason_code",
+          "deposit_insurance_scheme",
+          "purpose_of_account",
+          "tax_id_no",
+          "casa_declaration_info_3", 
+          "casa_fatca_declaration",
+          "embossed_dc_name",
+          "embossed_name",
+          "tax_resident_of_other_country",
+          "no_of_tax_residency_country",
+          "country_of_tax_residence_1",
+          "crs_reason_code_1",
+          "crs_comments_1",
+          "tax_id_no_1",
+          "country_of_tax_residence_2",
+          "crs_reason_code_2",
+          "crs_comments_2",
+          "tax_id_no_2",
+          "country_of_tax_residence_3",
+          "crs_reason_code_3",
+          "crs_comments_3",
+          "tax_id_no_3",
+          "country_of_tax_residence_4",
+          "crs_reason_code_4",
+          "crs_comments_4",
+          "tax_id_no_4",
+"myinfo_data_nocli"
+        ],
+          newFields: [],
+        })
+      );
+    }
+    /*istanbul ignore else*/
+if(stageSelector[0].stageId==="ad-2"){
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: [
+            "mode_of_operation",
+            "pass_exp_dt",
+            "crs_reason_code",
+            "home_phone2" ,
+            "mobile_1_add",
+            "mobile_2_add",
+            "ofc1",
+            "ofc2",
+            "office_phone1",
+            "office_phone2",
+            "ohph1",
+            "ohph2",
+            "overseas_mobile1",
+            "overseas_mobile2",
+            "debit_card_request_rwb"
+          ],
+          newFields: [],
+        })
+      )}
+      /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-2" 
+    && stageSelector[0].stageInfo.applicants.nationality_a_1 === "SGP"
+    && props.data.logical_field_name === "country_of_tax_residence" && stageSelector[0].stageInfo.products[0].product_category!="TD"){
+      const previousSelectedOption = [...selectedOption];
+      const updatedSelectedOption = previousSelectedOption.filter(
+        (item: LovInputValModel) => item.CODE_VALUE !== "SG");
+      setSelectedOption(updatedSelectedOption);
+      let value: Array<LovInputValModel> = [
         {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'TD',
-                name: 'Time Deposit',
-                product_sequence_number: '1',
-                product_type: 'DEPOSIT',
-                acct_details: [{ account_number: '1234567890' }]
+          CODE_DESC: "Singapore",
+          CODE_VALUE: "SG",
+        },
+      ];
+      setSelectedValue(value);
+    }
+    /*istanbul ignore else*/
+    if((stageSelector[0].stageId==="ssf-1" || stageSelector[0].stageId==="bd-1" || stageSelector[0].stageId==="ad-1")
+    && (props.data.logical_field_name === "account_currency_rwb_1" || props.data.logical_field_name === "account_currency_rwb_2" || props.data.logical_field_name==="td_product_currency_value")){
+      const previousSelectedOption = [...selectedOption];
+      const updatedSelectedOption = previousSelectedOption.filter(
+        (item: LovInputValModel) => item.CODE_VALUE !== "SGD");
+      setSelectedOption(updatedSelectedOption);
+      let value: Array<LovInputValModel> = [
+        {
+          CODE_DESC: "Singapore Dollar",
+          CODE_VALUE: "SGD",
+        },
+      ];
+      setSelectedValue(value);
+    }
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ssf-1" 
+    && authenticateType() === "myinfo"
+    && props.data.logical_field_name === "mobile_number_rwb"){
+      let value: Array<LovInputValModel> = [
+        {
+          CODE_DESC: "Singapore (+65)",
+          CODE_VALUE: "65",
+        },
+      ];
+      setSelectedValue(value);
+    }
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-1" && stageSelector?.[0]?.stageInfo?.applicants?.existing_casa_a_1 
+    && props.data.logical_field_name === "td_fund_account_etc"){
+      const parsedData = JSON.parse(stageSelector?.[0]?.stageInfo?.applicants?.existing_casa_a_1);
+      setSelectedOption([{
+        CODE_DESC: parsedData[0].accountNumber,
+        CODE_VALUE: parsedData[0].accountNumber,
+      }])
+    }
+   
+    //Personal details page residential address singapore country preselected for manual flow 
+    /*istanbul ignore else*/
+    if(authenticateType()==="manual" && stageSelector[0].stageId==="bd-2"
+    && props.data.logical_field_name==="country_rwb"){
+      const previousSelectedOption = [...selectedOption];
+      const updatedSelectedOption = previousSelectedOption.filter(
+        (item: LovInputValModel) => item.CODE_VALUE !== "SG");
+      setSelectedOption(updatedSelectedOption);
+      let value: Array<LovInputValModel> = [
+        {
+          CODE_DESC: "Singapore",
+          CODE_VALUE: "SG",
+        },
+      ];
+      setSelectedValue(value);
+    }
+/*istanbul ignore else*/
+    if(stageSelector[0].stageId ==="ssf-1"&&props.data.logical_field_name ==="no_of_accounts_rwb"&&
+    ((stageSelector[0].stageInfo.products[0].product_type === '310'||stageSelector[0].stageInfo.products[0].product_type === '307'||stageSelector[0].stageInfo.products[0].product_type === '324') || (stageSelector[0].stageInfo.products[0].product_category === 'TD'))
+    ){
+      
+      let value: Array<LovInputValModel> = [
+        {
+          CODE_DESC: "1",
+          CODE_VALUE: "1"
+        },
+      ];
+      setSelectedValue(value);
+
+    }
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-1"
+    && props.data.logical_field_name==="account_level_mailing_address"){
+      const previousSelectedOption = [...selectedOption];
+      const updatedSelectedOption = previousSelectedOption.filter(
+        (item: LovInputValModel) => item.CODE_VALUE !== "RES");
+      setSelectedOption(updatedSelectedOption);
+      let value: Array<LovInputValModel> = [
+        {
+          CODE_DESC: "Residential Address",
+          CODE_VALUE: "RES",
+        },
+      ];
+      setSelectedValue(value);
+    }
+  },[]);
+useEffect(() => {
+     //Personal details page other address singapore country preselected 
+     /*istanbul ignore else*/
+    if (
+      ((userInputSelector.applicants["select_alt_addresses_a_1"] !== "") ||
+        userInputSelector.applicants["select_alt_addresses_a_1"] !== undefined) &&
+      stageSelector[0].stageId === "bd-2"
+    ) {
+      const addressMapping: { [key: string]: string } = {
+        PER: "per_country",
+        AL1: "alt_country_1",
+        AL2: "alt_country_2",
+        AL3: "alt_country_3",
+        AL4: "alt_country_4",
+        AL5: "alt_country_5",
+      };
+    
+      const selectedAddress = userInputSelector.applicants["select_alt_addresses_a_1"] ?.split(",") || [];
+      selectedAddress.forEach((value: any) => {
+      const logicalFieldName = addressMapping[value];
+    /*istanbul ignore else*/
+      if (logicalFieldName && props.data.logical_field_name === logicalFieldName) {
+        const previousSelectedOption = [...selectedOption];
+        const updatedSelectedOption = previousSelectedOption.filter(
+          (item: LovInputValModel) => item.CODE_VALUE !== "SG"
+        );
+        setSelectedOption(updatedSelectedOption);
+    
+        let value: Array<LovInputValModel> = [
+          {
+            CODE_DESC: "Singapore",
+            CODE_VALUE: "SG",
+          },
+        ];
+        setSelectedValue(value);
+        dispatch(isFieldUpdate(props, value[0].CODE_VALUE, logicalFieldName));
+      }
+    });
+    }
+   
+  }, [userInputSelector.applicants["select_alt_addresses_a_1"]])
+  
+  useLayoutEffect(()=>{
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageInfo.applicants["tax_id_no_a_1"] &&
+     props.data.logical_field_name === "crs_reason_code" &&
+     !userInputSelector.applicants["crs_reason_code_a_1"]){
+      setShowCrsReason(false);
+      dispatch(stagesAction.removeAddToggleField({
+        removeFields:["crs_reason_code","crs_comments"],
+        newFields:[]
+      }))
+    }
+    /*istanbul ignore else*/
+    if(!userInputSelector.applicants["tax_id_no_a_1"]){
+      setShowCrsReason(true);
+    }
+  })
+useEffect(()=>{
+  /*istanbul ignore else*/
+    if (userInputSelector.applicants["country_of_tax_residence_a_1"] === "SG") {
+      if (props.data.logical_field_name === 'crs_reason_code') {
+        setShowCrsReason(false);
+        setSelectedValue([]);
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ['crs_reason_code'],
+            newFields: [],
+          })
+        );
+      } else {
+        setShowCrsReason(true);
+      }
+    }else if((userInputSelector.applicants["country_of_tax_residence_a_1"] !== "SG"&&userInputSelector.applicants["country_of_tax_residence_a_1"] !== undefined&&userInputSelector.applicants["country_of_tax_residence_a_1"]!=="")){
+      /*istanbul ignore else*/
+      if (props.data.logical_field_name === 'crs_reason_code') {
+        setShowCrsReason(true);
+        setSelectedValue([]);
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: [],
+            newFields: ['crs_reason_code'],
+            value:''
+          })
+        );
+      }
+    }
+  },[userInputSelector.applicants.country_of_tax_residence_a_1]);
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageInfo.applicants["tax_id_no_a_1"] &&
+    props.data.logical_field_name === "crs_reason_code" &&
+    !userInputSelector.applicants["crs_reason_code_a_1"]){
+      const crsReasonValue=selectedValue && selectedValue.length>0;
+      dispatch(fieldErrorAction.getMandatoryFields([]));
+        const valObj:any={
+          casa_fatca_declaration_a_1: '',
+          country_of_tax_residence_a_1: '',
+          crs_comments_a_1: '',
+          crs_reason_code_a_1: crsReasonValue? selectedValue[0].CODE_VALUE:''
+        }
+        for(let key in valObj) {
+          if(applicantsSelector[key]!==""&&applicantsSelector[key]!==undefined){
+               valObj[key] = applicantsSelector[key];
+          }else{
+            delete valObj[key]
+          }
+      }
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["name_of_employer", "nature_of_employer", "job_title","office_phone_number","name_of_business","NRIC"],
+            newFields: ["casa_fatca_declaration","country_of_tax_residence","crs_reason_code","crs_comments"],
+            value:valObj
+          })
+        );
+    }
+  },[userInputSelector.applicants["crs_reason_code_a_1"]])
+  useEffect(()=>{
+    if(userInputSelector.applicants["tax_id_no_a_1"] !== "" 
+    && userInputSelector.applicants["tax_id_no_a_1"] !== undefined 
+    && props.data.logical_field_name === "crs_reason_code"){
+      setShowCrsReason(false)
+    }
+    else{
+      setShowCrsReason(true)
+    }
+  },[userInputSelector.applicants.tax_id_no_a_1]);
+
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if (props.data.logical_field_name === "loan_tenor") {
+      let value: Array<LovInputValModel> = [
+        {
+          CODE_DESC: userInputSelector.applicants.loan_tenor_a_1,
+          CODE_VALUE: userInputSelector.applicants.loan_tenor_a_1,
+          checked: true,
+        },
+      ];
+      setSelectedValue(value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userInputSelector.applicants.loan_tenor_a_1]);
+  const handlePopupBackButton = () => {
+    setShowInfoPopup(false);
+  };
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if (Object.fromEntries(Object.entries(userInputSelector.applicants).filter(([key]) => key.startsWith('tax_id_no_') &&  key !== 'tax_id_no')) !== null
+    &&props.data.logical_field_name!=="crs_reason_code") {
+      const taxId = Object.fromEntries(Object.entries(userInputSelector.applicants).filter(([key,value]) => key.startsWith('tax_id_no_') && value !=="" && value !==undefined));
+      let shouldShowCrsReasonCode = true;
+      Object.keys(taxId).forEach((key: any) => {
+        const taxIdNoIndex = key.split("_")[3];
+        /*istanbul ignore else*/
+        if (props.data.logical_field_name === `crs_reason_code_${taxIdNoIndex}`) {
+          shouldShowCrsReasonCode = false;
+          dispatch(
+              stagesAction.removeAddToggleField({
+                removeFields: [`crs_reason_code_${taxIdNoIndex}`],
+               newFields: [],
+              }))
+        }
+      });
+      setShowCrsReason(shouldShowCrsReasonCode);
+    }
+  },[userInputSelector.applicants.tax_id_no_1_a_1,userInputSelector.applicants.tax_id_no_2_a_1,userInputSelector.applicants.tax_id_no_3_a_1,userInputSelector.applicants.tax_id_no_4_a_1]);
+  
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-1" && (props.data.logical_field_name === "td_term_value_months" || props.data.logical_field_name === "td_term_value_years" || props.data.logical_field_name === "td_fund_account_etc" || props.data.logical_field_name === "td_fund_account_new")){
+      if(props.data.logical_field_name === "td_term_value_months"  && userInputSelector.applicants["td_term_type_a_1"] === "M") {
+        setVisibility(true);
+        dispatch(getLovData("td_term_value_months"));
+      }else if(props.data.logical_field_name === "td_term_value_years" && userInputSelector.applicants["td_term_type_a_1"] === "Y"){
+        setVisibility(true);
+        dispatch(getLovData("td_term_value_years"));
+      }
+      else if(props.data.logical_field_name === "td_fund_account_etc" && userInputSelector.applicants["td_fund_account_choice_a_1"] === "Existing CASA"){
+        setVisibility(true);
+      }
+      else if(props.data.logical_field_name === "td_fund_account_new" && userInputSelector.applicants["td_fund_account_choice_a_1"] === "New CASA"){
+        setVisibility(true);
+      }
+      else{
+        setVisibility(false);
+      }
+}else if(stageSelector[0].stageId==="bd-1" && props.data.logical_field_name === 'mobile_number_rwb'){
+      setVisibility(false);
+    }else {
+      setVisibility(true)
+    }
+  },[userInputSelector.applicants["td_term_type_a_1"], userInputSelector.applicants["td_fund_account_choice_a_1"]]);
+  useEffect(()=>{
+    if((userInputSelector.applicants.select_alt_contacts_a_1 === undefined || userInputSelector.applicants.select_alt_contacts_a_1 === "") && 
+    (props.data.logical_field_name === "mobile_1" || props.data.logical_field_name === "mobile_2" || props.data.logical_field_name === "overseas_mobile1_contact_no" || 
+    props.data.logical_field_name === "overseas_mobile2_contact_no" || props.data.logical_field_name === "ofc1_number" || props.data.logical_field_name === "ofc2_number" || 
+    props.data.logical_field_name === "office_phone1_number" || props.data.logical_field_name === "office_phone2_number" || props.data.logical_field_name === "ohph1_number" || 
+    props.data.logical_field_name === "ohph2_number" || props.data.logical_field_name === "home_phone2_number")){ 
+      setShowFields(false)
+    }else if(userInputSelector.applicants.select_alt_contacts_a_1){
+      let displayFields = userInputSelector.applicants.select_alt_contacts_a_1.split(",");
+      if(displayFields.includes("MO1") && props.data.logical_field_name === "mobile_1"){
+        setShowFields(true)
+      }else if(displayFields.includes("MO2") && props.data.logical_field_name === "mobile_2"){
+        setShowFields(true)
+      }else if(displayFields.includes("MF1") && props.data.logical_field_name === "overseas_mobile1_contact_no"){
+        setShowFields(true)
+      }else if(displayFields.includes("MF2") && props.data.logical_field_name === "overseas_mobile2_contact_no"){
+        setShowFields(true)
+      }else if(displayFields.includes("OF1") && props.data.logical_field_name === "ofc1_number"){
+        setShowFields(true)
+      }else if(displayFields.includes("OF2") && props.data.logical_field_name === "ofc2_number"){
+        setShowFields(true)
+      }else if(displayFields.includes("RT2") && props.data.logical_field_name === "home_phone2_number"){
+        setShowFields(true)
+      }else if(displayFields.includes("OT1") && props.data.logical_field_name === "office_phone1_number"){
+        setShowFields(true)
+      }else if(displayFields.includes("OT2") && props.data.logical_field_name === "office_phone2_number"){
+        setShowFields(true)
+      }else if(displayFields.includes("RF1") && props.data.logical_field_name === "ohph1_number"){
+        setShowFields(true)
+      }else if(displayFields.includes("RF2") && props.data.logical_field_name === "ohph2_number"){
+        setShowFields(true)
+      }
+      else{
+        if(props.data.logical_field_name === "mobile_1" || props.data.logical_field_name === "mobile_2" || props.data.logical_field_name === "overseas_mobile1_contact_no" || 
+        props.data.logical_field_name === "overseas_mobile2_contact_no" || props.data.logical_field_name === "ofc1_number" || props.data.logical_field_name === "ofc2_number" || 
+        props.data.logical_field_name === "office_phone1_number" || props.data.logical_field_name === "office_phone2_number" || props.data.logical_field_name === "ohph1_number" || 
+        props.data.logical_field_name === "ohph2_number" || props.data.logical_field_name === "home_phone2_number"){
+          setShowFields(false)
+        }
+      }
+    }
+    //employment screen based Non Face to Face selection enable existing_account_ccy at Term Deposit product
+    else if(props.data.logical_field_name === "existing_account_ccy"){
+      if(stageSelector[0].stageId === "bd-3" && ((stageSelector[0].stageInfo.products[0].product_category === "TD" && (stageSelector[0].stageInfo.products[0].product_type === "604" || stageSelector[0].stageInfo.products[0].product_type === "617")) || (stageSelector[0].stageInfo.products[0].product_category==='SA' && getUrl.getJourneyType()==="ETC") || (stageSelector[0].stageInfo.products[0].product_category === "CA" && (stageSelector[0].stageInfo.products[0].product_type === "317" || (stageSelector[0].stageInfo.products[0].product_type === "318" || stageSelector[0].stageInfo.products[0].product_type==='154' || stageSelector[0].stageInfo.products[0].product_type==='339' || stageSelector[0].stageInfo.products[0].product_type==='342' || stageSelector[0].stageInfo.products[0].product_type==='314' || stageSelector[0].stageInfo.products[0].product_type==='329'|| stageSelector[0].stageInfo.products[0].product_type==='330' && getUrl.getJourneyType()==="ETC")))) && (userInputSelector.applicants["signature_crop_from_existing_ac_a_1"] === "Y" && userInputSelector.applicants["application_sourcing_a_1"] === "2")) {
+        setShowFields(true);
+        dispatch(fieldErrorAction.getMandatoryFields(["existing_account_ccy"]));
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: [],
+            newFields: ["existing_account_ccy"],
+            value: userInputSelector.applicants.existing_account_ccy_a_1?userInputSelector.applicants.existing_account_ccy_a_1:stageSelector[0].stageInfo.applicants.existing_account_ccy_a_1,
+          })
+        );  
+      }else if(userInputSelector.applicants["signature_crop_from_existing_ac_a_1"] === "N"){
+        setShowFields(false);
+        dispatch(fieldErrorAction.removeMandatoryFields(["existing_account_ccy"]));
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["existing_account_ccy"],
+            newFields: [],
+            value: "",
+          })
+        );
+        setSelectedValue([]);
+      }
+    }
+    else{
+      setShowFields(true)
+    }
+  },[userInputSelector.applicants.select_alt_contacts_a_1,userInputSelector.applicants["signature_crop_from_existing_ac_a_1"], userInputSelector.applicants["application_sourcing_a_1"]])  
+ 
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(userInputSelector.applicants["country_of_tax_residence_a_1"] !== "SG" && stageSelector[0].stageId === "ad-2"){
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["declare_preferred_contacts"],
+          newFields: [],
+        })
+      );
+ 
+    }
+  },[userInputSelector.applicants["country_of_tax_residence_a_1"]])
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId === "bd-2"){
+    const postalMapping: Record<string, string[]> = {
+      PER: ["per_country"],
+      AL1: ["alt_country_1"],
+      AL2: ["alt_country_2"],
+      AL3: ["alt_country_3"],
+      AL4: ["alt_country_4"],
+      AL5: ["alt_country_5"],
+    };
+
+    // empty particular selected fields options other address field at Personal Details Page   
+    /*istanbul ignore else*/
+    if (userInputSelector.applicants.select_alt_addresses_a_1) {
+      const selectedValues = userInputSelector.applicants.select_alt_addresses_a_1.split(",");
+      Object.entries(postalMapping).forEach(([key, fields]) => {
+        const removeCountryCode = fields[0];
+        /*istanbul ignore else*/
+        if (!selectedValues.includes(key)) {
+          /*istanbul ignore else*/
+          if (removeCountryCode === props.data.logical_field_name) {
+            setSelectedValue([]);
+            dispatch(stagesAction.removeAddToggleField({
+              removeFields: [removeCountryCode],
+              newFields: [],
+            }))
+          }
+        }
+      });
+    }
+  }
+}, [userInputSelector.applicants.select_alt_addresses_a_1])
+
+useEffect(()=>{
+  /*istanbul ignore else*/
+  if(repeatCount &&stageSelector[0].stageId === "ad-1"){
+
+  for(let i =0 ; i < repeatCount -1 ; i++){
+    const key =`debit_card_request_rwb_${i + 2}_a_1`;
+    /*istanbul ignore else*/
+    if(userInputSelector.applicants[key] === "Y"){
+      dispatch(stagesAction.removeAddToggleField({
+        removeFields: [],
+        newFields: [`issuance_type_${i + 2}`],
+}))
+}
+}
+}
+
+},[userInputSelector.applicants.debit_card_request_rwb_2_a_1,userInputSelector.applicants.debit_card_request_rwb_3_a_1,
+  userInputSelector.applicants.debit_card_request_rwb_4_a_1,userInputSelector.applicants.debit_card_request_rwb_5_a_1,
+  userInputSelector.applicants.debit_card_request_rwb_6_a_1,userInputSelector.applicants.debit_card_request_rwb_7_a_1,
+  userInputSelector.applicants.debit_card_request_rwb_8_a_1])
+
+
+
+useEffect(()=>{
+  /*istanbul ignore else*/
+  if(repeatCount &&stageSelector[0].stageId === "ad-1"){
+
+  for(let i =0 ; i < repeatCount -1 ; i++){
+    const key =`debit_card_request_rwb_${i + 2}_a_1`;
+    /*istanbul ignore else*/
+    if(userInputSelector.applicants[key] === "N"){
+      dispatch(stagesAction.removeAddToggleField({
+        removeFields: [`issuance_type_${i + 2}`],
+        newFields: [],
+}))
+}
+}
+}
+
+},[userInputSelector.applicants.debit_card_request_rwb_2_a_1,userInputSelector.applicants.debit_card_request_rwb_3_a_1,
+  userInputSelector.applicants.debit_card_request_rwb_4_a_1,userInputSelector.applicants.debit_card_request_rwb_5_a_1,
+  userInputSelector.applicants.debit_card_request_rwb_6_a_1,userInputSelector.applicants.debit_card_request_rwb_7_a_1,
+  userInputSelector.applicants.debit_card_request_rwb_8_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(products.length > 1){
+      /*istanbul ignore else*/
+      if(stageSelector[0].stageId ==="ad-1"){
+        /*istanbul ignore else*/
+        if(userInputSelector.applicants["debit_card_request_rwb_2_a_1"] === "Y"){
+          dispatch(stagesAction.removeAddToggleField({
+            removeFields: [],
+            newFields: ["issuance_type_2"],
+    }))
+    }
+
+      }
+}
+},[userInputSelector.applicants.debit_card_request_rwb_2_a_1])
+
+
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(products.length > 1){
+      /*istanbul ignore else*/
+      if(stageSelector[0].stageId ==="ad-1"){
+        /*istanbul ignore else*/
+        if(userInputSelector.applicants["debit_card_request_rwb_2_a_1"] === "N"){
+          dispatch(stagesAction.removeAddToggleField({
+            removeFields: ["issuance_type_2"],
+            newFields: [],
+    }))
+    }
+
+      }
+
+    }
+},[userInputSelector.applicants.debit_card_request_rwb_2_a_1])
+ return (
+    <>
+      {showFields && showCrsReason&&<div className= {`dropdown-select ${visibility ? "" : "display-none" }`} id={props.data.logical_field_name}>
+        <label htmlFor={props.data.logical_field_name}>
+          {props.data.rwb_label_name}
+          {/* {isCountryTaxResideancyField && (
+            <span onClick={() => removeTaxField()} className="remove-button">
+              Delete
+            </span>
+          )} */}
+        </label>
+        <div className="dropdown-container">
+          <div
+           className={`dropdown-select__field ${
+            (((isMyinfo || props.data.editable || props.data.logical_field_name === "account_currency_rwb_1") && (props.data.logical_field_name !== "mobile_number_rwb" && (stageSelector[0].stageInfo.products[0].product_type !== '317'))) && ((props.data.logical_field_name !== "no_of_accounts_rwb") && (props.data.logical_field_name !== "account_currency_rwb_7")) ||
+            (stageSelector[0].stageId === "bd-3" && (getUrl.getJourneyType() === "NTC" || getUrl.getJourneyType() === "ETC" || getUrl.getJourneyType() === "ECC" || getUrl.getJourneyType() === "ECA") && (props.data.logical_field_name === "arm_code_rwb" || props.data.logical_field_name === "segment_code" || props.data.logical_field_name === "sub_segment" || props.data.logical_field_name === "service_indicator")) ||
+            (stageSelector[0].stageId === "bd-2" && ((getUrl.getJourneyType() === "NTC" || getUrl.getJourneyType() === "ETC") && props.data.logical_field_name === "mailing_address_rwb") ||
+            (props.data.logical_field_name === "country_rwb" && stageSelector[0].stageInfo.applicants.country_rwb_a_1 && authenticateType() === 'myinfo') || 
+            (stageSelector[0].stageId === "bd-3" && store.getState().stages.stages[0].stageInfo.applicants.ofc_existing_country_a_1 && props.data.logical_field_name === "ofc_country")))? "disabled" : ""
+            }`}
+            onClick={(event) => dropdownHandler(event)}
+            onFocus={focusHandler.bind(this, props.data.logical_field_name)}
+          >
+            {selectedValue &&
+              selectedValue.length > 0 &&
+              selectedValue.map((item: LovInputValModel) => {
+                return (
+                  <div
+                    className="dropdown-select__fieldlabel"
+                    key={item.CODE_VALUE}
+                  >
+                    {(props.data.logical_field_name === "mobile_number_rwb" || props.data.logical_field_name === "mobile_1" || props.data.logical_field_name === "mobile_2" || props.data.logical_field_name === "overseas_mobile1_contact_no" ||
+                    props.data.logical_field_name === "overseas_mobile2_contact_no" || props.data.logical_field_name === "ofc1_number" || props.data.logical_field_name === "ofc2_number" || props.data.logical_field_name === "home_phone2_number" ||
+                    props.data.logical_field_name === "office_phone1_number" || props.data.logical_field_name === "office_phone2_number" || props.data.logical_field_name === "ohph1_number" || props.data.logical_field_name === "ohph2_number" || props.data.logical_field_name === "home_phone_number_rwb") ?
+                      <span>{item.CODE_VALUE}</span>:
+                      <span>{item.CODE_DESC}</span>
+                    }
+                    <span
+                      className="multi-close"
+                      onClick={(
+                        e: React.MouseEvent<HTMLDivElement, MouseEvent>
+                      ) => removeSelectedValues(e, item)}
+                    ></span>
+                  </div>
+                );
+              })}
+            {!(selectedValue && selectedValue.length > 0) && (
+              <input
+                type="text"
+                className="dropdown-select__input"
+                id={fieldIdAppend(props)}
+                placeholder={placeHolderText(props.data.logical_field_name)}
+                onChange={() => {
+                  //do nothing
+                }}
+              />
+            )}
+          </div>
+          {props.data.info_tooltips === "Yes" &&
+            props.data.logical_field_name !== "casa_fatca_declaration" && (
+              <span 
+                className="info-tooltip"
+                onClick={() => setShowInfoPopup(true)}
+              ></span>
+          )}
+        </div>
+        {errors  &&errorsMessage.length <= 0 && (
+        <span className="error-msg">
+          Please select your {props.data.rwb_label_name}
+        </span>
+      )}
+      {/* {errorsMessage.length < 0  && ( */}
+      <span className= {errorsMessage.length > 0? "error-msg":""}
+        >{errorsMessage}</span>
+      {/* )} */}
+        {show && selectedOption && (
+          <div className="dropdown-select__background">
+            <div className="dropdown-select__bg-curve"></div>
+            <div className="dropdown-select__popup">
+              <div className="dropdown-select__header">
+                <div>{props.data.rwb_label_name}</div>
+                <div className="close" onClick={close}></div>
+              </div>
+
+              <div className="dropdown-select__search">
+                <input
+                  autoFocus
+                  name="search"
+                  className="dropdown-select__search"
+                  type="search"
+                  placeholder="Search"
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              {
+                <div className="dropdown-select__expand">
+                  {selectedOption
+                    .filter((item: LovInputValModel) =>
+                      item.CODE_DESC.toLowerCase().includes(
+                        search.toLowerCase()
+                      )
+                    )
+                    .map((item: LovInputValModel, index: number) => {
+                      return (
+                        <div key={index} className="dropdown-select__item">
+                          <input
+                            type="radio"
+                            checked={item.checked}
+                            onClick={() => addUserInput(item)}
+                            onChange={() => {
+                              //do nothing
+                            }}
+                            value={item.CODE_VALUE}
+                            id={item.CODE_VALUE}
+                          />
+                          <label htmlFor={item.CODE_VALUE}>
+                            {item.CODE_DESC}
+                          </label>
+                        </div>
+                      );
+                    })}
+                </div>
               }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IX'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByText('ThankYouCASA Mock')).toBeInTheDocument();
-    });
-  });
+            </div>
+          </div>
+        )}
+      </div>
+      }
+      {showInfoPopup && (
+        <Model name={props.data.logical_field_name} isTooltip={true} data={props.data.details}  handlebuttonClick={handlePopupBackButton} />
+      )}
+    </>
+  );
+};
 
-  it('handles PL products', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'PL',
-                name: 'Personal Loan',
-                product_sequence_number: '1',
-                product_type: 'LOAN',
-                acct_details: [{ account_number: '1234567890' }]
-              },
-              { 
-                product_category: 'SA',
-                name: 'Savings Account',
-                product_sequence_number: '2',
-                product_type: 'SAVINGS',
-                acct_details: [{ account_number: '1234567891' }]
-              }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IX'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByText('ThankYouCASA Mock')).toBeInTheDocument();
-    });
-  });
+export default SelectionBox;
 
-  it('handles empty acct_details', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'SA',
-                name: 'Savings Account',
-                product_sequence_number: '1',
-                product_type: 'SAVINGS',
-                acct_details: []
-              }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IX'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByText('ThankYouCASA Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('handles missing stageInfo', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: null
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('form')).toBeInTheDocument();
-    });
-  });
-
-  it('handles missing products', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: null,
-            applicants: {
-              auth_mode_a_1: 'IX'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByTestId('form')).toBeInTheDocument();
-    });
-  });
-
-  it('handles missing applicants', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'SA',
-                name: 'Savings Account',
-                product_sequence_number: '1',
-                product_type: 'SAVINGS',
-                acct_details: [{ account_number: '1234567890' }]
-              }
-            ],
-            applicants: null
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByText('ThankYouCASA Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('handles IM auth mode', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'SA',
-                name: 'Savings Account',
-                product_sequence_number: '1',
-                product_type: 'SAVINGS',
-                acct_details: [{ account_number: '1234567890' }]
-              }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IM'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    fireEvent.click(screen.getByText('Submit CASA'));
-    
-    await waitFor(() => {
-      expect(mockRedirectingToIbanking).toHaveBeenCalled();
-    });
-  });
-
-  it('handles card activation error', async () => {
-    mockActivateDigitalCard.mockResolvedValue({ status: 'FAILURE' });
-    
-    const store = createMockStore({
-      otpSuccess: true,
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'CC',
-                name: 'Credit Card',
-                product_sequence_number: '1',
-                product_type: 'CREDIT',
-                acct_details: [{ card_no: '1234567890123456' }]
-              }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IX',
-              embossed_name_a_1: 'John Doe'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(mockActivateDigitalCard).toHaveBeenCalled();
-    });
-  });
-
-  it('handles continue without activation flow', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'CC',
-                name: 'Credit Card',
-                product_sequence_number: '1',
-                product_type: 'CREDIT',
-                acct_details: [{ card_no: '1234567890123456' }]
-              }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IX',
-              embossed_name_a_1: 'John Doe'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    // Simulate user flow
-    fireEvent.click(screen.getByText('Continue Without Activation'));
-    await waitFor(() => {
-      expect(screen.getByTestId('model')).toBeInTheDocument();
-    });
-    
-    fireEvent.click(screen.getByText('Back Button'));
-    await waitFor(() => {
-      expect(screen.queryByTestId('model')).not.toBeInTheDocument();
-    });
-  });
-
-  it('handles multiple product categories', async () => {
-    const store = createMockStore({
-      stages: [
-        {
-          stageId: 'thankyou',
-          stageInfo: {
-            application: { application_reference: 'APP123' },
-            products: [
-              { 
-                product_category: 'SA',
-                name: 'Savings Account',
-                product_sequence_number: '1',
-                product_type: 'SAVINGS',
-                acct_details: [{ account_number: '1234567890' }]
-              },
-              { 
-                product_category: 'CA',
-                name: 'Current Account',
-                product_sequence_number: '2',
-                product_type: 'CURRENT',
-                acct_details: [{ account_number: '1234567891' }]
-              },
-              { 
-                product_category: 'CC',
-                name: 'Credit Card',
-                product_sequence_number: '3',
-                product_type: 'CREDIT',
-                acct_details: [{ card_no: '1234567890123456' }]
-              }
-            ],
-            applicants: {
-              auth_mode_a_1: 'IX',
-              embossed_name_a_1: 'John Doe'
-            }
-          }
-        }
-      ]
-    });
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      expect(screen.getByText('ThankYouCASA Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('verifies applicationDetails state updates', async () => {
-    const store = createMockStore();
-    
-    renderWithStore(store);
-    
-    await waitFor(() => {
-      const detailsText = screen.getByText(/Savings Account/);
-      expect(detailsText).toBeInTheDocument();
-      expect(detailsText).toHaveTextContent('APP123');
-      expect(detailsText).toHaveTextContent('1234567890');
-    });
-  });
-});
+Please write test cases using jest with RTL
