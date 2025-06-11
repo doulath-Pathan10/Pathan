@@ -1,213 +1,128 @@
-import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import { MemoryRouter, useLocation } from 'react-router-dom';
-import Dashboard from './dashboard';
-import { StoreModel } from '../../utils/model/common-model';
+import { createElement } from "react";
+import Dates from "../../../shared/components/dates/dates";
+import Date from "../../../shared/components/dates/dates";
+import Information from "../../../shared/components/information/information";
+import MultiSelectionBox from "../../../shared/components/multi-selection-box/multi-selection-box";
+import Number from "../../../shared/components/number/number";
+import OtherMyinfo from "../../../shared/components/other-myinfo/other-myinfo";
+import Phone from "../../../shared/components/phone/phone";
+import RadioWithLabel from "../../../shared/components/radio-with-label/radio-with-label";
+import SelectionBox from "../../../shared/components/selection-box/selection-box";
+import Text from "../../../shared/components/text/text";
+import Toggle from "../../../shared/components/toggle/toggle";
+import TypeAhead from "../../../shared/components/type-ahead/type-ahead";
+import { KeyWithAnyModel } from "../../../utils/model/common-model";
+import Button from "../../../shared/components/button/button";
+import Amount from "../../../shared/components/amount/amount";
+import SliderWithLimit from "../../../shared/components/slider-with-limit/slider-with-limit";
+import SliderWithCurrency from "../../../shared/components/slider-with-currency/slider-with-currency";
+import { authenticateType } from "../../../utils/common/change.utils";
+import Signature from "../../../shared/components/signature/signature";
+// import ButtonGroup from "../../../shared/components/button-group/button-group";
 
-// Mock the components and hooks
-jest.mock('./header/header', () => () => <div>Header Mock</div>);
-jest.mock('./fields/fields', () => () => <div>Fields Mock</div>);
-jest.mock('../../shared/components/popup-model/popup-model', () => ({ children, displayPopup }: any) => 
-  displayPopup ? <div>{children}</div> : null);
-jest.mock('../../shared/components/model/model', () => ({ name, handlebuttonClick }: any) => 
-  <div onClick={handlebuttonClick}>{name} Mock</div>);
-jest.mock('../../shared/components/myinfo-singpass-login-modal/myinfo-singpass-login', () => () => 
-  <div>MyinfoSingpassLogin Mock</div>);
+const keysToComponentMap: KeyWithAnyModel = {
+  Dates: Dates,
+  RadioWithLabel: RadioWithLabel,
+  Phone:Phone,
+  Text: Text,
+  SelectionBox: SelectionBox,
+  MultiSelectionBox: MultiSelectionBox,
+  Toggle: Toggle,
+  Number: Number,
+  Information: Information,
+  OtherMyinfo: OtherMyinfo,
+  TypeAhead: TypeAhead,
+  Button: Button,
+  Amount: Amount,
+  SliderWithLimit: SliderWithLimit,
+  SliderWithlimit: SliderWithLimit,
+  SliderWithCurrency: SliderWithCurrency,
+ // Display: Signature,
+ Display:Text,
+  // ButtonGroup: ButtonGroup,
+  RateButton: Button,
+  authorize: Toggle, 
+  Date: Date,
+  Infowithoutmodal:Information,
+  PhoneAreaCode: Phone
+};
 
-// Mock services and utils
-jest.mock('../../services/common-service', () => ({
-  dispatchLoader: jest.fn(),
-  getClientInfo: jest.fn(),
-}));
-
-jest.mock('../../utils/store/urlparam-slice', () => ({
-  urlParamAction: {
-    getUrlParameter: jest.fn(),
-  },
-}));
-
-jest.mock('../../utils/store/loader-slice', () => ({
-  loaderAction: {
-    getState: jest.fn(),
-  },
-}));
-
-jest.mock('../../utils/store/store', () => ({
-  store: {
-    getState: jest.fn(),
-  },
-}));
-
-jest.mock('../../utils/common/change.utils', () => ({
-  authenticateType: jest.fn(),
-  getUrl: {
-    getLoader: jest.fn(),
-  },
-}));
-
-describe('Dashboard Component', () => {
-  const mockStore = configureStore({
-    reducer: {
-      stages: () => ({ stages: [], otpOpen: false, otpResume: false }),
-      urlParam: () => ({ myInfo: false, validUrl: true }),
-      referralcode: () => ({}),
-    },
-  });
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    // Default mock implementations
-    (require('../../utils/store/store').store.getState as jest.Mock).mockReturnValue({
-      urlParam: { validUrl: true },
+const renderComponent = (
+  currentSection: KeyWithAnyModel,
+  _i: number,
+  handleCallback: any,
+  handleFieldDispatch: any,
+  userInput: { [key: string]: string }
+) => {
+  /* istanbul ignore next */
+  let component = currentSection.component_type.replace(/\s/g, "");
+  if(currentSection.logical_field_name === "mobile_number_rwb"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "mobile_number"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "mobile_1"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "mobile_1_add"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "mobile_2"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "mobile_2_add"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "overseas_mobile1_contact_no"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "overseas_mobile1"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "overseas_mobile2_contact_no"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "overseas_mobile2"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "ofc1_number"){
+    keysToComponentMap['PhoneAreaCode']= SelectionBox;
+  }else if(currentSection.logical_field_name === "ofc1"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "ofc2_number"){
+    keysToComponentMap['PhoneAreaCode']= SelectionBox;
+  }else if(currentSection.logical_field_name === "ofc2"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "home_phone2_number"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "home_phone2"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "office_phone1_number"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "office_phone1"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "office_phone2_number"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }else if(currentSection.logical_field_name === "office_phone2"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "ohph1_number"){
+    keysToComponentMap['PhoneAreaCode']= SelectionBox;
+  }else if(currentSection.logical_field_name === "ohph1"){
+    keysToComponentMap['Phone']=  Phone;
+  }else if(currentSection.logical_field_name === "ohph2_number"){
+    keysToComponentMap['PhoneAreaCode']= SelectionBox;
+  }else if(currentSection.logical_field_name === "ohph2"){
+    keysToComponentMap['Phone']=  Phone;
+  }
+  else if(currentSection.logical_field_name === "home_phone_number_rwb"){
+    keysToComponentMap['Phone']= SelectionBox;
+  }
+  else if(currentSection.logical_field_name === "home_phone_number"){
+    keysToComponentMap['Phone']=  Phone;
+  }
+  /* istanbul ignore else */
+  if (typeof keysToComponentMap[component] !== "undefined") {
+    return createElement(keysToComponentMap[component], {
+      data: currentSection,
+      key: currentSection.logical_field_name,
+      handleCallback: handleCallback,
+      handleFieldDispatch: handleFieldDispatch,
+      value: userInput,
     });
-    
-    (require('../../utils/common/change.utils').authenticateType as jest.Mock).mockReturnValue('other');
-    
-    (require('../../utils/common/change.utils').getUrl.getLoader as jest.Mock).mockReturnValue({
-      cta: { cta: false },
-    });
-    
-    (require('../../services/common-service').getClientInfo as jest.Mock).mockResolvedValue({});
-  });
+  }
+};
 
-  const renderDashboard = (initialEntries = ['/']) => {
-    return render(
-      <Provider store={mockStore}>
-        <MemoryRouter initialEntries={initialEntries}>
-          <Dashboard />
-        </MemoryRouter>
-      </Provider>
-    );
-  };
+export default renderComponent;
 
-  it('renders without crashing', () => {
-    renderDashboard();
-    expect(screen.getByText('Header Mock')).toBeInTheDocument();
-  });
-
-  it('displays loader initially', () => {
-    renderDashboard();
-    expect(require('../../services/common-service').dispatchLoader).toHaveBeenCalledWith(true);
-  });
-
-  it('handles invalid URL by showing error modal', async () => {
-    (require('../../utils/store/store').store.getState as jest.Mock).mockReturnValue({
-      urlParam: { validUrl: false },
-    });
-    
-    renderDashboard();
-    
-    await waitFor(() => {
-      expect(screen.getByText('globalError Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('shows MyInfoSingpassLogin when myInfo is true in store', async () => {
-    const myInfoStore = configureStore({
-      reducer: {
-        stages: () => ({ stages: [], otpOpen: false, otpResume: false }),
-        urlParam: () => ({ myInfo: true, validUrl: true }),
-        referralcode: () => ({}),
-      },
-    });
-    
-    render(
-      <Provider store={myInfoStore}>
-        <MemoryRouter>
-          <Dashboard />
-        </MemoryRouter>
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByText('MyinfoSingpassLogin Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('shows confirmation popup when authenticateType is myinfo', async () => {
-    (require('../../utils/common/change.utils').authenticateType as jest.Mock).mockReturnValue('myinfo');
-    
-    renderDashboard();
-    
-    await waitFor(() => {
-      expect(screen.getByText('confirmationPopup Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('hides confirmation popup when handlePopupBackButton is called', async () => {
-    (require('../../utils/common/change.utils').authenticateType as jest.Mock).mockReturnValue('myinfo');
-    
-    renderDashboard();
-    
-    const popup = await screen.findByText('confirmationPopup Mock');
-    act(() => {
-      popup.click();
-    });
-    
-    await waitFor(() => {
-      expect(screen.queryByText('confirmationPopup Mock')).not.toBeInTheDocument();
-    });
-  });
-
-  it('renders Fields component when fieldsComponent is true', async () => {
-    renderDashboard();
-    
-    await waitFor(() => {
-      expect(screen.getByText('Fields Mock')).toBeInTheDocument();
-    });
-  });
-
-  it('applies pointer-none class when ctaLoader.cta is true', async () => {
-    (require('../../utils/common/change.utils').getUrl.getLoader as jest.Mock).mockReturnValue({
-      cta: { cta: true },
-    });
-    
-    renderDashboard();
-    
-    await waitFor(() => {
-      const appBody = screen.getByText('Fields Mock').closest('.app__body');
-      expect(appBody).toHaveClass('pointer-none');
-    });
-  });
-
-  it('does not render Fields when otpShowSelector is true', async () => {
-    const otpStore = configureStore({
-      reducer: {
-        stages: () => ({ stages: [{}], otpOpen: true, otpResume: false }),
-        urlParam: () => ({ myInfo: false, validUrl: true }),
-        referralcode: () => ({}),
-      },
-    });
-    
-    render(
-      <Provider store={otpStore}>
-        <MemoryRouter>
-          <Dashboard />
-        </MemoryRouter>
-      </Provider>
-    );
-    
-    await waitFor(() => {
-      expect(screen.queryByText('Fields Mock')).not.toBeInTheDocument();
-    });
-  });
-
-  it('updates marginTop on window resize', async () => {
-    renderDashboard();
-    
-    act(() => {
-      // Change the viewport to 500px
-      global.innerWidth = 500;
-      // Trigger the window resize event
-      global.dispatchEvent(new Event('resize'));
-    });
-    
-    // We can't directly test the marginTop state, but we can verify the effect ran
-    await waitFor(() => {
-      expect(screen.getByText('Header Mock')).toBeInTheDocument();
-    });
-  });
-});
+Please write test cases using jest with RTL
