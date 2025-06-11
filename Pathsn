@@ -1,504 +1,123 @@
-import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import App from './App';
-import * as trackEvents from './services/track-events';
+import { AppDispatch } from "../../../services/common-service";
+import {
+  KeyWithAnyModel,
+  StageDetails,
+} from "../../../utils/model/common-model";
+import { fieldErrorAction } from "../../../utils/store/field-error-slice";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import { getUrl } from "../../../utils/common/change.utils";
 
-// Mock child components
-jest.mock('./router/main', () => {
-  return function MockMain() {
-    return <div data-testid="main-router">Main Router Component</div>;
-  };
-});
-
-jest.mock('./shared/components/model/model', () => {
-  return function MockModel({ name, handlebuttonClick }) {
-    return (
-      <div data-testid="global-error-model">
-        <span data-testid="model-name">{name}</span>
-        <button data-testid="model-button" onClick={handlebuttonClick}>
-          Close
-        </button>
-      </div>
+export const getFields = (
+  getStages: Array<StageDetails>,
+  phoneSelector: any,
+): any => {
+  return (dispatch: AppDispatch) => {
+    const stageId = getStages[0].stageId;
+    const stageIndex =  getStages[0].stageInfo.fieldmetadata.data.stages.findIndex(
+      (id: any) => id.stageId.toLowerCase() === stageId.toLowerCase()
     );
+    let fields: Array<KeyWithAnyModel> | undefined = getStages[0].stageInfo.fieldmetadata.data.stages[stageIndex === -1?0:stageIndex].fields;
+    let newFileds: Array<KeyWithAnyModel> = [];
+    let newFieldsArray: Array<string> = [];
+    const journeyType = getUrl.getJourneyType();
+
+    let getClonedField = (logical_field_name: string) => {
+      if (fields) {
+        let field = fields.find(
+          fieldData => fieldData.logical_field_name === logical_field_name
+        );
+        if (field && field.logical_field_name) {
+          return { ...field };
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    };
+
+    phoneSelector.fields.forEach((field: string) => {
+      let phone = getClonedField(phoneSelector.fields[0]);
+      if (field && phone) {
+        if(phoneSelector.fields[0] === "mobile_number_rwb"){
+          phone.logical_field_name = "mobile_number";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+          phone.editable = false;
+        }
+        else if(phoneSelector.fields[0] === "mobile_1"){
+          phone.logical_field_name = "mobile_1_add";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }
+        else if(phoneSelector.fields[0] === "mobile_2"){
+          phone.logical_field_name = "mobile_2_add";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "overseas_mobile1_contact_no"){
+          phone.logical_field_name = "overseas_mobile1";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "overseas_mobile2_contact_no"){
+          phone.logical_field_name = "overseas_mobile2";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "ofc1_number"){
+          phone.logical_field_name = "ofc1";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "ofc2_number"){
+          phone.logical_field_name = "ofc2";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "home_phone2_number"){
+          phone.logical_field_name = "home_phone2";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "office_phone1_number"){
+          phone.logical_field_name = "office_phone1";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "office_phone2_number"){
+          phone.logical_field_name = "office_phone2";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "ohph1_number"){
+          phone.logical_field_name = "ohph1";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }else if(phoneSelector.fields[0] === "ohph2_number"){
+          phone.logical_field_name = "ohph2";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+        }
+        else if(phoneSelector.fields[0] === "home_phone_number_rwb"){
+          phone.logical_field_name = "home_phone_number";
+          phone.component_type = "Phone";
+          phone.rwb_label_name = "";
+          phone.editable = false;
+        }
+        if (journeyType) {
+          phone.hide_remove_btn = true;
+        }
+        newFileds.push(phone);
+        newFieldsArray.push(phone.logical_field_name);
+      }
+    });
+
+    if (newFieldsArray.length > 0 && phoneSelector.fields[0] !== "home_phone_number_rwb") {
+      dispatch(fieldErrorAction.getMandatoryFields(newFieldsArray));
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: [],
+          newFields: newFieldsArray,
+          value: ""
+        })
+      );
+    }
+
+    return newFileds;
   };
-});
-
-jest.mock('./shared/components/spinner/spinner', () => {
-  return function MockSpinner() {
-    return <div data-testid="spinner">Loading...</div>;
-  };
-});
-
-jest.mock('./shared/components/model/dynamic-model', () => {
-  return function MockDynamicModel({ errorList }) {
-    return (
-      <div data-testid="dynamic-model">
-        <span data-testid="error-list">{JSON.stringify(errorList)}</span>
-      </div>
-    );
-  };
-});
-
-jest.mock('./shared/components/model/idle-time-out', () => {
-  return function MockIdleTimeOutModel({ handlePopUpClick }) {
-    return (
-      <div data-testid="idle-timeout-model">
-        <button data-testid="idle-timeout-button" onClick={handlePopUpClick}>
-          Continue Session
-        </button>
-      </div>
-    );
-  };
-});
-
-jest.mock('react-activity-detector', () => {
-  return function MockActivityDetector({ enabled, timeout, onIdle, onActive, name }) {
-    // Store the callbacks for testing
-    React.useEffect(() => {
-      window.mockActivityDetector = { onIdle, onActive };
-    }, [onIdle, onActive]);
-    
-    return (
-      <div data-testid="activity-detector">
-        <span data-testid="activity-detector-enabled">{enabled.toString()}</span>
-        <span data-testid="activity-detector-timeout">{timeout}</span>
-        <span data-testid="activity-detector-name">{name}</span>
-      </div>
-    );
-  };
-});
-
-// Mock services
-jest.mock('./services/track-events', () => ({
-  triggerAdobeEvent: jest.fn(),
-}));
-
-jest.mock('./modules/dashboard/fields/fields.utils', () => ({
-  submitRequest: jest.fn(),
-}));
-
-jest.mock('./utils/store/store', () => ({
-  store: {
-    getState: jest.fn(),
-  },
-}));
-
-// Mock environment variables
-const mockEnv = {
-  REACT_APP_RTOB_APP_IDLE_TIMEOUT_DURATION: '30',
 };
 
-Object.defineProperty(process, 'env', {
-  value: mockEnv,
-});
-
-// Create mock store
-const createMockStore = (initialState = {}) => {
-  const defaultState = {
-    loader: {
-      isFetching: {
-        isFetching: false,
-      },
-    },
-    error: {
-      errors: [],
-      exceptionList: [],
-    },
-    ...initialState,
-  };
-
-  return configureStore({
-    reducer: {
-      loader: (state = defaultState.loader) => state,
-      error: (state = defaultState.error) => state,
-    },
-    preloadedState: defaultState,
-  });
-};
-
-// Helper function to render component with providers
-const renderWithProviders = (component, { initialState = {} } = {}) => {
-  const store = createMockStore(initialState);
-  
-  return render(
-    <Provider store={store}>
-      {component}
-    </Provider>
-  );
-};
-
-describe('App Component', () => {
-  let mockDispatch;
-  let originalAddEventListener;
-  let originalRemoveEventListener;
-
-  beforeEach(() => {
-    mockDispatch = jest.fn();
-    jest.clearAllMocks();
-    
-    // Mock addEventListener and removeEventListener
-    originalAddEventListener = window.addEventListener;
-    originalRemoveEventListener = window.removeEventListener;
-    
-    window.addEventListener = jest.fn();
-    window.removeEventListener = jest.fn();
-    
-    // Mock useDispatch
-    jest.doMock('react-redux', () => ({
-      ...jest.requireActual('react-redux'),
-      useDispatch: () => mockDispatch,
-    }));
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-    window.addEventListener = originalAddEventListener;
-    window.removeEventListener = originalRemoveEventListener;
-    delete window.mockActivityDetector;
-  });
-
-  test('renders main components correctly', () => {
-    renderWithProviders(<App />);
-
-    expect(screen.getByTestId('main-router')).toBeInTheDocument();
-    expect(screen.getByTestId('activity-detector')).toBeInTheDocument();
-    expect(screen.getByTestId('activity-detector-enabled')).toHaveTextContent('true');
-    expect(screen.getByTestId('activity-detector-name')).toHaveTextContent('default');
-  });
-
-  test('sets correct idle timeout from environment variable', () => {
-    renderWithProviders(<App />);
-
-    const expectedTimeout = Number(mockEnv.REACT_APP_RTOB_APP_IDLE_TIMEOUT_DURATION) * 10000;
-    expect(screen.getByTestId('activity-detector-timeout')).toHaveTextContent(expectedTimeout.toString());
-  });
-
-  test('displays spinner when loader is active', () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        loader: {
-          isFetching: {
-            isFetching: true,
-          },
-        },
-        error: {
-          errors: [],
-          exceptionList: [],
-        },
-      },
-    });
-
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-  });
-
-  test('displays global error model when errors exist', () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        loader: {
-          isFetching: {
-            isFetching: false,
-          },
-        },
-        error: {
-          errors: ['Test error'],
-          exceptionList: [],
-        },
-      },
-    });
-
-    expect(screen.getByTestId('global-error-model')).toBeInTheDocument();
-    expect(screen.getByTestId('model-name')).toHaveTextContent('globalError');
-  });
-
-  test('displays dynamic model when exception list exists', () => {
-    const mockExceptionList = [{ error_header: 'Exception Error', error_message: 'Test exception' }];
-    
-    renderWithProviders(<App />, {
-      initialState: {
-        loader: {
-          isFetching: {
-            isFetching: false,
-          },
-        },
-        error: {
-          errors: [],
-          exceptionList: mockExceptionList,
-        },
-      },
-    });
-
-    expect(screen.getByTestId('dynamic-model')).toBeInTheDocument();
-    expect(screen.getByTestId('error-list')).toHaveTextContent(JSON.stringify(mockExceptionList));
-  });
-
-  test('triggers Adobe events for form errors', async () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        error: {
-          errors: ['Test error'],
-          exceptionList: [],
-        },
-      },
-    });
-
-    await waitFor(() => {
-      expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith('formError');
-    });
-  });
-
-  test('triggers Adobe events for exception errors', async () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        error: {
-          errors: [],
-          exceptionList: { error_header: 'Exception Error' },
-        },
-      },
-    });
-
-    await waitFor(() => {
-      expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith('formError');
-    });
-  });
-
-  test('adds and removes context menu event listener', () => {
-    const { unmount } = renderWithProviders(<App />);
-
-    expect(window.addEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
-    expect(window.addEventListener).toHaveBeenCalledWith('unload', expect.any(Function));
-
-    unmount();
-
-    expect(window.removeEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
-  });
-
-  test('prevents context menu on right click', () => {
-    renderWithProviders(<App />);
-    
-    const contextMenuEvent = new MouseEvent('contextmenu', { bubbles: true });
-    const preventDefaultSpy = jest.spyOn(contextMenuEvent, 'preventDefault');
-    
-    // Get the event listener callback from the mock
-    const addEventListenerCalls = window.addEventListener.mock.calls;
-    const contextMenuCall = addEventListenerCalls.find(call => call[0] === 'contextmenu');
-    const contextMenuHandler = contextMenuCall[1];
-    
-    contextMenuHandler(contextMenuEvent);
-    
-    expect(preventDefaultSpy).toHaveBeenCalled();
-  });
-
-  test('displays idle timeout modal when user becomes idle', async () => {
-    renderWithProviders(<App />);
-
-    // Wait for activity detector to be set up
-    await waitFor(() => {
-      expect(window.mockActivityDetector).toBeDefined();
-    });
-
-    // Simulate user becoming idle
-    act(() => {
-      window.mockActivityDetector.onIdle();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('idle-timeout-model')).toBeInTheDocument();
-    });
-  });
-
-  test('does not show idle popup when loader is active', async () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        loader: {
-          isFetching: {
-            isFetching: true,
-          },
-        },
-      },
-    });
-
-    await waitFor(() => {
-      expect(window.mockActivityDetector).toBeDefined();
-    });
-
-    act(() => {
-      window.mockActivityDetector.onIdle();
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('idle-timeout-model')).not.toBeInTheDocument();
-    });
-  });
-
-  test('handles idle timeout popup close', async () => {
-    renderWithProviders(<App />);
-
-    await waitFor(() => {
-      expect(window.mockActivityDetector).toBeDefined();
-    });
-
-    // Make user idle to show popup
-    act(() => {
-      window.mockActivityDetector.onIdle();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('idle-timeout-model')).toBeInTheDocument();
-    });
-
-    // Click to close popup
-    fireEvent.click(screen.getByTestId('idle-timeout-button'));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('idle-timeout-model')).not.toBeInTheDocument();
-    });
-  });
-
-  test('handles user becoming active after idle', async () => {
-    renderWithProviders(<App />);
-
-    await waitFor(() => {
-      expect(window.mockActivityDetector).toBeDefined();
-    });
-
-    // Make user idle
-    act(() => {
-      window.mockActivityDetector.onIdle();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('idle-timeout-model')).toBeInTheDocument();
-    });
-
-    // Make user active again
-    act(() => {
-      window.mockActivityDetector.onActive();
-    });
-
-    // The popup should still be there until manually closed
-    expect(screen.getByTestId('idle-timeout-model')).toBeInTheDocument();
-  });
-
-  test('handles global error model button click', () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        error: {
-          errors: ['Test error'],
-          exceptionList: [],
-        },
-      },
-    });
-
-    const button = screen.getByTestId('model-button');
-    fireEvent.click(button);
-
-    // Button click handler should execute without errors
-    expect(button).toBeInTheDocument();
-  });
-
-  test('displays spinner instead of error model when both loader and errors exist', () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        loader: {
-          isFetching: {
-            isFetching: true,
-          },
-        },
-        error: {
-          errors: ['Test error'],
-          exceptionList: [],
-        },
-      },
-    });
-
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    expect(screen.queryByTestId('global-error-model')).not.toBeInTheDocument();
-  });
-
-  test('handles state updates when selectors change', async () => {
-    const { rerender } = renderWithProviders(<App />, {
-      initialState: {
-        loader: {
-          isFetching: {
-            isFetching: false,
-          },
-        },
-        error: {
-          errors: [],
-          exceptionList: [],
-        },
-      },
-    });
-
-    expect(screen.queryByTestId('spinner')).not.toBeInTheDocument();
-
-    // Update state to show loader
-    const newStore = createMockStore({
-      loader: {
-        isFetching: {
-          isFetching: true,
-        },
-      },
-      error: {
-        errors: [],
-        exceptionList: [],
-      },
-    });
-
-    rerender(
-      <Provider store={newStore}>
-        <App />
-      </Provider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('spinner')).toBeInTheDocument();
-    });
-  });
-
-  test('triggers form abandonment event on window unload', () => {
-    renderWithProviders(<App />);
-
-    // Get the unload event listener
-    const addEventListenerCalls = window.addEventListener.mock.calls;
-    const unloadCall = addEventListenerCalls.find(call => call[0] === 'unload');
-    const unloadHandler = unloadCall[1];
-
-    // Simulate unload event
-    unloadHandler();
-
-    expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith('formAbandonment', 'BrowserClose');
-  });
-
-  test('handles empty exception list correctly', () => {
-    renderWithProviders(<App />, {
-      initialState: {
-        error: {
-          errors: [],
-          exceptionList: [],
-        },
-      },
-    });
-
-    expect(screen.queryByTestId('dynamic-model')).not.toBeInTheDocument();
-  });
-
-  test('handles undefined selectors gracefully', () => {
-    const storeWithUndefined = configureStore({
-      reducer: {
-        loader: () => undefined,
-        error: () => undefined,
-      },
-    });
-
-    render(
-      <Provider store={storeWithUndefined}>
-        <App />
-      </Provider>
-    );
-
-    expect(screen.getByTestId('main-router')).toBeInTheDocument();
-  });
-});
+Please write test cases using jest with RTL
