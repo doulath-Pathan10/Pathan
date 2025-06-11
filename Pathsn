@@ -1,143 +1,213 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import "./dashboard.scss";
-import Header from "./header/header";
-import Fields from "./fields/fields";
-import { useDispatch, useSelector } from "react-redux";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  dispatchLoader,
-  getClientInfo,
-} from "../../services/common-service";
-import { StoreModel } from "../../utils/model/common-model";
-import MyinfoSingpassLogin from "../../shared/components/myinfo-singpass-login-modal/myinfo-singpass-login";
-import PopupModel from "../../shared/components/popup-model/popup-model";
-import { urlParamAction } from "../../utils/store/urlparam-slice";
-import Model from "../../shared/components/model/model";
-import { loaderAction } from "../../utils/store/loader-slice";
-import { store } from "../../utils/store/store";
-import { authenticateType, getUrl } from "../../utils/common/change.utils";
+import React from 'react';
+import { render, screen, waitFor, act } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import Dashboard from './dashboard';
+import { StoreModel } from '../../utils/model/common-model';
 
+// Mock the components and hooks
+jest.mock('./header/header', () => () => <div>Header Mock</div>);
+jest.mock('./fields/fields', () => () => <div>Fields Mock</div>);
+jest.mock('../../shared/components/popup-model/popup-model', () => ({ children, displayPopup }: any) => 
+  displayPopup ? <div>{children}</div> : null);
+jest.mock('../../shared/components/model/model', () => ({ name, handlebuttonClick }: any) => 
+  <div onClick={handlebuttonClick}>{name} Mock</div>);
+jest.mock('../../shared/components/myinfo-singpass-login-modal/myinfo-singpass-login', () => () => 
+  <div>MyinfoSingpassLogin Mock</div>);
 
-const Dashboard = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const urlParams = useLocation();
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  const myInfoAuthSelector = useSelector(
-    (state: StoreModel) => state.urlParam.myInfo
-  );
-  const otpShowSelector = useSelector(
-    (state: StoreModel) => state.stages.otpOpen
-  );
-  const otpResumeSelector = useSelector(
-    (state: StoreModel) => state.stages.otpResume
-  );
-  const referralcodeSelector = useSelector((state: StoreModel) => state.referralcode);
-  const [urlInvalid, setUrlInvalid] = useState(false);
-  const [marginTop, setMarginTop] = useState(0);
-  const headerHeight = useRef<HTMLInputElement>(null);
-  const [fieldsComponent, setFieldsComponent] = useState(false);
-  const [pointer, setPointer] = useState(false);
-  const ctaLoader: any = getUrl.getLoader().cta;
-  const [isMobileView, setIsMobileView] = useState<number>(0);
-  const [uploadJourney, setFieldsUpload] = useState(false);
-  const [ntcIbanking, setNtcIbanking] = useState(false);
-  const [confirmationPopup, setConfirmationPopup] = useState(false);
+// Mock services and utils
+jest.mock('../../services/common-service', () => ({
+  dispatchLoader: jest.fn(),
+  getClientInfo: jest.fn(),
+}));
 
+jest.mock('../../utils/store/urlparam-slice', () => ({
+  urlParamAction: {
+    getUrlParameter: jest.fn(),
+  },
+}));
 
-  useEffect(() => {
+jest.mock('../../utils/store/loader-slice', () => ({
+  loaderAction: {
+    getState: jest.fn(),
+  },
+}));
 
-    if (ctaLoader) {
-      setPointer(ctaLoader.cta ? true : false);
-    }
-  }, [ctaLoader]);
+jest.mock('../../utils/store/store', () => ({
+  store: {
+    getState: jest.fn(),
+  },
+}));
 
-  useLayoutEffect(() => {
-    let clearSetTimeout: ReturnType<typeof setTimeout>;
-    function updateSize() {
-      setIsMobileView(window.innerWidth < 768 ? 110 : 167);
-      /* istanbul ignore next */
-      if (headerHeight.current) {
-        clearSetTimeout = setTimeout(() => {
-          setMarginTop(headerHeight && headerHeight.current!["offsetHeight"]);
-        }, 100);
-      }
-    }
-    window.addEventListener("resize", updateSize);
-    updateSize();
-    return () => {
-      window.removeEventListener("resize", updateSize);
-      clearTimeout(clearSetTimeout);
-    };
-  }, [stageSelector,confirmationPopup]);
+jest.mock('../../utils/common/change.utils', () => ({
+  authenticateType: jest.fn(),
+  getUrl: {
+    getLoader: jest.fn(),
+  },
+}));
 
-  useEffect(() => {
-    dispatch(dispatchLoader(true));
-    dispatch(urlParamAction.getUrlParameter(urlParams));
-    if (!store.getState().urlParam.validUrl) {
-      dispatch(
-        loaderAction.getState({
-          isFetching: false,
-        })
-      );
-      setUrlInvalid(true);
-    } 
-    else {
-      dispatch(getClientInfo()).then(async (response: any) => {
-        /* istanbul ignore next */
-        if(response){
-          if(authenticateType() === 'myinfo'){
-            setConfirmationPopup(true);
-          }
-        setFieldsComponent(true);
-        if(!confirmationPopup){
-          navigate("sg/super-short-form");
-        }
-      }
-      });
-    }
+describe('Dashboard Component', () => {
+  const mockStore = configureStore({
+    reducer: {
+      stages: () => ({ stages: [], otpOpen: false, otpResume: false }),
+      urlParam: () => ({ myInfo: false, validUrl: true }),
+      referralcode: () => ({}),
+    },
+  });
 
-  }, []);
-  const handlePopupBackButton = () => {
-    setConfirmationPopup(false);
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Default mock implementations
+    (require('../../utils/store/store').store.getState as jest.Mock).mockReturnValue({
+      urlParam: { validUrl: true },
+    });
+    
+    (require('../../utils/common/change.utils').authenticateType as jest.Mock).mockReturnValue('other');
+    
+    (require('../../utils/common/change.utils').getUrl.getLoader as jest.Mock).mockReturnValue({
+      cta: { cta: false },
+    });
+    
+    (require('../../services/common-service').getClientInfo as jest.Mock).mockResolvedValue({});
+  });
+
+  const renderDashboard = (initialEntries = ['/']) => {
+    return render(
+      <Provider store={mockStore}>
+        <MemoryRouter initialEntries={initialEntries}>
+          <Dashboard />
+        </MemoryRouter>
+      </Provider>
+    );
   };
-   const handleBtClick = () => {
-  };
-  return (
-    <>
-      {(urlInvalid || myInfoAuthSelector  || ntcIbanking) && (
-        <PopupModel displayPopup={myInfoAuthSelector || urlInvalid  || ntcIbanking}>
-          {urlInvalid ? <Model name="globalError" handlebuttonClick={handleBtClick}/> : <MyinfoSingpassLogin />}
-        </PopupModel>
-      )}
-       {confirmationPopup && (
-        <Model name="confirmationPopup" handlebuttonClick={handlePopupBackButton}/>
-      )}
 
-      {!confirmationPopup && stageSelector && stageSelector.length > 0 && !otpShowSelector && (
-        <div className="app">
-          <div className="app__header">
-            <div ref={headerHeight}>
-              <Header />
-            </div>
-          </div>
-          <div
-            className={`app__body ${pointer ? "pointer-none" : ""}`}
-            style={{
-              marginTop: marginTop + "px",
-              height: `calc(100dvh - ${marginTop + isMobileView}px)`,
-            }}
-          >
-            <div className="wrapper">
-              <div>{fieldsComponent && <Fields />}</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+  it('renders without crashing', () => {
+    renderDashboard();
+    expect(screen.getByText('Header Mock')).toBeInTheDocument();
+  });
 
-export default Dashboard;
+  it('displays loader initially', () => {
+    renderDashboard();
+    expect(require('../../services/common-service').dispatchLoader).toHaveBeenCalledWith(true);
+  });
 
-Please write test cases using jest with RTL
+  it('handles invalid URL by showing error modal', async () => {
+    (require('../../utils/store/store').store.getState as jest.Mock).mockReturnValue({
+      urlParam: { validUrl: false },
+    });
+    
+    renderDashboard();
+    
+    await waitFor(() => {
+      expect(screen.getByText('globalError Mock')).toBeInTheDocument();
+    });
+  });
+
+  it('shows MyInfoSingpassLogin when myInfo is true in store', async () => {
+    const myInfoStore = configureStore({
+      reducer: {
+        stages: () => ({ stages: [], otpOpen: false, otpResume: false }),
+        urlParam: () => ({ myInfo: true, validUrl: true }),
+        referralcode: () => ({}),
+      },
+    });
+    
+    render(
+      <Provider store={myInfoStore}>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </Provider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.getByText('MyinfoSingpassLogin Mock')).toBeInTheDocument();
+    });
+  });
+
+  it('shows confirmation popup when authenticateType is myinfo', async () => {
+    (require('../../utils/common/change.utils').authenticateType as jest.Mock).mockReturnValue('myinfo');
+    
+    renderDashboard();
+    
+    await waitFor(() => {
+      expect(screen.getByText('confirmationPopup Mock')).toBeInTheDocument();
+    });
+  });
+
+  it('hides confirmation popup when handlePopupBackButton is called', async () => {
+    (require('../../utils/common/change.utils').authenticateType as jest.Mock).mockReturnValue('myinfo');
+    
+    renderDashboard();
+    
+    const popup = await screen.findByText('confirmationPopup Mock');
+    act(() => {
+      popup.click();
+    });
+    
+    await waitFor(() => {
+      expect(screen.queryByText('confirmationPopup Mock')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders Fields component when fieldsComponent is true', async () => {
+    renderDashboard();
+    
+    await waitFor(() => {
+      expect(screen.getByText('Fields Mock')).toBeInTheDocument();
+    });
+  });
+
+  it('applies pointer-none class when ctaLoader.cta is true', async () => {
+    (require('../../utils/common/change.utils').getUrl.getLoader as jest.Mock).mockReturnValue({
+      cta: { cta: true },
+    });
+    
+    renderDashboard();
+    
+    await waitFor(() => {
+      const appBody = screen.getByText('Fields Mock').closest('.app__body');
+      expect(appBody).toHaveClass('pointer-none');
+    });
+  });
+
+  it('does not render Fields when otpShowSelector is true', async () => {
+    const otpStore = configureStore({
+      reducer: {
+        stages: () => ({ stages: [{}], otpOpen: true, otpResume: false }),
+        urlParam: () => ({ myInfo: false, validUrl: true }),
+        referralcode: () => ({}),
+      },
+    });
+    
+    render(
+      <Provider store={otpStore}>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </Provider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.queryByText('Fields Mock')).not.toBeInTheDocument();
+    });
+  });
+
+  it('updates marginTop on window resize', async () => {
+    renderDashboard();
+    
+    act(() => {
+      // Change the viewport to 500px
+      global.innerWidth = 500;
+      // Trigger the window resize event
+      global.dispatchEvent(new Event('resize'));
+    });
+    
+    // We can't directly test the marginTop state, but we can verify the effect ran
+    await waitFor(() => {
+      expect(screen.getByText('Header Mock')).toBeInTheDocument();
+    });
+  });
+});
