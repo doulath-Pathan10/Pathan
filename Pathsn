@@ -1,254 +1,296 @@
-describe('Additional renderComponent Tests for Coverage', () => {
-  const mockHandleCallback = jest.fn();
-  const mockHandleFieldDispatch = jest.fn();
-  const mockUserInput = { testField: 'testValue' };
+import { useEffect, useState } from "react";
+import "./thank-you.scss";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import thankyouData from "../../../assets/_json/thankyou.json";
+import { useSelector, useDispatch } from "react-redux";
+import { getUrl } from "../../../utils/common/change.utils";
+import trackEvents from "../../../services/track-events";
+import {
+  redirectingToIbanking,
+  activateDigitalCard,
+} from "../../../services/common-service";
+import Model from "../../../shared/components/model/model";
+import PopupModel from "../../../shared/components/popup-model/popup-model";
+import ThankYouCASA from "./thankyou-casa";
+import ThankYouCC from "./thankyou-cc";
+import CCWithoutActivation from "./cc-without-activation";
+import gaTrackEvents from "../../../services/ga-track-events";
+import CCActivationSucess from "./cc-activation-success";
+import ThankyouError from "./thankyou-error";
+import { useNavigate } from "react-router-dom";
+import ThankYouUpload from "./thankyou-upload";
+import { store } from "../../../utils/store/store";
 
-  // Test all phone number variations that should render SelectionBox
-  const phoneSelectionBoxCases = [
-    'mobile_number_rwb',
-    'mobile_1',
-    'mobile_2',
-    'overseas_mobile1_contact_no',
-    'overseas_mobile2_contact_no',
-    'ofc1_number',
-    'ofc2_number',
-    'home_phone2_number',
-    'office_phone1_number',
-    'office_phone2_number',
-    'ohph1_number',
-    'ohph2_number',
-    'home_phone_number_rwb'
-  ];
+const ThankYou = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  /*istanbul ignore next */
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const applicationJourney = useSelector(
+    (state: StoreModel) => state.stages.journeyType
+  );
+  const otpSuccessSelector = useSelector(
+    (state: StoreModel) => state.stages.otpSuccess
+  );
+  const thankyou: KeyWithAnyModel = thankyouData;
+  const applicationReferenceNo = getUrl.getChannelRefNo().applicationRefNo || stageSelector[0].stageInfo.application.application_reference;
+  const [applicationDetails, setApplicationDetails] = useState({
+    productCategory: [],
+    productName: [],
+    acct_details: [],
+    account_number: "",
+    thankyouProp: "NSTP",
+    accountNum: "",
+    thankyouText: "Common",
+    thankyouFeedback: "Feedback",
+    feedbackUrl: "",
+    isStp: false,
+    loanTenureMonths: "",
+    approvedLoan: 0,
+    productType: [],
+    feeAmount: "",
+    card_no: "",
+    cardNumber: "",
+    cardName: "",
+    productSequenceNo: [],
+  });
+  const saProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "SA");
+  const caProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "CA");
+  const tdProducts = applicationDetails?.productCategory?.filter((product:any)=> product === "TD");
+  const [enableActivation, setEnableActivation] = useState<boolean>(false);
+  const [showPlatinum, setShowPlatinum] = useState<boolean>(false);
+  const [isCampaignBenefits, setIsCampaignBenefits] = useState<boolean>(false);
+  const [
+    showContinueWithoutActivationMsg,
+    setShowContinueWithoutActivationMsg,
+  ] = useState<boolean>(false);
+  const [continueWithoutActivationUI, setContinueWithoutActivationUI] =
+    useState(false);
+  const [cardActivationSuccessUI, setCardActivationSuccessUI] = useState(false);
+  const [showErrorUI, setShowerrorUI] = useState(false);
+  useEffect(() => {
+    setApplicationDetails((prevValue) => {
+      if (
+        stageSelector &&
+        stageSelector[0].stageInfo && stageSelector[0].stageInfo.products &&
+        stageSelector[0].stageInfo.products.length >= 1
+      ) {
+        prevValue.productCategory =
+          stageSelector[0].stageInfo.products.map((product:any)=> product.product_category);
+        prevValue.productName = stageSelector[0].stageInfo.products.map((product:any)=> product.name);
+        prevValue.productSequenceNo =
+          stageSelector[0].stageInfo.products.map((product:any)=> product.product_sequence_number);
+        prevValue.productType =
+          stageSelector[0].stageInfo.products.map((product:any)=> product.product_type);
+        if (
+          stageSelector[0].stageInfo.products[0].acct_details &&
+          stageSelector[0].stageInfo.products[0].acct_details.length >= 1
+        ) {
+          prevValue.acct_details =
+            stageSelector[0].stageInfo.products[0].acct_details;
+          prevValue.account_number =
+            stageSelector[0].stageInfo.products[0].acct_details[0].account_number;
+          prevValue.card_no =
+            stageSelector[0].stageInfo.products[0].acct_details[0].card_no;
+        }
+      }
+      prevValue.thankyouProp = "NSTP";
+      if (
+        prevValue.acct_details &&
+        prevValue.acct_details[0] &&
+        prevValue.account_number
+      ) {
+        prevValue.thankyouProp = "STP";
+        prevValue.accountNum = prevValue.account_number;
+      }
+      if (
+        prevValue.acct_details &&
+        prevValue.acct_details[0] &&
+        prevValue.card_no
+      ) {
+        prevValue.thankyouProp = "STP";
+        prevValue.cardNumber = prevValue.card_no;
+      }
+      prevValue.isStp = prevValue.thankyouProp === "STP" ? true : false;
+      prevValue.feedbackUrl =
+        thankyou[prevValue.thankyouFeedback]["url_prefix"] +
+        thankyou[prevValue.thankyouFeedback]["casa"] +
+        thankyou[prevValue.thankyouFeedback]["url_suffix"] +
+        applicationReferenceNo!;
 
-  phoneSelectionBoxCases.forEach((fieldName) => {
-    it(`should render SelectionBox for Phone type when logical_field_name is ${fieldName}`, () => {
-      const currentSection = {
-        component_type: 'Phone',
-        logical_field_name: fieldName,
-      };
+      prevValue = setSTPData(prevValue);
+      if (prevValue.isStp) {
+        if (prevValue.productCategory[0] === "CC"
+        && (prevValue.productCategory[1] === "CA"
+        || prevValue.productCategory[1] === "SA"
+        ||prevValue.productCategory[0] ==="SA"
+        || prevValue.productCategory[0] === "CC")) {
+          prevValue.thankyouText="CCSTP"
+          
+          if (stageSelector[0].stageInfo.applicants) {
+            if (stageSelector[0].stageInfo.applicants.embossed_name_a_1) {
+              prevValue.cardName =
+                stageSelector[0].stageInfo.applicants.embossed_name_a_1.toUpperCase();
+            }
+            if (prevValue.card_no) {
+              prevValue.cardNumber = prevValue.card_no;
+            }
+          }
+        } 
 
-      const { container } = render(
-        renderComponent(
-          currentSection,
-          0,
-          mockHandleCallback,
-          mockHandleFieldDispatch,
-          mockUserInput
-        )
-      );
-
-      expect(container).toHaveTextContent('SelectionBox Mock');
+      }
+      return { ...prevValue };
     });
-  });
+    /*istanbul ignore next */
+    if (stageSelector[0] && stageSelector[0].stageId && getUrl.getParameterByName("auth") !== "upload" && !store.getState().stages.isDocumentUpload) {
+      gaTrackEvents.pageView(stageSelector[0].stageId);
+    }
+    /* istanbul ignore else */
+    if(getUrl.getParameterByName("auth") !== "upload" && !store.getState().stages.isDocumentUpload){
+    trackEvents.triggerAdobeEvent("formSubmit");
+    }
+  }, []);
 
-  // Test all phone number variations that should render Phone component
-  const phoneComponentCases = [
-    'mobile_number',
-    'mobile_1_add',
-    'mobile_2_add',
-    'overseas_mobile1',
-    'overseas_mobile2',
-    'ofc1',
-    'ofc2',
-    'home_phone2',
-    'office_phone1',
-    'office_phone2',
-    'ohph1',
-    'ohph2',
-    'home_phone_number'
-  ];
+  useEffect(() => {
+    if (otpSuccessSelector) {
+      activateCard();
+    }
+  }, [otpSuccessSelector]);
+  const setSTPData = (prevValue: any) => {
+    if (prevValue.isStp && prevValue.productCategory) {
+      if (prevValue.productCategory[0] === "CC"
+        && (prevValue.productCategory[1] === "CA"
+        || prevValue.productCategory[1] === "SA"
+        ||prevValue.productCategory[0] ==="SA"
+        || prevValue.productCategory[0] === "CC")) {
+        prevValue.feedbackUrl =
+          thankyou[prevValue.thankyouFeedback]["url_prefix"] +
+          thankyou[prevValue.thankyouFeedback]["cc"] +
+          thankyou[prevValue.thankyouFeedback]["url_suffix"] +
+          applicationReferenceNo!;
+      } 
+      else if (prevValue.productCategory[1] === "PL") {
+        prevValue.feedbackUrl =
+          thankyou[prevValue.thankyouFeedback]["url_prefix"] +
+          thankyou[prevValue.thankyouFeedback]["pl"] +
+          thankyou[prevValue.thankyouFeedback]["url_suffix"] +
+          applicationReferenceNo!;
+      }
+    }
+    return prevValue;
+  };
 
-  phoneComponentCases.forEach((fieldName) => {
-    it(`should render Phone component for Phone type when logical_field_name is ${fieldName}`, () => {
-      const currentSection = {
-        component_type: 'Phone',
-        logical_field_name: fieldName,
-      };
+  const submitForm = (event:React.FormEvent<EventTarget>) => {
+    if (
+      stageSelector &&
+      (stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IX" || stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IM")
+    ) {
+      goToIBanking(event);
+    } else {
+      window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`;
+    }
+    event.preventDefault();
+  };
 
-      const { container } = render(
-        renderComponent(
-          currentSection,
-          0,
-          mockHandleCallback,
-          mockHandleFieldDispatch,
-          mockUserInput
-        )
-      );
-
-      expect(container).toHaveTextContent('Phone Mock');
+  const continueWithoutActivation = () => {
+    setShowContinueWithoutActivationMsg(false);
+    setContinueWithoutActivationUI(true);
+  };
+  const showContinuePopup = (event: React.FormEvent<EventTarget>) => {
+    setShowContinueWithoutActivationMsg(true);
+    event.preventDefault();
+  };
+  const handlePopupBackButton = () => {
+    setShowContinueWithoutActivationMsg(false);
+    setContinueWithoutActivationUI(false);
+  };
+  const showOTPPopup = () => {
+    navigate("/otp");
+  };
+  const goToIBanking = (event: React.FormEvent<EventTarget>) => {
+    if (getUrl.getParameterByName("source") === "scm") {
+      //Ibanking redirection for app
+      window.location.href = `${process.env.REACT_APP_IBANKING_SC_MOBILE}`;
+    }  else if(getUrl.getUpdatedStage().ccplChannel=== "MBNK" || getUrl.getParameterByName("channel") === "MBNK") {
+      const redirectUrl =  `${process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER}`;
+      window.location.href = redirectUrl;
+    }else {
+      redirectingToIbanking();
+    }
+    event.preventDefault();
+  };
+  const activateCard = () => {
+    setShowContinueWithoutActivationMsg(false);
+    setContinueWithoutActivationUI(false);
+    setShowerrorUI(false);
+    dispatch(activateDigitalCard(applicationDetails)).then((result: any) => {
+      if (result.status && result.status.toUpperCase() === "SUCCESS") {
+        setCardActivationSuccessUI(true);
+      } else {
+        setShowerrorUI(true);
+      }
     });
-  });
+  };
+  return (
+    <>
+      {applicationDetails && (
+        <form data-testid="form" className="form">
+          <div data-testid="app thankyou" className="app thankyou">
+            <div  data-testid="app__body" className="app__body">
+              <div className="app__right">
+                <div className="thankyou__container">
+                  {!showErrorUI &&
+                    !continueWithoutActivationUI &&
+                    !cardActivationSuccessUI && (
+                      <>
+                      {(getUrl.getParameterByName("auth") === "upload" || store.getState().stages.isDocumentUpload) &&(
+                          <ThankYouUpload
+                          applicationDetails={applicationDetails}
+                          thankyou={thankyou}
+                          applicationReferenceNo={applicationReferenceNo}
+                          submitForm={submitForm}
+                        />
+                        )}
+                        {(caProducts.length ||
+                          saProducts.length) && (
+                          <ThankYouCASA
+                            applicationDetails={applicationDetails}
+                            thankyou={thankyou}
+                            applicationReferenceNo={applicationReferenceNo}
+                            submitForm={submitForm}
+                          />
+                        )}
+                        {showContinueWithoutActivationMsg && (
+                          <PopupModel displayPopup={true}>
+                            <Model
+                              name="CCThankYou"
+                              handlebuttonClick={handlePopupBackButton}
+                              handleContinueWithoutActivation={
+                                continueWithoutActivation
+                              }
+                            />
+                          </PopupModel>
+                        )}
+                      </>
+                    )}
+                  {showErrorUI && (
+                    <ThankyouError
+                      applicationDetails={applicationDetails}
+                      thankyou={thankyou}
+                      applicationReferenceNo={applicationReferenceNo}
+                      goToIBanking={goToIBanking}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      )}
+    </>
+  );
+};
 
-  // Test all component types in the mapping
-  const componentTypes = [
-    'Toggle',
-    'Number',
-    'Information',
-    'OtherMyinfo',
-    'TypeAhead',
-    'Button',
-    'Amount',
-    'SliderWithLimit',
-    'SliderWithCurrency',
-    'Date'
-  ];
+export default ThankYou;
 
-  componentTypes.forEach((type) => {
-    it(`should render ${type} component for ${type} type`, () => {
-      const currentSection = {
-        component_type: type,
-        logical_field_name: `test_${type.toLowerCase()}`,
-      };
-
-      const { container } = render(
-        renderComponent(
-          currentSection,
-          0,
-          mockHandleCallback,
-          mockHandleFieldDispatch,
-          mockUserInput
-        )
-      );
-
-      expect(container).toHaveTextContent(`${type} Mock`);
-    });
-  });
-
-  // Test case for SliderWithlimit (notice lowercase 'l')
-  it('should render SliderWithLimit for SliderWithlimit type', () => {
-    const currentSection = {
-      component_type: 'SliderWithlimit',
-      logical_field_name: 'test_slider',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('SliderWithLimit Mock');
-  });
-
-  // Test case for empty component_type
-  it('should return undefined for empty component_type', () => {
-    const currentSection = {
-      component_type: '',
-      logical_field_name: 'test_empty',
-    };
-
-    const result = renderComponent(
-      currentSection,
-      0,
-      mockHandleCallback,
-      mockHandleFieldDispatch,
-      mockUserInput
-    );
-
-    expect(result).toBeUndefined();
-  });
-
-  // Test case for null component_type
-  it('should return undefined for null component_type', () => {
-    const currentSection = {
-      component_type: null,
-      logical_field_name: 'test_null',
-    };
-
-    const result = renderComponent(
-      currentSection as any,
-      0,
-      mockHandleCallback,
-      mockHandleFieldDispatch,
-      mockUserInput
-    );
-
-    expect(result).toBeUndefined();
-  });
-
-  // Test case for undefined component_type
-  it('should return undefined for undefined component_type', () => {
-    const currentSection = {
-      logical_field_name: 'test_undefined',
-    };
-
-    const result = renderComponent(
-      currentSection as any,
-      0,
-      mockHandleCallback,
-      mockHandleFieldDispatch,
-      mockUserInput
-    );
-
-    expect(result).toBeUndefined();
-  });
-
-  // Test case for component_type with only whitespace
-  it('should return undefined for whitespace-only component_type', () => {
-    const currentSection = {
-      component_type: '   ',
-      logical_field_name: 'test_whitespace',
-    };
-
-    const result = renderComponent(
-      currentSection,
-      0,
-      mockHandleCallback,
-      mockHandleFieldDispatch,
-      mockUserInput
-    );
-
-    expect(result).toBeUndefined();
-  });
-
-  // Test case for component with additional props
-  it('should pass through additional props from currentSection', () => {
-    const currentSection = {
-      component_type: 'Text',
-      logical_field_name: 'test_text',
-      customProp1: 'value1',
-      customProp2: { nested: 'value' },
-      required: true
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        0,
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    expect(container).toHaveTextContent('customProp1');
-    expect(container).toHaveTextContent('value1');
-    expect(container).toHaveTextContent('nested');
-    expect(container).toHaveTextContent('required');
-  });
-
-  // Test case for verifying the index parameter is not used
-  it('should not use the index parameter in rendering', () => {
-    const currentSection = {
-      component_type: 'Text',
-      logical_field_name: 'test_index',
-    };
-
-    const { container } = render(
-      renderComponent(
-        currentSection,
-        999, // Unlikely index value
-        mockHandleCallback,
-        mockHandleFieldDispatch,
-        mockUserInput
-      )
-    );
-
-    // Verify the rendered component doesn't include the index
-    expect(container).not.toHaveTextContent('999');
-  });
-});
+Please write test cases using jest with RTL
