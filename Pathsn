@@ -1,234 +1,210 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import SelectionBox from './SelectionBox';
-import { StoreModel } from '../../../utils/model/common-model';
+import { json } from 'stream/consumers';
+import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import { store } from '../../utils/store/store';
+import rulesUtils from './rules.utils';
 
-// Mock the external utility functions
-jest.mock('../../../utils/common/change.utils', () => ({
-  fieldError: jest.fn(() => false),
-  isFieldUpdate: jest.fn(),
-  isMyinfoField: jest.fn(() => false),
-  fieldIdAppend: jest.fn(() => 'test_field_a_1'),
-  getUrl: {
-    getProductInfo: jest.fn(() => [{}, { product_category: 'SA' }]),
-    getJourneyType: jest.fn(() => ''),
-    getUserInputs: jest.fn(() => ({})),
-    getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] })),
-  },
-  authenticateType: jest.fn(() => 'manual'),
-}));
-
-jest.mock('../../../services/common-service', () => ({
-  getLovData: jest.fn(),
-  lovRequests: jest.fn(),
-}));
-
-const mockStore = configureStore([]);
-
-describe('SelectionBox Component', () => {
-  let store: any;
-  let initialState: StoreModel;
-
-  beforeEach(() => {
-    initialState = {
-      lov: {
-        lov: [{
-          label: 'test_field',
-          value: [
-            { CODE_VALUE: 'VAL1', CODE_DESC: 'Value 1' },
-            { CODE_VALUE: 'VAL2', CODE_DESC: 'Value 2' }
-          ]
-        }]
-      },
-      fielderror: { error: [] },
-      stages: {
-        stages: [{
-          stageId: 'test-stage',
-          stageInfo: {
-            applicants: {},
-            products: [{ product_type: '123', product_category: 'SA' }]
-          }
-        }],
-        userInput: { applicants: {} },
-        myinfoResponse: {},
-        dependencyFields: []
-      },
-      tax: {},
-      last: {},
-      valueupdate: {}
-    };
-
-    store = mockStore(initialState);
-  });
-
-  const defaultProps = {
-    data: {
-      logical_field_name: 'test_field',
-      rwb_label_name: 'Test Field',
-      editable: true,
-      info_tooltips: 'No',
-      details: 'Tooltip details'
-    },
-    handleCallback: jest.fn()
+const Rules_ad_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: []
   };
-
-  test('renders basic dropdown with label', () => {
-    render(
-      <Provider store={store}>
-        <SelectionBox {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Test Field')).toBeInTheDocument();
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  test('opens dropdown and shows options when clicked', () => {
-    render(
-      <Provider store={store}>
-        <SelectionBox {...defaultProps} />
-      </Provider>
-    );
-
-    fireEvent.click(screen.getByRole('textbox'));
-
-    expect(screen.getByText('Value 1')).toBeInTheDocument();
-    expect(screen.getByText('Value 2')).toBeInTheDocument();
-  });
-
-  test('selects an option and calls handleCallback', () => {
-    render(
-      <Provider store={store}>
-        <SelectionBox {...defaultProps} />
-      </Provider>
-    );
-
-    fireEvent.click(screen.getByRole('textbox'));
-    fireEvent.click(screen.getByText('Value 1'));
-
-    expect(defaultProps.handleCallback).toHaveBeenCalledWith(
-      defaultProps.data,
-      'VAL1'
-    );
-  });
-
-  test('displays error message when field is required', () => {
-    // Mock fieldError to return true
-    jest.spyOn(require('../../../utils/common/change.utils'), 'fieldError').mockReturnValue(true);
-
-    render(
-      <Provider store={store}>
-        <SelectionBox {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Please select your Test Field')).toBeInTheDocument();
-  });
-
-  test('displays selected value when provided in store', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            test_field_a_1: 'VAL1'
-          }
-        }
-      }
-    };
-
-    store = mockStore(customState);
-
-    render(
-      <Provider store={store}>
-        <SelectionBox {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Value 1')).toBeInTheDocument();
-  });
-
-  test('handles myinfo fields correctly', () => {
-    jest.spyOn(require('../../../utils/common/change.utils'), 'isMyinfoField').mockReturnValue(true);
-
-    render(
-      <Provider store={store}>
-        <SelectionBox {...defaultProps} />
-      </Provider>
-    );
-
-    expect(screen.getByRole('textbox')).toHaveClass('disabled');
-  });
-
-  test('handles tooltip display when configured', () => {
-    const propsWithTooltip = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        info_tooltips: 'Yes'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <SelectionBox {...propsWithTooltip} />
-      </Provider>
-    );
-
-    expect(screen.getByRole('button', { name: /info/i })).toBeInTheDocument();
-  });
-});
-test('handles empty options list', () => {
-  const emptyState = {
-    ...initialState,
-    lov: { lov: [] }
-  };
-  store = mockStore(emptyState);
-
-  render(
-    <Provider store={store}>
-      <SelectionBox {...defaultProps} />
-    </Provider>
-  );
-
-  fireEvent.click(screen.getByRole('textbox'));
-  expect(screen.queryByText('Value 1')).not.toBeInTheDocument();
-});
-
-test('filters options based on search input', () => {
-  render(
-    <Provider store={store}>
-      <SelectionBox {...defaultProps} />
-    </Provider>
-  );
-
-  fireEvent.click(screen.getByRole('textbox'));
-  fireEvent.change(screen.getByPlaceholderText('Search'), { 
-    target: { value: 'Value 1' } 
-  });
-
-  expect(screen.getByText('Value 1')).toBeInTheDocument();
-  expect(screen.queryByText('Value 2')).not.toBeInTheDocument();
-});
-
-test('handles country of tax residence fields', () => {
-  const taxProps = {
-    ...defaultProps,
-    data: {
-      ...defaultProps.data,
-      logical_field_name: 'country_of_tax_residence_1'
+  const filteredFields:any = [];
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const FieldSetMap:any = {};
+ 
+    let defaultVisiblity:any= []
+    let hidhenFields:Array<string> = [];
+    let modifyVisibilityFields:Array<string> = [];
+    const repeatCount = stageInfo?.applicants.no_of_accounts_rwb_a_1? stageInfo?.applicants.no_of_accounts_rwb_a_1:1 ;
+    const additionalDetails =props[0].filter((fields:any)=> fields.field_set_name === "Additional Details");
+    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Additional Details"));
+    const name = products[0].product_category_name + " - " + products[0].name;
+    if(products.length>1){
+      if(filteredFields[0]?.[0]?.field_set_name === 'Additional Details'){
+      filteredFields[0].shift() 
+      filteredFields[0].unshift({
+        field_set_name: `${name} Additional Details`,
+        fields: props[0][3].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}`,
+          rwb_index: 1,
+          mandatory: "true",
+        })),
+      })
     }
-  };
+    }
 
-  render(
-    <Provider store={store}>
-      <SelectionBox {...taxProps} />
-    </Provider>
-  );
+    const filteredBankingServicesDetails = props[0].filter((fields:any)=> fields.field_set_name === "Banking Services");
+    
+    if(filteredFields[0].length > 0){
+      if(products.length>1){
+      const name = products[0].product_category_name + " - " + products[0].name;
+    if((stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="318"))||(stageInfo.products.some((p:any)=>p.product_type ==="339") && stageInfo.products.some((p:any)=>p.product_type ==="318"))){
+      filteredFields[0].push(
+      {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
+        ![
+          'debit_card_request_rwb','issuance_type',
+          'embossed_dc_name_rwb','existing_account_no_dc',
+          "cheque_book_request_rwb"
+        ].includes(f.logical_field_name)).map((f:any)=>({
+        ...f,
+        logical_field_name:`${f.logical_field_name}`,
+        rwb_index: 2,
+        }))});}
+        else if((stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="516"))||(stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="507"))){
+          filteredFields[0].push(
+            {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
+              ![
+                'debit_card_request_rwb','issuance_type',
+                'embossed_dc_name_rwb',
+                "cheque_book_request_rwb"
+              ].includes(f.logical_field_name)).map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}`,
+              rwb_index: 2,
+              }))});
 
-  // Add specific assertions for tax residence behavior
-  expect(screen.getByText('Test Field')).toBeInTheDocument();
-});
+        }
+        else{
+          filteredFields[0].push({field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
+            ...f,
+            logical_field_name:`${f.logical_field_name}`,
+            rwb_index: 2,
+          })),})
+
+        }
+    ;}
+     else{
+        filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields});
+      }
+     }
+     if(repeatCount){
+     if(stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307")||stageInfo.products.some((p:any)=>p.product_type ==="324")){
+    for(let i =0;i<repeatCount - 1 ;i++){
+      filteredFields[0].push({field_set_name: "Additional Details", fields: additionalDetails[0].fields.map((f:any)=>({
+        ...f,
+        logical_field_name:`${f.logical_field_name}_${i+2}`,
+        rwb_index: i+2,
+      }))});
+      if(filteredFields[0].length > 0){
+         filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_${i+2}`,
+          rwb_index: i+2,
+         }))});
+       }
+      
+    }
+
+    if((stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307"))){
+      hidhenFields.push("cheque_book_request_rwb","cheque_book_request_rwb_2","cheque_book_request_rwb_3","cheque_book_request_rwb_4","cheque_book_request_rwb_5","cheque_book_request_rwb_6","cheque_book_request_rwb_7","cheque_book_request_rwb_8","reason_for_account_rwb","Initial_deposit_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
+      ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
+      ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
+       }
+   
+       if(stageInfo.products.some((p:any)=>p.product_type ==="307")){
+        hidhenFields.push("reason_for_account_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
+        ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
+        ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
+         }
+}
+}
+
+if(products.length>1){
+      for(let i =0;i<products.length-1 ;i++){
+        const name = products[1].product_category_name + " - " + products[1].name;
+        if((stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="310"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="339"))
+        ||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="504"))||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="507"))){
+        filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_2`,
+          rwb_index: 2,
+          mandatory: "true",
+        }))},
+        {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
+          ![
+            'debit_card_request_rwb','issuance_type',
+            'embossed_dc_name_rwb','existing_account_no_dc',
+            "cheque_book_request_rwb","cheque_book_request_rwb_2"
+          ].includes(f.logical_field_name)).map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_2`,
+          rwb_index: 2,
+          }))});}
+          else if((stageInfo.products.some((p:any)=>p.product_type ==="504")&& stageInfo.products.some((p:any)=>p.product_type ==="507"))||stageInfo.products.some((p:any)=>p.product_type ==="516") && stageInfo.products.some((p:any)=>p.product_type ==="507")){
+            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              mandatory: "true",
+            }))},
+            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
+              ![
+                'debit_card_request_rwb','issuance_type',
+                'embossed_dc_name_rwb',
+                "cheque_book_request_rwb","cheque_book_request_rwb_2"
+              ].includes(f.logical_field_name)).map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              }))});
+
+          }
+          else{
+            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              mandatory: "true",
+            }))},
+            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+            }))});
+
+          }
+        }}
+        
+     if(stageInfo.products[0].product_category === "TD" && filteredFields[0].length > 0){
+       const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
+       
+      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
+      
+      // filteredFields[0].forEach((item:any, index: number) => {
+      //   if (item.logical_field_name === "td_product_currency_value" && item.component_type==="Text")  {
+      //     filteredFields.splice(index, 1);
+      //   }
+      // });
+      filteredFields[0].forEach((item:any, index: number) => {
+        item.fields = item.fields.map((field:any) => {
+          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
+            return {
+              ...field,
+              component_type: "SelectionBox" // text to selection box converted
+            };
+          }
+          return field;
+        });
+      });
+
+
+
+      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
+      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb")
+    }
+    if(stageInfo.products[0].product_category === 'CA' && (stageInfo.products.some((p:any)=>p.product_type ==="317") || stageInfo.products.some((p:any)=>p.product_type ==="314"))){
+      hidhenFields.push("reason_for_account_rwb")
+    }
+    hidhenFields.push("Initial_deposit_rwb");
+    validationObj.hidden!.push(hidhenFields);
+    validationObj.modifyVisibility!.push(modifyVisibilityFields);
+    validationObj.modifyVisibility!.push(defaultVisiblity)
+    
+      return rulesUtils(filteredFields, validationObj);
+}
+
+export default Rules_ad_1;
+
+Please write test cases using jest with RTL
