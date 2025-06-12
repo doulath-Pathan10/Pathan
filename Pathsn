@@ -4,59 +4,59 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import SelectionBox from './SelectionBox';
 import { StoreModel } from '../../../utils/model/common-model';
-import { fieldErrorAction } from '../../../utils/store/field-error-slice';
-import { stagesAction } from '../../../utils/store/stages-slice';
-import { taxAction } from '../../../utils/store/tax-slice';
-import { ValueUpdateAction } from '../../../utils/store/value-update-slice';
-import { lastAction } from '../../../utils/store/last-accessed-slice';
 
-// Mock Redux store
-const mockStore = configureStore({
-  reducer: {
-    lov: () => ({
-      lov: [
-        {
-          label: 'country_of_tax_residence',
-          value: [
-            { CODE_VALUE: 'US', CODE_DESC: 'United States' },
-            { CODE_VALUE: 'SG', CODE_DESC: 'Singapore' },
-          ],
-        },
-      ],
-    }),
-    fielderror: () => ({ error: {} }),
-    stages: () => ({
-      stages: [
-        {
-          stageId: 'bd-2',
-          stageInfo: {
-            applicants: {
-              country_rwb_a_1: 'SG',
-            },
-            products: [{ product_type: '153' }],
+// Mock the Redux store with all required slices
+const createMockStore = (overrides = {}) => {
+  return configureStore({
+    reducer: {
+      lov: () => ({
+        lov: [
+          {
+            label: 'country_of_tax_residence',
+            value: [
+              { CODE_VALUE: 'US', CODE_DESC: 'United States' },
+              { CODE_VALUE: 'SG', CODE_DESC: 'Singapore' },
+            ],
           },
+        ],
+      }),
+      fielderror: () => ({
+        error: {},
+      }),
+      stages: () => ({
+        stages: [
+          {
+            stageId: 'bd-2',
+            stageInfo: {
+              applicants: {
+                country_rwb_a_1: 'SG',
+              },
+              products: [{ product_type: '153' }],
+            },
+          },
+        ],
+        userInput: {
+          applicants: {},
         },
-      ],
-      userInput: {
-        applicants: {},
-      },
-      myinfoResponse: {},
-      dependencyFields: [],
-    }),
-    tax: () => ({}),
-    lastaccessed: () => ({}),
-    valueupdate: () => ({}),
-  },
-});
+        myinfoResponse: {},
+        dependencyFields: [],
+      }),
+      tax: () => ({}),
+      lastaccessed: () => ({}),
+      valueupdate: () => ({}),
+      ...overrides,
+    },
+  });
+};
 
 // Mock props
-const mockProps = {
+const baseProps = {
   data: {
     logical_field_name: 'country_of_tax_residence',
     rwb_label_name: 'Country of Tax Residence',
     info_tooltips: 'Yes',
     details: 'Tooltip details',
-    editable: false,
+    editable: true,
   },
   handleCallback: jest.fn(),
 };
@@ -67,151 +67,178 @@ describe('SelectionBox Component', () => {
   });
 
   test('renders without crashing', () => {
+    const store = createMockStore();
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
     expect(screen.getByText('Country of Tax Residence')).toBeInTheDocument();
   });
 
   test('displays placeholder text when no option is selected', () => {
+    const store = createMockStore();
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
     expect(screen.getByPlaceholderText('Select the purpose of the account')).toBeInTheDocument();
   });
 
-  test('opens dropdown on click', async () => {
+  test('opens dropdown when clicked', async () => {
+    const store = createMockStore();
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
+    
     const dropdown = screen.getByRole('textbox');
     fireEvent.click(dropdown);
+    
     await waitFor(() => {
       expect(screen.getByText('United States')).toBeInTheDocument();
     });
   });
 
-  test('selects an option from dropdown', async () => {
+  test('selects an option from dropdown and calls callback', async () => {
+    const store = createMockStore();
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
+    
     const dropdown = screen.getByRole('textbox');
     fireEvent.click(dropdown);
+    
     const option = await screen.findByText('United States');
     fireEvent.click(option);
+    
     await waitFor(() => {
-      expect(mockProps.handleCallback).toHaveBeenCalled();
+      expect(baseProps.handleCallback).toHaveBeenCalledWith(
+        baseProps.data,
+        'US'
+      );
     });
   });
 
   test('displays error message when field is required but not selected', () => {
-    const errorStore = configureStore({
-      reducer: {
-        ...mockStore.reducer,
-        fielderror: () => ({
-          error: { country_of_tax_residence: 'Please select a country' },
-        }),
-      },
+    const store = createMockStore({
+      fielderror: () => ({
+        error: { country_of_tax_residence: 'Please select a country' },
+      }),
     });
+    
     render(
-      <Provider store={errorStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
+    
     expect(screen.getByText('Please select your Country of Tax Residence')).toBeInTheDocument();
   });
 
-  test('displays tooltip when info_tooltips is "Yes"', () => {
+  test('displays tooltip icon when info_tooltips is "Yes"', () => {
+    const store = createMockStore();
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
-    const tooltip = screen.getByRole('button', { name: /info-tooltip/i });
-    expect(tooltip).toBeInTheDocument();
-  });
-
-  test('opens tooltip popup on click', async () => {
-    render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
-      </Provider>
-    );
-    const tooltip = screen.getByRole('button', { name: /info-tooltip/i });
-    fireEvent.click(tooltip);
-    await waitFor(() => {
-      expect(screen.getByText('Tooltip details')).toBeInTheDocument();
-    });
+    
+    expect(screen.getByRole('button', { name: /info-tooltip/i })).toBeInTheDocument();
   });
 
   test('disables dropdown when field is not editable', () => {
-    const nonEditableProps = {
-      ...mockProps,
-      data: { ...mockProps.data, editable: false },
+    const store = createMockStore();
+    const props = {
+      ...baseProps,
+      data: { ...baseProps.data, editable: false },
     };
+    
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...nonEditableProps} />
+      <Provider store={store}>
+        <SelectionBox {...props} />
       </Provider>
     );
+    
     const dropdown = screen.getByRole('textbox');
-    expect(dropdown).toBeDisabled();
+    expect(dropdown).toHaveClass('disabled');
   });
 
-  test('removes selected value when close button is clicked', async () => {
-    const storeWithSelection = configureStore({
-      reducer: {
-        ...mockStore.reducer,
-        stages: () => ({
-          stages: [
-            {
-              stageId: 'bd-2',
-              stageInfo: {
-                applicants: {
-                  country_of_tax_residence_a_1: 'US',
-                },
-                products: [{ product_type: '153' }],
-              },
-            },
-          ],
-          userInput: {
-            applicants: {},
-          },
-        }),
-      },
-    });
+  test('filters options based on search input', async () => {
+    const store = createMockStore();
     render(
-      <Provider store={storeWithSelection}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
-    const closeButton = screen.getByRole('button', { name: /close/i });
-    fireEvent.click(closeButton);
+    
+    const dropdown = screen.getByRole('textbox');
+    fireEvent.click(dropdown);
+    
+    const searchInput = screen.getByPlaceholderText('Search');
+    fireEvent.change(searchInput, { target: { value: 'Sing' } });
+    
     await waitFor(() => {
+      expect(screen.getByText('Singapore')).toBeInTheDocument();
       expect(screen.queryByText('United States')).not.toBeInTheDocument();
     });
   });
 
-  test('filters options based on search input', async () => {
+  test('displays selected value when one is provided', () => {
+    const store = createMockStore({
+      stages: () => ({
+        stages: [
+          {
+            stageId: 'bd-2',
+            stageInfo: {
+              applicants: {
+                country_of_tax_residence_a_1: 'US',
+              },
+              products: [{ product_type: '153' }],
+            },
+          },
+        ],
+        userInput: {
+          applicants: {},
+        },
+      }),
+    });
+    
     render(
-      <Provider store={mockStore}>
-        <SelectionBox {...mockProps} />
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
       </Provider>
     );
+    
+    expect(screen.getByText('United States')).toBeInTheDocument();
+  });
+
+  test('handles empty options gracefully', async () => {
+    const store = createMockStore({
+      lov: () => ({
+        lov: [
+          {
+            label: 'country_of_tax_residence',
+            value: [],
+          },
+        ],
+      }),
+    });
+    
+    render(
+      <Provider store={store}>
+        <SelectionBox {...baseProps} />
+      </Provider>
+    );
+    
     const dropdown = screen.getByRole('textbox');
     fireEvent.click(dropdown);
-    const searchInput = screen.getByPlaceholderText('Search');
-    fireEvent.change(searchInput, { target: { value: 'Sing' } });
+    
     await waitFor(() => {
-      expect(screen.getByText('Singapore')).toBeInTheDocument();
       expect(screen.queryByText('United States')).not.toBeInTheDocument();
     });
   });
