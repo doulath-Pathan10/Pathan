@@ -1,365 +1,124 @@
-// stageUtils.test.js
-import {
-  stageFields,
-  fieldGroupingFunc,
-  userInputPayload,
-  residentialAddress,
-  submitRequest,
-  compareStageRequest
-} from './stageUtils';
-import { store } from '../../../utils/store/store';
-import { CONSTANTS } from '../../../utils/common/constants';
-import { authenticateType, FindIndex } from '../../../utils/common/change.utils';
+import React, { useEffect, useState,useRef } from "react";
+import { useDispatch,useSelector } from "react-redux";
+import { BrowserRouter } from "react-router-dom";
+import "./utils/styles/App.scss";
+import Main from "./router/main";
+import Model from "./shared/components/model/model";
+import Spinner from "./shared/components/spinner/spinner";
+import { KeyWithAnyModel, StoreModel } from "./utils/model/common-model";
+import DynamicModel from "./shared/components/model/dynamic-model";
+import ActivityDetector from "react-activity-detector";
+import IdleTimeOutModel from "./shared/components/model/idle-time-out";
+import trackEvents from "./services/track-events";
+import { submitRequest } from "./modules/dashboard/fields/fields.utils";
+import { store } from "./utils/store/store";
 
-// Mock dependencies
-jest.mock('../../../utils/store/store');
-jest.mock('../../../utils/common/change.utils');
+export const App = () => {
+  const loaderSelector = useSelector((state: StoreModel) => state.loader);
+  const errorSelector = useSelector((state: StoreModel) => state.error);
+  const [loaderState, setLoaderState] = useState(null);
+  const [error, setError] = useState([]);
+  const [exceptionList, setExceptionList] = useState<KeyWithAnyModel>([]);
+  const [isIdle, setIsIdle] = useState(false);
+  const [openIdlePopUp, setOpenIdlePopUp] = useState(false);
+  const idleTimeoutRef=useRef<NodeJS.Timeout| null>(null);
+  const dispatch = useDispatch();
 
-// Mock rules modules
-jest.mock('../../rules/rules_bd-1', () => jest.fn());
-jest.mock('../../rules/rules_bd-2', () => jest.fn());
-jest.mock('../../rules/rules_ssf-1', () => jest.fn());
-jest.mock('../../rules/rules_ssf-2', () => jest.fn());
-jest.mock('../../rules/rules_ad-1', () => jest.fn());
-jest.mock('../../rules/rules_ad-2', () => jest.fn());
-jest.mock('../../rules/rules_acd', () => jest.fn());
-jest.mock('../../rules/rules_ld-1', () => jest.fn());
-jest.mock('../../rules/rules_bd-3', () => jest.fn());
+  /**
+   * Added to disabled right click options
+   */
+  /* istanbul ignore next */
+  useEffect(() => {
+    window.addEventListener('contextmenu', function (event) {
+      event.preventDefault();
+    });
+    return () => {
+      window.removeEventListener('contextmenu', function (event) {
+        event.preventDefault();
+      });
+    }
+  }, []);
+  useEffect(() => {
+    // to check whether loader is enabled
+    /*istanbul ignore else*/
+    if (loaderSelector && loaderSelector.isFetching) {
+      setLoaderState(loaderSelector.isFetching.isFetching);
+    }
+    // to check whether error is received from api request
+    /*istanbul ignore else*/
+    if (errorSelector && errorSelector.errors) {
+      setError(errorSelector.errors);
+    }
 
-// Mock sessionStorage
-const sessionStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn()
-};
-global.sessionStorage = sessionStorageMock;
+    // To check exceptional handling
+    if (errorSelector && errorSelector.exceptionList) {
+      setExceptionList(errorSelector.exceptionList);
+    }
+    const exceptions:  KeyWithAnyModel = errorSelector.exceptionList;
+    /*istanbul ignore else*/
+    if(errorSelector.errors.length > 0 || (exceptions && exceptions.error_header)){
+      trackEvents.triggerAdobeEvent('formError');
+    }
+   
+    window.addEventListener("unload", function () {
+      trackEvents.triggerAdobeEvent('formAbandonment', 'BrowserClose')
+    })
+  }, [loaderSelector, errorSelector]);
+/* istanbul ignore next */
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if (isIdle) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      /*istanbul ignore else*/
+      if (!openIdlePopUp) {
+        setOpenIdlePopUp(true);
+      }
+    }
+  },[isIdle]);
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  
-  // Default mock implementations
-  authenticateType.mockReturnValue('manual');
-  FindIndex.mockImplementation((obj, stageId) => {
-    if (stageId === 'ssf-1') return 0;
-    if (stageId === 'ssf-2') return 1;
-    return -1;
-  });
-  
-  sessionStorage.getItem.mockImplementation((key) => 
-    key === 'currentStage' ? '1' : null
+  const onIdle = () => {   
+    loaderState === true ? onActive() : setIsIdle(true);
+  };
+  const onActive = () => {
+    setIsIdle(false);
+  };
+  const handlePopUpClick = () => {
+    setOpenIdlePopUp(false);
+  };
+  const handleBtClick = () => {
+  };
+  return (
+    <>
+      {/* Idle time out */}
+      <ActivityDetector
+        enabled={true}
+        timeout={
+          Number(`${process.env.REACT_APP_RTOB_APP_IDLE_TIMEOUT_DURATION}`) *
+          10000
+        }
+        onIdle={onIdle}
+        onActive={onActive}
+        name="default"
+      />
+
+      {openIdlePopUp && (
+        <IdleTimeOutModel handlePopUpClick={handlePopUpClick} />
+      )}
+
+      <BrowserRouter basename="/">
+        <Main />
+        {exceptionList.length !== 0 && (
+          <DynamicModel errorList={exceptionList} />
+        )}
+        {error.length > 0 ? (
+          <Model name="globalError"  handlebuttonClick={handleBtClick}/>
+        ) : (
+          loaderState && <Spinner />
+        )}
+      </BrowserRouter>
+    </>
   );
-});
-describe('stageFields', () => {
-  const mockStageSelector = [{
-    stageId: 'ssf-1',
-    stageInfo: {
-      fieldmetadata: {
-        data: {
-          stages: [
-            { 
-              stageId: 'ssf-1', 
-              fields: [
-                { field_set_name: 'Personal Info', logical_field_name: 'name', component_type: 'Text' },
-                { field_set_name: 'Address', logical_field_name: 'address', component_type: 'Text' }
-              ] 
-            },
-            { 
-              stageId: 'ssf-2', 
-              fields: [
-                { field_set_name: 'Additional Info', logical_field_name: 'occupation', component_type: 'Text' }
-              ] 
-            }
-          ]
-        }
-      },
-      applicants: {}
-    }
-  }];
+};
+export default App;
 
-  it('should return fields for ssf-1 stage', () => {
-    const result = stageFields(mockStageSelector, 'ssf-1');
-    
-    expect(result).toHaveProperty('fields');
-    expect(FindIndex).toHaveBeenCalled();
-  });
-
-  it('should handle myinfo flow differently', () => {
-    authenticateType.mockReturnValue('myinfo');
-    const result = stageFields(mockStageSelector, 'ssf-1');
-    
-    expect(result).toHaveProperty('fields');
-    expect(FindIndex).toHaveBeenCalled();
-  });
-
-  it('should handle ibanking flow differently', () => {
-    authenticateType.mockReturnValue('ibanking');
-    const result = stageFields(mockStageSelector, 'ssf-1');
-    
-    expect(result).toHaveProperty('fields');
-    expect(FindIndex).toHaveBeenCalled();
-  });
-
-  it('should handle multiple applicants', () => {
-    sessionStorage.getItem.mockReturnValue('2'); // currentStage = 2
-    const result = stageFields(mockStageSelector, 'ssf-1');
-    
-    expect(result).toHaveProperty('fields');
-  });
-
-  it('should return empty fields when no stage data', () => {
-    const result = stageFields([], 'ssf-1');
-    expect(result.fields).toBeUndefined();
-  });
-
-  it('should apply different rules for different stages', () => {
-    const stages = ['bd-1', 'bd-2', 'bd-3', 'ad-1', 'ad-2', 'ACD', 'ld-1'];
-    
-    stages.forEach(stage => {
-      const result = stageFields(mockStageSelector, stage);
-      expect(result).toHaveProperty('fields');
-    });
-  });
-});
-describe('fieldGroupingFunc', () => {
-  it('should add new field group when not exists', () => {
-    const prev = [];
-    const items = { logical_field_name: 'test', component_type: 'Text' };
-    
-    fieldGroupingFunc(-1, prev, 'Test Group', items);
-    
-    expect(prev).toHaveLength(1);
-    expect(prev[0].field_set_name).toBe('Test Group');
-    expect(prev[0].fields).toContainEqual(items);
-  });
-
-  it('should append to existing field group', () => {
-    const prev = [{ field_set_name: 'Test Group', fields: [] }];
-    const items = { logical_field_name: 'test', component_type: 'Text' };
-    
-    fieldGroupingFunc(0, prev, 'Test Group', items);
-    
-    expect(prev).toHaveLength(1);
-    expect(prev[0].fields).toContainEqual(items);
-  });
-});
-describe('userInputPayload', () => {
-  const mockDispatch = jest.fn();
-  const mockApplicantsSelector = { name_a_1: 'John Doe' };
-  const mockStageSelector = [{
-    stageId: 'ssf-1',
-    stageInfo: {
-      applicants: { name_a_1: '' },
-      fieldmetadata: { data: { stages: [] } }
-    }
-  }];
-
-  it('should dispatch updated stage fields', async () => {
-    await userInputPayload(mockApplicantsSelector, mockStageSelector)(mockDispatch);
-    
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'stages/updateStageFields',
-        payload: expect.objectContaining({
-          stageInfo: expect.objectContaining({
-            applicants: expect.objectContaining({
-              name_a_1: 'John Doe'
-            })
-          })
-        })
-      })
-    );
-  });
-
-  it('should handle otherMyInfo parameter', async () => {
-    await userInputPayload(mockApplicantsSelector, mockStageSelector, 'otherInfo')(mockDispatch);
-    
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'stages/updateStageFields',
-        payload: expect.objectContaining({
-          stageId: 'otherInfo'
-        })
-      })
-    );
-  });
-});
-describe('residentialAddress', () => {
-  const mockStageSelector = [{
-    stageInfo: {
-      applicants: {
-        block_a_1: '123',
-        building_name_a_1: 'Tower A',
-        street_name_a_1: 'Main Street',
-        unit_no_a_1: '10-01',
-        postal_code_a_1: '123456'
-      }
-    }
-  }];
-
-  it('should return formatted address with all components', () => {
-    const result = residentialAddress(mockStageSelector);
-    expect(result).toBe('123,Tower A,Main Street,10-01,123456');
-  });
-
-  it('should handle missing optional components', () => {
-    const modifiedSelector = JSON.parse(JSON.stringify(mockStageSelector));
-    delete modifiedSelector[0].stageInfo.applicants.building_name_a_1;
-    delete modifiedSelector[0].stageInfo.applicants.unit_no_a_1;
-    
-    const result = residentialAddress(modifiedSelector);
-    expect(result).toBe('123,Main Street,123456');
-  });
-
-  it('should return null when required fields are missing', () => {
-    const modifiedSelector = JSON.parse(JSON.stringify(mockStageSelector));
-    delete modifiedSelector[0].stageInfo.applicants.block_a_1;
-    
-    const result = residentialAddress(modifiedSelector);
-    expect(result).toBeNull();
-  });
-});
-describe('submitRequest', () => {
-  const mockDispatch = jest.fn();
-  const mockApplicantsSelector = { name_a_1: 'John Doe' };
-  const mockStageSelector = {
-    stageId: 'ssf-1',
-    stageInfo: {
-      fieldmetadata: {
-        data: {
-          stages: [
-            { 
-              stageId: 'ssf-1', 
-              fields: [
-                { logical_field_name: 'name', component_type: 'Text' }
-              ] 
-            }
-          ]
-        }
-      },
-      applicants: { name_a_1: '' },
-      products: [{ product_type: 'CC' }]
-    }
-  };
-  const mockStageSelectorThankYou = [mockStageSelector];
-  const mockValueSelector = { 
-    backNavigation: { formChange: null, nextStageId: null } 
-  };
-  const mockLovSelector = { lov: [] };
-  const mockUserInputSelector = { applicants: {} };
-  const mockErrorSelector = { retry: false };
-
-  beforeEach(() => {
-    // Mock store.getState
-    store.getState.mockReturnValue({
-      stages: {
-        stages: [mockStageSelector]
-      }
-    });
-  });
-
-  it('should make preserve request when isPreserveCall is true', async () => {
-    const result = await submitRequest(
-      mockApplicantsSelector,
-      mockStageSelector,
-      mockStageSelectorThankYou,
-      mockValueSelector,
-      'ETC',
-      mockLovSelector,
-      mockUserInputSelector,
-      mockErrorSelector,
-      false,
-      true // isPreserveCall
-    )(mockDispatch);
-    
-    expect(mockDispatch).toHaveBeenCalledWith(expect.any(Function)); // preserveRequest
-  });
-
-  it('should handle bd-1 stage differently (skip API call)', async () => {
-    const modifiedStageSelector = {
-      ...mockStageSelector,
-      stageId: 'bd-1'
-    };
-    
-    const result = await submitRequest(
-      mockApplicantsSelector,
-      modifiedStageSelector,
-      mockStageSelectorThankYou,
-      mockValueSelector,
-      'ETC',
-      mockLovSelector,
-      mockUserInputSelector,
-      mockErrorSelector,
-      false
-    )(mockDispatch);
-    
-    expect(result).toBe('bd-2'); // Next stage after bd-1
-    expect(mockDispatch).not.toHaveBeenCalledWith(expect.any(Function)); // No API call
-  });
-
-  it('should make post request when form has changes', async () => {
-    const modifiedUserInputSelector = {
-      applicants: { name_a_1: 'New Name' }
-    };
-    
-    const result = await submitRequest(
-      mockApplicantsSelector,
-      mockStageSelector,
-      mockStageSelectorThankYou,
-      mockValueSelector,
-      'ETC',
-      mockLovSelector,
-      modifiedUserInputSelector,
-      mockErrorSelector,
-      false
-    )(mockDispatch);
-    
-    expect(mockDispatch).toHaveBeenCalledWith(expect.any(Function)); // postRequest
-  });
-
-  it('should handle retry scenario', async () => {
-    const modifiedErrorSelector = { retry: true };
-    
-    const result = await submitRequest(
-      mockApplicantsSelector,
-      mockStageSelector,
-      mockStageSelectorThankYou,
-      mockValueSelector,
-      'ETC',
-      mockLovSelector,
-      mockUserInputSelector,
-      modifiedErrorSelector,
-      false
-    )(mockDispatch);
-    
-    expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'error/getRetryStatus',
-        payload: false
-      })
-    );
-    expect(mockDispatch).toHaveBeenCalledWith(expect.any(Function)); // postRequest
-  });
-});
-describe('compareStageRequest', () => {
-  it('should return true when no changes', () => {
-    const stageApplicants = { name_a_1: 'John', age_a_1: '30' };
-    const userInput = { name_a_1: 'John', age_a_1: '30' };
-    
-    const result = compareStageRequest(stageApplicants, userInput);
-    expect(result).toBe(true);
-  });
-
-  it('should return false when changes exist', () => {
-    const stageApplicants = { name_a_1: 'John', age_a_1: '30' };
-    const userInput = { name_a_1: 'Jane', age_a_1: '30' };
-    
-    const result = compareStageRequest(stageApplicants, userInput);
-    expect(result).toBe(false);
-  });
-
-  it('should handle empty objects', () => {
-    const result = compareStageRequest({}, {});
-    expect(result).toBe(true);
-  });
-});
+Please write test cases using jest with RTL
