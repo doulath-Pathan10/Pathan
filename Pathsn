@@ -1,90 +1,174 @@
-import { createSlice } from "@reduxjs/toolkit";
-import {taxStoreModel} from '../model/common-model'
-const initialState: taxStoreModel = {
+import { configureStore } from '@reduxjs/toolkit';
+import taxReducer, { taxAction } from './taxSlice';
+import { taxStoreModel } from '../model/common-model';
+
+describe('tax slice', () => {
+  let store: ReturnType<typeof configureStore>;
+
+  beforeEach(() => {
+    store = configureStore({
+      reducer: {
+        tax: taxReducer
+      }
+    });
+  });
+
+  describe('initial state', () => {
+    it('should have the correct initial state', () => {
+      const state = store.getState().tax;
+      expect(state).toEqual({
         maxCount: 5,
         count: 0,
         fields: []
-};
+      });
+    });
+  });
 
-const tax = createSlice({
-        name: "tax",
-        initialState,
-        reducers: {
-                addTaxFiled(state, action) {
-                        state.fields.push(action.payload);
-                },
-                updateCount(state, action) {
-                        state.count = action.payload;
-                },
-                removeTaxField(state, action) {
-                       // if (state.count >= 0) {
-                        /*istanbul ignore else*/
-                           if(action.payload!=="no_of_tax_residency_country"){
-                                state.count = --state.count;
-                                let findIndex = state.fields.findIndex(
-                                        (field: string) => field === action.payload
-                                );
-                                state.fields.splice(findIndex,1);
-                           }
-                       // }
-                        
-                },
-                updateTax(state, action) {
-                        const updatedFields = [...state.fields]; 
-                        const [field, value] = Object.entries(action.payload)[0];
-                      
-                        const normalizedField = field.replace(/_a_\d+$/, '');
-                      
-                        const index = updatedFields.findIndex(
-                          (item) => item.replace(/_a_\d+$/, '') === normalizedField
-                        );
-                       const taxField = `tax_id_no_${field.split("_")[4]}`;
-                       const reasonField = `crs_reason_code_${field.split("_")[4]}`;
-                //        if(field.startsWith('crs_comments')){
-                //         const crsCommentsField = `crs_comments_${field.split("_")[2]}`;
-                //         const existCrsComments = updatedFields.includes(crsCommentsField);         
-                //         if (!existCrsComments) {
-                //                 updatedFields.splice(index + 1, 0, `tax_id_no_${field.split("_")[4]}`, `crs_reason_code_${field.split("_")[4]}`, `crs_comments_${field.split("_")[4]}`);
-                //         }  
-                //        }
-                       const taxAlone = updatedFields.includes(taxField)
-                       const alreadyExists = updatedFields.includes(taxField) && updatedFields.includes(reasonField);
-                      /*istanbul ignore else*/
-                        if (value && index !== -1 &&!alreadyExists &&!taxAlone) {
-                          updatedFields.splice(index + 1, 0, `tax_id_no_${field.split("_")[4]}`, `crs_reason_code_${field.split("_")[4]}`);
-                        }
-                      
-                        state.fields = updatedFields; // Update state fields
-                      },
-                      updateCrsComments(state,action){
-                        const updatedFields = [...state.fields];
-                        const [field, value] = Object.entries(action.payload)[0];
-                        const normalizedField = field.replace(/_a_\d+$/, '');
-                        const index = updatedFields.findIndex(
-                                (item) => item.replace(/_a_\d+$/, '') === normalizedField
-                              );
-                              const crsCmnts =`crs_comments_${field.split("_")[3]}`;
-                              const crsExist = updatedFields.includes(crsCmnts)
-                              /*istanbul ignore else*/
-                            if(value &&index!==-1 && !crsExist){
-                                updatedFields.splice(index +1,0,`crs_comments_${field.split("_")[3]}`)
-                              }  
-                              state.fields = updatedFields;
-                      },
-                      removeReasonField(state, action) {
-                        const updatedFields = state.fields.filter(
-                          (field) => !action.payload.includes(field)
-                        );
-                        state.fields = updatedFields;
-                      },
-                resetTaxField(state, action) {
-                        state.maxCount = 4;
-                        state.count = 0;
-                        state.fields = action.payload;
-                }
-        }
+  describe('actions', () => {
+    describe('addTaxFiled', () => {
+      it('should add a new tax field to the fields array', () => {
+        const fieldName = 'test_field';
+        store.dispatch(taxAction.addTaxFiled(fieldName));
+        const state = store.getState().tax;
+        expect(state.fields).toContain(fieldName);
+      });
+    });
+
+    describe('updateCount', () => {
+      it('should update the count value', () => {
+        store.dispatch(taxAction.updateCount(3));
+        const state = store.getState().tax;
+        expect(state.count).toBe(3);
+      });
+    });
+
+    describe('removeTaxField', () => {
+      beforeEach(() => {
+        // Set up initial state with some fields
+        store.dispatch(taxAction.addTaxFiled('field1'));
+        store.dispatch(taxAction.addTaxFiled('field2'));
+        store.dispatch(taxAction.addTaxFiled('field3'));
+        store.dispatch(taxAction.updateCount(3));
+      });
+
+      it('should remove the specified field and decrement count when field is not "no_of_tax_residency_country"', () => {
+        store.dispatch(taxAction.removeTaxField('field2'));
+        const state = store.getState().tax;
+        expect(state.fields).not.toContain('field2');
+        expect(state.count).toBe(2);
+      });
+
+      it('should not remove field or decrement count when field is "no_of_tax_residency_country"', () => {
+        store.dispatch(taxAction.removeTaxField('no_of_tax_residency_country'));
+        const state = store.getState().tax;
+        expect(state.fields).toHaveLength(3);
+        expect(state.count).toBe(3);
+      });
+    });
+
+    describe('updateTax', () => {
+      beforeEach(() => {
+        store.dispatch(taxAction.addTaxFiled('country_a_1'));
+      });
+
+      it('should add tax_id_no and crs_reason_code fields when value is truthy', () => {
+        store.dispatch(taxAction.updateTax({ 'country_a_1': 'USA' }));
+        const state = store.getState().tax;
+        expect(state.fields).toEqual([
+          'country_a_1',
+          'tax_id_no_1',
+          'crs_reason_code_1'
+        ]);
+      });
+
+      it('should not add fields when value is falsy', () => {
+        store.dispatch(taxAction.updateTax({ 'country_a_1': '' }));
+        const state = store.getState().tax;
+        expect(state.fields).toEqual(['country_a_1']);
+      });
+
+      it('should not add duplicate fields', () => {
+        store.dispatch(taxAction.updateTax({ 'country_a_1': 'USA' }));
+        store.dispatch(taxAction.updateTax({ 'country_a_1': 'USA' }));
+        const state = store.getState().tax;
+        expect(state.fields).toEqual([
+          'country_a_1',
+          'tax_id_no_1',
+          'crs_reason_code_1'
+        ]);
+      });
+
+      it('should handle normalized field names', () => {
+        store.dispatch(taxAction.addTaxFiled('country_a_2_suffix'));
+        store.dispatch(taxAction.updateTax({ 'country_a_2_suffix': 'Canada' }));
+        const state = store.getState().tax;
+        expect(state.fields).toContain('tax_id_no_2');
+        expect(state.fields).toContain('crs_reason_code_2');
+      });
+    });
+
+    describe('updateCrsComments', () => {
+      beforeEach(() => {
+        store.dispatch(taxAction.addTaxFiled('crs_reason_code_1'));
+      });
+
+      it('should add crs_comments field when value is truthy', () => {
+        store.dispatch(taxAction.updateCrsComments({ 'crs_reason_code_1': 'reason' }));
+        const state = store.getState().tax;
+        expect(state.fields).toEqual([
+          'crs_reason_code_1',
+          'crs_comments_1'
+        ]);
+      });
+
+      it('should not add crs_comments field when value is falsy', () => {
+        store.dispatch(taxAction.updateCrsComments({ 'crs_reason_code_1': '' }));
+        const state = store.getState().tax;
+        expect(state.fields).toEqual(['crs_reason_code_1']);
+      });
+
+      it('should not add duplicate crs_comments fields', () => {
+        store.dispatch(taxAction.updateCrsComments({ 'crs_reason_code_1': 'reason' }));
+        store.dispatch(taxAction.updateCrsComments({ 'crs_reason_code_1': 'reason' }));
+        const state = store.getState().tax;
+        expect(state.fields).toEqual([
+          'crs_reason_code_1',
+          'crs_comments_1'
+        ]);
+      });
+    });
+
+    describe('removeReasonField', () => {
+      beforeEach(() => {
+        store.dispatch(taxAction.addTaxFiled('tax_id_no_1'));
+        store.dispatch(taxAction.addTaxFiled('crs_reason_code_1'));
+        store.dispatch(taxAction.addTaxFiled('crs_comments_1'));
+      });
+
+      it('should remove all specified fields', () => {
+        store.dispatch(taxAction.removeReasonField(['tax_id_no_1', 'crs_reason_code_1']));
+        const state = store.getState().tax;
+        expect(state.fields).not.toContain('tax_id_no_1');
+        expect(state.fields).not.toContain('crs_reason_code_1');
+        expect(state.fields).toContain('crs_comments_1');
+      });
+    });
+
+    describe('resetTaxField', () => {
+      beforeEach(() => {
+        // Set up initial state with some fields
+        store.dispatch(taxAction.addTaxFiled('field1'));
+        store.dispatch(taxAction.addTaxFiled('field2'));
+        store.dispatch(taxAction.updateCount(2));
+      });
+
+      it('should reset the tax fields to initial values with provided fields', () => {
+        store.dispatch(taxAction.resetTaxField(['new_field']));
+        const state = store.getState().tax;
+        expect(state.maxCount).toBe(4);
+        expect(state.count).toBe(0);
+        expect(state.fields).toEqual(['new_field']);
+      });
+    });
+  });
 });
-export const taxAction = tax.actions;
-export default tax;
-
-Please write test cases using jest with RTL
