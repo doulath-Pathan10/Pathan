@@ -1,244 +1,106 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import SelectionBox from './SelectionBox';
-import thunk from 'redux-thunk';
-
-// Mock the complex dependencies
-jest.mock('../../../utils/common/change.utils', () => ({
-  fieldError: jest.fn(() => false),
-  isFieldUpdate: jest.fn(),
-  isMyinfoField: jest.fn(() => false),
-  fieldIdAppend: jest.fn((props) => `${props.data.logical_field_name}_a_1`),
-  getUrl: {
-    getProductInfo: jest.fn(() => [{}, { product_category: 'SA' }]),
-    getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] })),
-    getJourneyType: jest.fn(() => ''),
-    getUserInputs: jest.fn(() => ({})),
-  },
-  authenticateType: jest.fn(() => 'manual'),
-}));
-
-jest.mock('../../../services/common-service', () => ({
-  getLovData: jest.fn(),
-  lovRequests: jest.fn(),
-}));
-
-jest.mock('../../../utils/store/store', () => ({
-  store: {
-    getState: jest.fn(() => ({
-      stages: {
-        stages: [{
-          stageId: 'test-stage',
-          stageInfo: {
-            applicants: {},
-            products: [{ product_type: '123', product_category: 'SA' }]
-          }
-        }]
+import { useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+import { CONSTANTS } from "../../../utils/common/constants";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import "./footer.scss";
+import { getUrl } from "../../../utils/common/change.utils";
+ 
+const Footer = (props: KeyWithAnyModel) => {
+ /* istanbul ignore next */
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const [backBtn, setBackBtn] = useState(false);
+  const [ctaSpinner, setCtaSpinner] = useState(false);
+  const urlEnpoint = getUrl.getUrlEndPoint();
+ /* istanbul ignore next */
+  const userInputSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput
+  );
+  const SignSelector1 = useSelector(
+    (state: StoreModel) => state.stages.signatureDocument
+  );
+ 
+  const backHandler = () => {
+    props.backHandler();
+  };
+ 
+  useEffect(() => {
+    setCtaSpinner(
+      urlEnpoint === "acknowledge" || urlEnpoint === "preserve" ? true : false
+    );
+  }, [urlEnpoint]);
+ 
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if (stageSelector && stageSelector.length > 0) {
+      const isEnableBackBtn =
+        stageSelector[0].stageId !== CONSTANTS.STAGE_NAMES.SSF_1 &&
+        stageSelector[0].stageId !== CONSTANTS.STAGE_NAMES.BD_1
+        // &&
+        // !(props.journeyType === 'NTC' && ((stageSelector[0].stageId == CONSTANTS.STAGE_NAMES.BD_3 && stageSelector[0].stageInfo.products[0].product_category == 'CC') ||
+        // (stageSelector[0].stageId == CONSTANTS.STAGE_NAMES.LD_1 && stageSelector[0].stageInfo.products[0].product_type === '280')))
+          ? true
+          : false;
+      setBackBtn(isEnableBackBtn);
+    }
+  }, [stageSelector]);
+ 
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if (stageSelector && stageSelector.length > 0) {
+      if(stageSelector[0].stageId == CONSTANTS.STAGE_NAMES.LD_1 && stageSelector[0].stageInfo.products[0].product_type === '280')
+       {
+        setBackBtn(false);
       }
-    })),
-    dispatch: jest.fn(),
-  },
-}));
-
-const mockStore = configureStore([thunk]);
-
-describe('SelectionBox Component - Basic Tests', () => {
-  const defaultProps = {
-    data: {
-      logical_field_name: 'test_field',
-      rwb_label_name: 'Test Field',
-      editable: true,
-      info_tooltips: 'No',
-    },
-    handleCallback: jest.fn(),
-  };
-
-  const initialState = {
-    lov: {
-      lov: [{
-        label: 'test_field',
-        value: [
-          { CODE_VALUE: 'val1', CODE_DESC: 'Value 1', checked: false },
-          { CODE_VALUE: 'val2', CODE_DESC: 'Value 2', checked: false },
-        ]
-      }]
-    },
-    fielderror: { error: [] },
-    stages: {
-      stages: [{
-        stageId: 'test-stage',
-        stageInfo: {
-          applicants: {},
-          products: [{ product_type: '123', product_category: 'SA' }]
-        }
-      }],
-      userInput: { applicants: {} },
-      myinfoResponse: {},
-      dependencyFields: []
-    },
-    tax: { taxFields: [] },
-    valueupdate: { changes: false },
-    lastaccessed: { field: '' }
-  };
-
-  const renderComponent = (props = defaultProps, state = initialState) => {
-    const store = mockStore(state);
-    return render(
-      <Provider store={store}>
-        <SelectionBox {...props} />
-      </Provider>
+     
+     else if (
+        stageSelector[0].stageId !== CONSTANTS.STAGE_NAMES.SSF_1 &&
+        stageSelector[0].stageId !== CONSTANTS.STAGE_NAMES.BD_1 &&
+        !props.otherMyinfo
+      )
+      {
+        setBackBtn(true);
+      }
+      else {
+        setBackBtn(props.otherMyinfo);
+      }
+    }
+ 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.otherMyinfo]);
+ 
+  const mobileNumber = userInputSelector.applicants?.mobile_number_a_1;
+ 
+  const isDisabled = () => {
+    return (
+      (mobileNumber && mobileNumber.length > 8 && userInputSelector.applicants.mobile_number_rwb_a_1 === '65') || 
+      (userInputSelector.applicants.mobile_number_rwb_a_1 === '65' && mobileNumber && mobileNumber.length === 8 && (mobileNumber && mobileNumber.charAt(0) !== '8' && mobileNumber.charAt(0) !== '9')) || 
+      (stageSelector && stageSelector[0].stageInfo && stageSelector[0].stageId === "rp" && stageSelector[0].stageInfo.applicants.application_sourcing_a_1 === "1" && !SignSelector1)
     );
   };
+ 
+  return (
+    <>
+      <div className="footer">
+        {backBtn && !props.uploadJourney && (
+          <div className="back" onClick={backHandler}>
+            <span className="arrow"></span> Back
+          </div>
+        )}
+        <button 
+          type="submit" 
+            className={`continue ${stageSelector && stageSelector[0].stageInfo && stageSelector[0].stageId === "rp" && stageSelector[0].stageInfo.applicants.application_sourcing_a_1 === "1" ? (SignSelector1 !== ""? "form-valid": "form-invalid") : props.validateNxt}`}
+            disabled={isDisabled()}
+          >
+            {ctaSpinner && <div className="circle-spinner"></div>}
+            {!ctaSpinner && (stageSelector[0].stageId === "rp" || props.uploadJourney === true)
+              ? "Agree and Submit"
+              : "Continue"}
+          </button>
+      </div>
+    </>
+  );
+};
+ 
+export default Footer;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('1. Renders basic dropdown with label', () => {
-    renderComponent();
-    expect(screen.getByText('Test Field')).toBeInTheDocument();
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  test('2. Shows placeholder when no value selected', () => {
-    renderComponent();
-    expect(screen.getByPlaceholderText('Select the purpose of the account')).toBeInTheDocument();
-  });
-
-  test('3. Opens dropdown on click and shows options', () => {
-    renderComponent();
-    const input = screen.getByRole('textbox');
-    fireEvent.click(input);
-    
-    expect(screen.getByText('Value 1')).toBeInTheDocument();
-    expect(screen.getByText('Value 2')).toBeInTheDocument();
-  });
-
-  test('4. Selects an option and displays it', async () => {
-    renderComponent();
-    const input = screen.getByRole('textbox');
-    fireEvent.click(input);
-    
-    const option1 = screen.getByText('Value 1');
-    fireEvent.click(option1);
-    
-    expect(defaultProps.handleCallback).toHaveBeenCalledWith(
-      defaultProps.data,
-      'val1'
-    );
-  });
-
-  test('5. Shows error message when field is required', () => {
-    const stateWithError = {
-      ...initialState,
-      fielderror: { error: ['test_field'] }
-    };
-    
-    renderComponent(defaultProps, stateWithError);
-    expect(screen.getByText('Please select your Test Field')).toBeInTheDocument();
-  });
-
-  test('6. Disables dropdown when field is not editable', () => {
-    const props = {
-      ...defaultProps,
-      data: { ...defaultProps.data, editable: false }
-    };
-    
-    renderComponent(props);
-    expect(screen.getByRole('textbox')).toBeDisabled();
-  });
-});
-
-describe('SelectionBox Component - Special Cases', () => {
-  const mockStore = configureStore([thunk]);
-
-  test('7. Handles mobile number field display', () => {
-    const props = {
-      data: {
-        logical_field_name: 'mobile_number_rwb',
-        rwb_label_name: 'Mobile Number',
-        editable: true,
-        info_tooltips: 'No',
-      },
-      handleCallback: jest.fn(),
-    };
-
-    const state = {
-      lov: {
-        lov: [{
-          label: 'mobile_number_rwb',
-          value: [
-            { CODE_VALUE: '65', CODE_DESC: 'Singapore (+65)', checked: false }
-          ]
-        }]
-      },
-      // ... rest of initialState
-    };
-
-    const store = mockStore(state);
-    render(
-      <Provider store={store}>
-        <SelectionBox {...props} />
-      </Provider>
-    );
-
-    const input = screen.getByRole('textbox');
-    fireEvent.click(input);
-    
-    const option = screen.getByText('Singapore (+65)');
-    fireEvent.click(option);
-    
-    expect(props.handleCallback).toHaveBeenCalledWith(
-      props.data,
-      '65'
-    );
-  });
-
-  test('8. Handles pre-selected values from store', () => {
-    const props = {
-      data: {
-        logical_field_name: 'test_field',
-        rwb_label_name: 'Test Field',
-        editable: true,
-        info_tooltips: 'No',
-      },
-      handleCallback: jest.fn(),
-    };
-
-    const state = {
-      lov: {
-        lov: [{
-          label: 'test_field',
-          value: [
-            { CODE_VALUE: 'val1', CODE_DESC: 'Value 1', checked: true },
-            { CODE_VALUE: 'val2', CODE_DESC: 'Value 2', checked: false },
-          ]
-        }]
-      },
-      stages: {
-        stages: [{
-          stageId: 'test-stage',
-          stageInfo: {
-            applicants: { test_field_a_1: 'val1' },
-            products: [{ product_type: '123', product_category: 'SA' }]
-          }
-        }],
-        userInput: { applicants: {} },
-        myinfoResponse: {},
-        dependencyFields: []
-      },
-      // ... rest of initialState
-    };
-
-    const store = mockStore(state);
-    render(
-      <Provider store={store}>
-        <SelectionBox {...props} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Value 1')).toBeInTheDocument();
-  });
-});
+Please write test cases using jest with RTL
