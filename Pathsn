@@ -1,365 +1,90 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import Phone from './Phone';
+import { createSlice } from "@reduxjs/toolkit";
+import {taxStoreModel} from '../model/common-model'
+const initialState: taxStoreModel = {
+        maxCount: 5,
+        count: 0,
+        fields: []
+};
 
-const mockStore = configureStore([]);
-
-describe('Phone Component', () => {
-  let store: any;
-  const mockProps = {
-    data: {
-      logical_field_name: 'mobile_number',
-      rwb_label_name: 'Mobile Number',
-      mandatory: 'Yes',
-      min_length: '8',
-      max_length: '17',
-      regex: '^[0-9]*$',
-      editable: false
-    },
-    handleCallback: jest.fn()
-  };
-
-  beforeEach(() => {
-    store = mockStore({
-      lov: { lov: [] },
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {
-              mobile_number_a_1: '91234567',
-              mobile_number_rwb_a_1: '65'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '91234567',
-            mobile_number_rwb_a_1: '65'
-          }
+const tax = createSlice({
+        name: "tax",
+        initialState,
+        reducers: {
+                addTaxFiled(state, action) {
+                        state.fields.push(action.payload);
+                },
+                updateCount(state, action) {
+                        state.count = action.payload;
+                },
+                removeTaxField(state, action) {
+                       // if (state.count >= 0) {
+                        /*istanbul ignore else*/
+                           if(action.payload!=="no_of_tax_residency_country"){
+                                state.count = --state.count;
+                                let findIndex = state.fields.findIndex(
+                                        (field: string) => field === action.payload
+                                );
+                                state.fields.splice(findIndex,1);
+                           }
+                       // }
+                        
+                },
+                updateTax(state, action) {
+                        const updatedFields = [...state.fields]; 
+                        const [field, value] = Object.entries(action.payload)[0];
+                      
+                        const normalizedField = field.replace(/_a_\d+$/, '');
+                      
+                        const index = updatedFields.findIndex(
+                          (item) => item.replace(/_a_\d+$/, '') === normalizedField
+                        );
+                       const taxField = `tax_id_no_${field.split("_")[4]}`;
+                       const reasonField = `crs_reason_code_${field.split("_")[4]}`;
+                //        if(field.startsWith('crs_comments')){
+                //         const crsCommentsField = `crs_comments_${field.split("_")[2]}`;
+                //         const existCrsComments = updatedFields.includes(crsCommentsField);         
+                //         if (!existCrsComments) {
+                //                 updatedFields.splice(index + 1, 0, `tax_id_no_${field.split("_")[4]}`, `crs_reason_code_${field.split("_")[4]}`, `crs_comments_${field.split("_")[4]}`);
+                //         }  
+                //        }
+                       const taxAlone = updatedFields.includes(taxField)
+                       const alreadyExists = updatedFields.includes(taxField) && updatedFields.includes(reasonField);
+                      /*istanbul ignore else*/
+                        if (value && index !== -1 &&!alreadyExists &&!taxAlone) {
+                          updatedFields.splice(index + 1, 0, `tax_id_no_${field.split("_")[4]}`, `crs_reason_code_${field.split("_")[4]}`);
+                        }
+                      
+                        state.fields = updatedFields; // Update state fields
+                      },
+                      updateCrsComments(state,action){
+                        const updatedFields = [...state.fields];
+                        const [field, value] = Object.entries(action.payload)[0];
+                        const normalizedField = field.replace(/_a_\d+$/, '');
+                        const index = updatedFields.findIndex(
+                                (item) => item.replace(/_a_\d+$/, '') === normalizedField
+                              );
+                              const crsCmnts =`crs_comments_${field.split("_")[3]}`;
+                              const crsExist = updatedFields.includes(crsCmnts)
+                              /*istanbul ignore else*/
+                            if(value &&index!==-1 && !crsExist){
+                                updatedFields.splice(index +1,0,`crs_comments_${field.split("_")[3]}`)
+                              }  
+                              state.fields = updatedFields;
+                      },
+                      removeReasonField(state, action) {
+                        const updatedFields = state.fields.filter(
+                          (field) => !action.payload.includes(field)
+                        );
+                        state.fields = updatedFields;
+                      },
+                resetTaxField(state, action) {
+                        state.maxCount = 4;
+                        state.count = 0;
+                        state.fields = action.payload;
+                }
         }
-      },
-      fielderror: { error: [] },
-      lastaccessed: { field: '' }
-    });
-
-    sessionStorage.setItem('currentStage', '1');
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-    sessionStorage.clear();
-  });
-
-  test('renders phone component with label', () => {
-    render(
-      <Provider store={store}>
-        <Phone {...mockProps} />
-      </Provider>
-    );
-
-    expect(screen.getByLabelText('Mobile Number')).toBeInTheDocument();
-  });
-
-  test('displays initial value correctly', () => {
-    render(
-      <Provider store={store}>
-        <Phone {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    expect(input).toHaveValue('91234567');
-  });
-
-  test('handles input change correctly', () => {
-    render(
-      <Provider store={store}>
-        <Phone {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    fireEvent.change(input, { target: { value: '98765432' } });
-    
-    expect(mockProps.handleCallback).toHaveBeenCalled();
-    expect(input).toHaveValue('98765432');
-  });
-
-  test('shows error for invalid Singapore mobile number', () => {
-    render(
-      <Provider store={store}>
-        <Phone {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    fireEvent.change(input, { target: { value: '71234567' } });
-    
-    expect(screen.getByText('Singapore mobile number should start with 8 or 9')).toBeInTheDocument();
-  });
-
-  test('shows error for number less than 8 digits', () => {
-    render(
-      <Provider store={store}>
-        <Phone {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    fireEvent.change(input, { target: { value: '9123' } });
-    
-    expect(screen.getByText('Please enter 8 digits')).toBeInTheDocument();
-  });
-
-  test('shows error when field is mandatory and empty', () => {
-    const mandatoryProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        mandatory: 'Yes'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Phone {...mandatoryProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    fireEvent.change(input, { target: { value: '' } });
-    
-    expect(screen.getByText('Please enter Mobile number')).toBeInTheDocument();
-  });
-
-  test('does not show error when field is optional and empty', () => {
-    const optionalProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        mandatory: 'No'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Phone {...optionalProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    fireEvent.change(input, { target: { value: '' } });
-    
-    expect(screen.queryByText('Please enter Mobile number')).not.toBeInTheDocument();
-  });
-
-  test('disables input when editable is true', () => {
-    const disabledProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        editable: true
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Phone {...disabledProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    expect(input).toBeDisabled();
-  });
-
-  test('handles myinfo authentication case correctly', () => {
-    const myInfoStore = mockStore({
-      ...store.getState(),
-      stages: {
-        stages: [{
-          stageId: 'ssf-1',
-          stageInfo: {
-            applicants: {
-              mobile_number_a_1: '65-91234567'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
-    render(
-      <Provider store={myInfoStore}>
-        <Phone {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Mobile Number');
-    expect(input).toHaveValue('91234567');
-  });
-
-  test('handles home phone number case correctly', () => {
-    const homePhoneProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'home_phone_number',
-        rwb_label_name: 'Home Phone Number'
-      }
-    };
-
-    const homePhoneStore = mockStore({
-      ...store.getState(),
-      stages: {
-        stages: [{
-          stageId: 'bd-2',
-          stageInfo: {
-            applicants: {
-              home_phone_number_a_1: '65-61234567'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            home_phone_number_a_1: '61234567',
-            home_phone_number_rwb_a_1: '65'
-          }
-        }
-      }
-    });
-
-    render(
-      <Provider store={homePhoneStore}>
-        <Phone {...homePhoneProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Home Phone Number');
-    expect(input).toHaveValue('61234567');
-  });
-
-  test('shows error for invalid home phone number', () => {
-    const homePhoneProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'home_phone_number',
-        rwb_label_name: 'Home Phone Number'
-      }
-    };
-
-    const homePhoneStore = mockStore({
-      ...store.getState(),
-      stages: {
-        stages: [{
-          stageId: 'bd-2',
-          stageInfo: {
-            applicants: {
-              home_phone_number_a_1: '65-51234567'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            home_phone_number_a_1: '51234567',
-            home_phone_number_rwb_a_1: '65'
-          }
-        }
-      }
-    });
-
-    render(
-      <Provider store={homePhoneStore}>
-        <Phone {...homePhoneProps} />
-      </Provider>
-    );
-
-    const input = screen.getByPlaceholderText('Home Phone Number');
-    fireEvent.change(input, { target: { value: '51234567' } });
-    
-    expect(screen.getByText('Singapore home phone number should start with 3 or 6')).toBeInTheDocument();
-  });
-
-  test('handles alternate contact fields in bd-3 stage', () => {
-    const altContactProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'mobile_1_add',
-        rwb_label_name: 'Mobile No. 1'
-      }
-    };
-
-    const altContactStore = mockStore({
-      ...store.getState(),
-      stages: {
-        stages: [{
-          stageId: 'bd-3',
-          stageInfo: {
-            applicants: {
-              mobile_1_add_a_1: '91234567'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_1_add_a_1: '91234567',
-            select_alt_contacts_a_1: 'MO1'
-          }
-        }
-      }
-    });
-
-    render(
-      <Provider store={altContactStore}>
-        <Phone {...altContactProps} />
-      </Provider>
-    );
-
-    expect(screen.getByPlaceholderText('Mobile No. 1')).toBeInTheDocument();
-  });
-
-  test('hides alternate contact fields when not selected', () => {
-    const altContactProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'mobile_1_add',
-        rwb_label_name: 'Mobile No. 1'
-      }
-    };
-
-    const altContactStore = mockStore({
-      ...store.getState(),
-      stages: {
-        stages: [{
-          stageId: 'bd-3',
-          stageInfo: {
-            applicants: {
-              mobile_1_add_a_1: '91234567'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_1_add_a_1: '91234567',
-            select_alt_contacts_a_1: 'MO2' // MO1 not included
-          }
-        }
-      }
-    });
-
-    render(
-      <Provider store={altContactStore}>
-        <Phone {...altContactProps} />
-      </Provider>
-    );
-
-    expect(screen.queryByPlaceholderText('Mobile No. 1')).not.toBeInTheDocument();
-  });
 });
+export const taxAction = tax.actions;
+export default tax;
+
+Please write test cases using jest with RTL
