@@ -1,90 +1,355 @@
-import { createSlice } from "@reduxjs/toolkit";
-import {taxStoreModel} from '../model/common-model'
-const initialState: taxStoreModel = {
-        maxCount: 5,
-        count: 0,
+import tax, { taxAction } from '../path/to/your/tax-slice'; // Update the import path
+
+describe('Tax Slice', () => {
+  const initialState = {
+    maxCount: 5,
+    count: 0,
+    fields: []
+  };
+
+  describe('Initial State', () => {
+    test('should return the initial state', () => {
+      expect(tax.reducer(undefined, { type: undefined })).toEqual(initialState);
+    });
+  });
+
+  describe('addTaxFiled', () => {
+    test('should add a tax field to the fields array', () => {
+      const action = taxAction.addTaxFiled('tax_country_1');
+      const result = tax.reducer(initialState, action);
+      
+      expect(result.fields).toEqual(['tax_country_1']);
+      expect(result.fields).toHaveLength(1);
+    });
+
+    test('should add multiple tax fields', () => {
+      const state = { ...initialState, fields: ['tax_country_1'] };
+      const action = taxAction.addTaxFiled('tax_country_2');
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['tax_country_1', 'tax_country_2']);
+      expect(result.fields).toHaveLength(2);
+    });
+  });
+
+  describe('updateCount', () => {
+    test('should update the count value', () => {
+      const action = taxAction.updateCount(3);
+      const result = tax.reducer(initialState, action);
+      
+      expect(result.count).toBe(3);
+    });
+
+    test('should update count from existing value', () => {
+      const state = { ...initialState, count: 2 };
+      const action = taxAction.updateCount(5);
+      const result = tax.reducer(state, action);
+      
+      expect(result.count).toBe(5);
+    });
+  });
+
+  describe('removeTaxField', () => {
+    test('should remove a tax field and decrement count', () => {
+      const state = {
+        ...initialState,
+        count: 2,
+        fields: ['tax_country_1', 'tax_country_2']
+      };
+      const action = taxAction.removeTaxField('tax_country_1');
+      const result = tax.reducer(state, action);
+      
+      expect(result.count).toBe(1);
+      expect(result.fields).toEqual(['tax_country_2']);
+    });
+
+    test('should not remove field or decrement count for "no_of_tax_residency_country"', () => {
+      const state = {
+        ...initialState,
+        count: 2,
+        fields: ['no_of_tax_residency_country', 'tax_country_1']
+      };
+      const action = taxAction.removeTaxField('no_of_tax_residency_country');
+      const result = tax.reducer(state, action);
+      
+      expect(result.count).toBe(2);
+      expect(result.fields).toEqual(['no_of_tax_residency_country', 'tax_country_1']);
+    });
+
+    test('should handle removing non-existent field', () => {
+      const state = {
+        ...initialState,
+        count: 1,
+        fields: ['tax_country_1']
+      };
+      const action = taxAction.removeTaxField('non_existent_field');
+      const result = tax.reducer(state, action);
+      
+      expect(result.count).toBe(0);
+      expect(result.fields).toEqual(['tax_country_1']);
+    });
+
+    test('should handle empty fields array', () => {
+      const state = {
+        ...initialState,
+        count: 1,
         fields: []
-};
+      };
+      const action = taxAction.removeTaxField('some_field');
+      const result = tax.reducer(state, action);
+      
+      expect(result.count).toBe(0);
+      expect(result.fields).toEqual([]);
+    });
+  });
 
-const tax = createSlice({
-        name: "tax",
-        initialState,
-        reducers: {
-                addTaxFiled(state, action) {
-                        state.fields.push(action.payload);
-                },
-                updateCount(state, action) {
-                        state.count = action.payload;
-                },
-                removeTaxField(state, action) {
-                       // if (state.count >= 0) {
-                        /*istanbul ignore else*/
-                           if(action.payload!=="no_of_tax_residency_country"){
-                                state.count = --state.count;
-                                let findIndex = state.fields.findIndex(
-                                        (field: string) => field === action.payload
-                                );
-                                state.fields.splice(findIndex,1);
-                           }
-                       // }
-                        
-                },
-                updateTax(state, action) {
-                        const updatedFields = [...state.fields]; 
-                        const [field, value] = Object.entries(action.payload)[0];
-                      
-                        const normalizedField = field.replace(/_a_\d+$/, '');
-                      
-                        const index = updatedFields.findIndex(
-                          (item) => item.replace(/_a_\d+$/, '') === normalizedField
-                        );
-                       const taxField = `tax_id_no_${field.split("_")[4]}`;
-                       const reasonField = `crs_reason_code_${field.split("_")[4]}`;
-                //        if(field.startsWith('crs_comments')){
-                //         const crsCommentsField = `crs_comments_${field.split("_")[2]}`;
-                //         const existCrsComments = updatedFields.includes(crsCommentsField);         
-                //         if (!existCrsComments) {
-                //                 updatedFields.splice(index + 1, 0, `tax_id_no_${field.split("_")[4]}`, `crs_reason_code_${field.split("_")[4]}`, `crs_comments_${field.split("_")[4]}`);
-                //         }  
-                //        }
-                       const taxAlone = updatedFields.includes(taxField)
-                       const alreadyExists = updatedFields.includes(taxField) && updatedFields.includes(reasonField);
-                      /*istanbul ignore else*/
-                        if (value && index !== -1 &&!alreadyExists &&!taxAlone) {
-                          updatedFields.splice(index + 1, 0, `tax_id_no_${field.split("_")[4]}`, `crs_reason_code_${field.split("_")[4]}`);
-                        }
-                      
-                        state.fields = updatedFields; // Update state fields
-                      },
-                      updateCrsComments(state,action){
-                        const updatedFields = [...state.fields];
-                        const [field, value] = Object.entries(action.payload)[0];
-                        const normalizedField = field.replace(/_a_\d+$/, '');
-                        const index = updatedFields.findIndex(
-                                (item) => item.replace(/_a_\d+$/, '') === normalizedField
-                              );
-                              const crsCmnts =`crs_comments_${field.split("_")[3]}`;
-                              const crsExist = updatedFields.includes(crsCmnts)
-                              /*istanbul ignore else*/
-                            if(value &&index!==-1 && !crsExist){
-                                updatedFields.splice(index +1,0,`crs_comments_${field.split("_")[3]}`)
-                              }  
-                              state.fields = updatedFields;
-                      },
-                      removeReasonField(state, action) {
-                        const updatedFields = state.fields.filter(
-                          (field) => !action.payload.includes(field)
-                        );
-                        state.fields = updatedFields;
-                      },
-                resetTaxField(state, action) {
-                        state.maxCount = 4;
-                        state.count = 0;
-                        state.fields = action.payload;
-                }
-        }
+  describe('updateTax', () => {
+    test('should add tax_id_no and crs_reason_code fields when conditions are met', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_a_1']
+      };
+      const action = taxAction.updateTax({ 'tax_country_a_1': 'US' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual([
+        'tax_country_a_1',
+        'tax_id_no_1',
+        'crs_reason_code_1'
+      ]);
+    });
+
+    test('should not add duplicate tax_id_no and crs_reason_code fields', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_a_1', 'tax_id_no_1', 'crs_reason_code_1']
+      };
+      const action = taxAction.updateTax({ 'tax_country_a_1': 'US' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual([
+        'tax_country_a_1',
+        'tax_id_no_1',
+        'crs_reason_code_1'
+      ]);
+    });
+
+    test('should not add fields if tax_id_no already exists alone', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_a_1', 'tax_id_no_1']
+      };
+      const action = taxAction.updateTax({ 'tax_country_a_1': 'US' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['tax_country_a_1', 'tax_id_no_1']);
+    });
+
+    test('should not add fields if value is empty', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_a_1']
+      };
+      const action = taxAction.updateTax({ 'tax_country_a_1': '' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['tax_country_a_1']);
+    });
+
+    test('should handle field not found in array', () => {
+      const state = {
+        ...initialState,
+        fields: ['other_field']
+      };
+      const action = taxAction.updateTax({ 'tax_country_a_1': 'US' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['other_field']);
+    });
+
+    test('should handle normalized field matching', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_a_2']
+      };
+      const action = taxAction.updateTax({ 'tax_country_a_2': 'Canada' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual([
+        'tax_country_a_2',
+        'tax_id_no_2',
+        'crs_reason_code_2'
+      ]);
+    });
+  });
+
+  describe('updateCrsComments', () => {
+    test('should add crs_comments field when conditions are met', () => {
+      const state = {
+        ...initialState,
+        fields: ['crs_reason_code_1']
+      };
+      const action = taxAction.updateCrsComments({ 'crs_reason_code_1': 'some_reason' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['crs_reason_code_1', 'crs_comments_1']);
+    });
+
+    test('should not add duplicate crs_comments field', () => {
+      const state = {
+        ...initialState,
+        fields: ['crs_reason_code_1', 'crs_comments_1']
+      };
+      const action = taxAction.updateCrsComments({ 'crs_reason_code_1': 'some_reason' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['crs_reason_code_1', 'crs_comments_1']);
+    });
+
+    test('should not add crs_comments if value is empty', () => {
+      const state = {
+        ...initialState,
+        fields: ['crs_reason_code_1']
+      };
+      const action = taxAction.updateCrsComments({ 'crs_reason_code_1': '' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['crs_reason_code_1']);
+    });
+
+    test('should handle field not found in array', () => {
+      const state = {
+        ...initialState,
+        fields: ['other_field']
+      };
+      const action = taxAction.updateCrsComments({ 'crs_reason_code_1': 'some_reason' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['other_field']);
+    });
+
+    test('should handle normalized field matching', () => {
+      const state = {
+        ...initialState,
+        fields: ['crs_reason_code_a_2']
+      };
+      const action = taxAction.updateCrsComments({ 'crs_reason_code_a_2': 'reason' });
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['crs_reason_code_a_2', 'crs_comments_2']);
+    });
+  });
+
+  describe('removeReasonField', () => {
+    test('should remove multiple fields from the array', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_1', 'tax_id_no_1', 'crs_reason_code_1', 'crs_comments_1']
+      };
+      const fieldsToRemove = ['tax_id_no_1', 'crs_reason_code_1'];
+      const action = taxAction.removeReasonField(fieldsToRemove);
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['tax_country_1', 'crs_comments_1']);
+    });
+
+    test('should handle removing non-existent fields', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_1', 'tax_id_no_1']
+      };
+      const fieldsToRemove = ['non_existent_field', 'another_non_existent'];
+      const action = taxAction.removeReasonField(fieldsToRemove);
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['tax_country_1', 'tax_id_no_1']);
+    });
+
+    test('should handle empty array of fields to remove', () => {
+      const state = {
+        ...initialState,
+        fields: ['tax_country_1', 'tax_id_no_1']
+      };
+      const fieldsToRemove = [];
+      const action = taxAction.removeReasonField(fieldsToRemove);
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual(['tax_country_1', 'tax_id_no_1']);
+    });
+
+    test('should remove all fields if all are in the removal array', () => {
+      const state = {
+        ...initialState,
+        fields: ['field1', 'field2', 'field3']
+      };
+      const fieldsToRemove = ['field1', 'field2', 'field3'];
+      const action = taxAction.removeReasonField(fieldsToRemove);
+      const result = tax.reducer(state, action);
+      
+      expect(result.fields).toEqual([]);
+    });
+  });
+
+  describe('resetTaxField', () => {
+    test('should reset maxCount to 4, count to 0, and update fields', () => {
+      const state = {
+        maxCount: 5,
+        count: 3,
+        fields: ['old_field_1', 'old_field_2']
+      };
+      const newFields = ['new_field_1', 'new_field_2'];
+      const action = taxAction.resetTaxField(newFields);
+      const result = tax.reducer(state, action);
+      
+      expect(result.maxCount).toBe(4);
+      expect(result.count).toBe(0);
+      expect(result.fields).toEqual(newFields);
+    });
+
+    test('should handle empty fields array in reset', () => {
+      const state = {
+        maxCount: 5,
+        count: 2,
+        fields: ['existing_field']
+      };
+      const action = taxAction.resetTaxField([]);
+      const result = tax.reducer(state, action);
+      
+      expect(result.maxCount).toBe(4);
+      expect(result.count).toBe(0);
+      expect(result.fields).toEqual([]);
+    });
+  });
+
+  describe('Edge Cases', () => {
+    test('should handle state immutability', () => {
+      const originalState = { ...initialState, fields: ['test_field'] };
+      const action = taxAction.addTaxFiled('new_field');
+      const result = tax.reducer(originalState, action);
+      
+      expect(originalState.fields).toEqual(['test_field']);
+      expect(result.fields).toEqual(['test_field', 'new_field']);
+      expect(result).not.toBe(originalState);
+    });
+
+    test('should handle complex field operations', () => {
+      let state = { ...initialState };
+      
+      // Add initial field
+      state = tax.reducer(state, taxAction.addTaxFiled('tax_country_a_1'));
+      expect(state.fields).toEqual(['tax_country_a_1']);
+      
+      // Update tax to add related fields
+      state = tax.reducer(state, taxAction.updateTax({ 'tax_country_a_1': 'US' }));
+      expect(state.fields).toEqual(['tax_country_a_1', 'tax_id_no_1', 'crs_reason_code_1']);
+      
+      // Add CRS comments
+      state = tax.reducer(state, taxAction.updateCrsComments({ 'crs_reason_code_1': 'reason' }));
+      expect(state.fields).toEqual(['tax_country_a_1', 'tax_id_no_1', 'crs_reason_code_1', 'crs_comments_1']);
+      
+      // Remove some fields
+      state = tax.reducer(state, taxAction.removeReasonField(['tax_id_no_1', 'crs_reason_code_1']));
+      expect(state.fields).toEqual(['tax_country_a_1', 'crs_comments_1']);
+    });
+  });
 });
-export const taxAction = tax.actions;
-export default tax;
-
-Please write test cases using jest with RTL
