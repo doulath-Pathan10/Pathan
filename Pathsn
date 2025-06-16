@@ -1,401 +1,122 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import Footer from './Footer';
-
-const mockStore = configureStore([]);
-
-describe('Footer Component', () => {
-  let store;
-  const mockBackHandler = jest.fn();
-  const defaultProps = {
-    backHandler: mockBackHandler,
-    validateNxt: 'form-valid',
-    otherMyinfo: false,
-    uploadJourney: false,
-    journeyType: 'standard'
-  };
-
-  beforeEach(() => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_1',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }],
-            applicants: {
-              application_sourcing_a_1: '0'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('renders without crashing', () => {
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    expect(screen.getByRole('button', { name: /Continue/i })).toBeInTheDocument();
-  });
-
-  it('shows back button when not on SSF_1 or BD_1 stages', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_2',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }]
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
+import { getUrl } from '../../utils/common/change.utils';
+import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import rulesUtils from './rules.utils';
+ 
+const Rules_bd_3 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+    const validationObj: ValidationObjModel = {
+        nonEditable: [],
+        hidden: [],
+        modifyVisibility:[]
+    };
+    let nonEditableFields: Array<string> = [];
+    let hiddenFields: Array<string> = [];
+    let defaultVisiblity:any= [];
+    let filteredFields:any = [];
+    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Employment Details"));
+    const filteredOfficeAddressDetails = props[0].filter((fields:any)=> fields.field_set_name === "Office Address (Optional)");
+    /*istanbul ignore else*/
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "Office Address (Optional)", fields: filteredOfficeAddressDetails[0].fields});
+    }
+    const filteredExistingContactDetails = props[0].filter((fields:any)=> fields.field_set_name === "Existing Contact Details");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "Existing Contact Details", fields: filteredExistingContactDetails[0].fields});
+      defaultVisiblity.push("existing_personal_email_co1", "existing_office_email_em1", "existing_office_email_em2", "existing_mobile_mo1", "existing_mobile_mo2", 
+      "existing_overseas_mobile_mf1", "existing_overseas_mobile_mf2", "existing_office_telephone_ot1", "existing_office_telephone_ot2",
+      "existing_residential_telephone_rt2", "existing_overseas_office_telno_of1", "existing_overseas_office_telno_of2", "existing_overseas_residential_telno_rf1",
+      "existing_overseas_residential_telno_rf2");
+    }
+    const filteredAdditionalContactDetails = props[0].filter((fields:any)=> fields.field_set_name === "Additional Contact Details");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "Additional Contact Details", fields: filteredAdditionalContactDetails[0].fields});
+      defaultVisiblity.push("per_email_2", "office_email_1", "office_email_2", "mobile_1", "mobile_2", "overseas_mobile1_contact_no", 
+      "overseas_mobile2_contact_no", "office_phone1_number", "office_phone2_number", "ohph1_number", "ohph2_number", "ofc1_number", "ofc2_number",
+      "home_phone2_number");
+    }
+    const filteredPreferedContactForEachClasification = props[0].filter((fields:any)=> fields.field_set_name === "Prefered Contact For Each Clasification");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "Prefered Contact For Each Clasification", fields: filteredPreferedContactForEachClasification[0].fields});
+    }
+    const filteredSelectPrimaryContactunderMobilePhone = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Mobile Phone");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "Select Primary Contact under Mobile Phone", fields: filteredSelectPrimaryContactunderMobilePhone[0].fields});
+    }
+    const filteredSelectPrimaryContactunderemail = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under email");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "Select Primary Contact under email", fields: filteredSelectPrimaryContactunderemail[0].fields});
+    }
+    if(filteredFields[0].length > 0 && getUrl.getJourneyType()==="NTC" && stageInfo.products[0].product_category === 'CA'
+     /*istanbul ignore else */ 
+    // && (stageInfo.products[0].product_type === "317" || stageInfo.products[0].product_type === "314")
+    ){
+      const filteredSelectPrimaryContactunderResidentialTelephoneNo = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Residential Telephone No.");
+      filteredFields[0].push({field_set_name: "Select Primary Contact under Residential Telephone No.", fields: filteredSelectPrimaryContactunderResidentialTelephoneNo[0].fields});
+      const filteredSelectPrimaryContactContactunderOfficeNo = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Office No.");
+      filteredFields[0].push({field_set_name: "Select Primary Contact under Office No.", fields: filteredSelectPrimaryContactContactunderOfficeNo[0].fields});
+    }
     
-    expect(screen.getByText(/Back/i)).toBeInTheDocument();
-  });
-
-  it('does not show back button on SSF_1 stage', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_1',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }]
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
+    const filteredForInternalUse = props[0].filter((fields:any)=> fields.field_set_name === "For Internal Use");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0){
+      filteredFields[0].push({field_set_name: "For Internal Use", fields: filteredForInternalUse[0].fields});
+      defaultVisiblity.push("sourcing_id_2", "sales_id_2", "referral_id_2", "closing_id_2");
+    }
+    const filteredOriginalSighted = props[0].filter((fields:any)=> fields.field_set_name === "Original Sighted");
+     /*istanbul ignore else */
+    if(filteredFields[0].length > 0 && filteredOriginalSighted.length>0){
+      filteredFields[0].push({field_set_name: "Original Sighted", fields: filteredOriginalSighted[0].fields});
+    }
+    /*istanbul ignore else */
+    if((stageInfo.products[0].product_category === "CC" || stageInfo.products[0].product_category === "PL")){
+        /*istanbul ignore else */
+        if(stageInfo.application.journey_type ||getUrl.getJourneyType()  === 'NTC'){
+            /*istanbul ignore else */
+            // if(!stageInfo.applicants["year_of_assessment_fff_1_a_1"]){
+            //     hiddenFields.push("year_of_assessment_fff_1");
+            // }
+            // /*istanbul ignore else */
+            // if(!stageInfo.applicants["annual_income_fff_1_a_1"]){
+            //     hiddenFields.push("annual_income_fff_1");
+            // }
+             defaultVisiblity.push("year_of_assessment_fff_1","year_of_assessment_fff_2","annual_income_fff_1","annual_income_fff_2")
+            // validationObj.modifyVisibility!.push(defaultVisiblity)
+            nonEditableFields.push("annual_income_fff_1","year_of_assessment_fff_1","residential_address");
+       }
+    }
+     /*istanbul ignore else */
+    // if (getUrl.getJourneyType() === "ETC") {
+    //     hiddenFields.push("work_type","name_of_employer","name_of_employer_other","name_of_business","job_title","embossed_name","residential_address","office_phone_number");
+    // }
+    /*istanbul ignore else */
+    if (getUrl.getJourneyType() === "ECC") {
+        const filteredCreditCardDetails = props[0].filter((fields:any)=> fields.field_set_name === 'Credit Card Details');
+        filteredFields[0].unshift({field_set_name: 'Credit Card Details', fields: filteredCreditCardDetails[0].fields});
+    }
+    else{
+        if(stageInfo.products[0].product_category  === "SA"){
+           hiddenFields.push("credit_limit_consent","myinfo_data_cli", "ofc_postal_other_code", "ofc_city", "ofc_state", "signature_crop_from_existing_ac", "existing_account_ccy", "existing_account_no");
+        }
+        /*istanbul ignore else */
+        if(stageInfo.products[0].product_category  === "PL" || stageInfo.products[0].product_category === "CC"){
+            // if(stageInfo.application.journey_type !== 'NTC'){
+            //     hiddenFields.push("annual_income_fff_1","year_of_assessment_fff_1","ownership_status","residential_address");
+            // }
+            defaultVisiblity.push("year_of_assessment_fff_2","annual_income_fff_2")
+            //validationObj.modifyVisibility!.push(defaultVisiblity)
       }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.queryByText(/Back/i)).not.toBeInTheDocument();
-  });
-
-  it('calls backHandler when back button is clicked', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_2',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }]
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    fireEvent.click(screen.getByText(/Back/i));
-    expect(mockBackHandler).toHaveBeenCalled();
-  });
-
-  it('shows "Agree and Submit" text on rp stage', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'rp',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }],
-            applicants: {
-              application_sourcing_a_1: '0'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText(/Agree and Submit/i)).toBeInTheDocument();
-  });
-
-  it('shows spinner when urlEndpoint is acknowledge or preserve', () => {
-    // Mock getUrl.getUrlEndPoint to return 'acknowledge'
-    jest.mock('../../../utils/common/change.utils', () => ({
-      getUrl: {
-        getUrlEndPoint: jest.fn(() => 'acknowledge')
-      }
-    }));
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('button').querySelector('.circle-spinner')).toBeInTheDocument();
-  });
-
-  it('disables button when mobile number is invalid', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_1',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }],
-            applicants: {
-              application_sourcing_a_1: '0'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '1234567',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('button')).toBeDisabled();
-  });
-
-  it('enables button when mobile number is valid', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_1',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }],
-            applicants: {
-              application_sourcing_a_1: '0'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '91234567',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('button')).not.toBeDisabled();
-  });
-
-  it('shows form-invalid class when signature is missing on rp stage', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'rp',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }],
-            applicants: {
-              application_sourcing_a_1: '1'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '91234567',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('button')).toHaveClass('form-invalid');
-  });
-
-  it('shows form-valid class when signature is present on rp stage', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'rp',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }],
-            applicants: {
-              application_sourcing_a_1: '1'
-            }
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '91234567',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: 'signature-data'
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByRole('button')).toHaveClass('form-valid');
-  });
-
-  it('hides back button when on LD_1 stage with product_type 280', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'LD_1',
-          stageInfo: {
-            products: [{
-              product_type: '280',
-              product_category: 'CC'
-            }]
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} />
-      </Provider>
-    );
-    
-    expect(screen.queryByText(/Back/i)).not.toBeInTheDocument();
-  });
-
-  it('shows back button when otherMyinfo is true', () => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'SSF_1',
-          stageInfo: {
-            products: [{
-              product_type: '100',
-              product_category: 'PL'
-            }]
-          }
-        }],
-        userInput: {
-          applicants: {
-            mobile_number_a_1: '',
-            mobile_number_rwb_a_1: '65'
-          }
-        },
-        signatureDocument: ''
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Footer {...defaultProps} otherMyinfo={true} />
-      </Provider>
-    );
-    
-    expect(screen.getByText(/Back/i)).toBeInTheDocument();
-  });
-});
+    }
+    hiddenFields.push("ofc_postal_other_code", "ofc_city", "ofc_state");
+    validationObj.modifyVisibility!.push(defaultVisiblity)
+    validationObj.nonEditable.push(nonEditableFields);
+    validationObj.hidden!.push(hiddenFields);
+    return rulesUtils(filteredFields, validationObj);
+}
+ 
+export default Rules_bd_3;
+ 
+Please write test cases using jest with RTL
