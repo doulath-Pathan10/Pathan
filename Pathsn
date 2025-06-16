@@ -1,122 +1,199 @@
+import Rules_bd_3 from './Rules_bd_3';
 import { getUrl } from '../../utils/common/change.utils';
-import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
-import rulesUtils from './rules.utils';
- 
-const Rules_bd_3 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
-    const validationObj: ValidationObjModel = {
-        nonEditable: [],
-        hidden: [],
-        modifyVisibility:[]
-    };
-    let nonEditableFields: Array<string> = [];
-    let hiddenFields: Array<string> = [];
-    let defaultVisiblity:any= [];
-    let filteredFields:any = [];
-    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Employment Details"));
-    const filteredOfficeAddressDetails = props[0].filter((fields:any)=> fields.field_set_name === "Office Address (Optional)");
-    /*istanbul ignore else*/
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Office Address (Optional)", fields: filteredOfficeAddressDetails[0].fields});
-    }
-    const filteredExistingContactDetails = props[0].filter((fields:any)=> fields.field_set_name === "Existing Contact Details");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Existing Contact Details", fields: filteredExistingContactDetails[0].fields});
-      defaultVisiblity.push("existing_personal_email_co1", "existing_office_email_em1", "existing_office_email_em2", "existing_mobile_mo1", "existing_mobile_mo2", 
-      "existing_overseas_mobile_mf1", "existing_overseas_mobile_mf2", "existing_office_telephone_ot1", "existing_office_telephone_ot2",
-      "existing_residential_telephone_rt2", "existing_overseas_office_telno_of1", "existing_overseas_office_telno_of2", "existing_overseas_residential_telno_rf1",
-      "existing_overseas_residential_telno_rf2");
-    }
-    const filteredAdditionalContactDetails = props[0].filter((fields:any)=> fields.field_set_name === "Additional Contact Details");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Additional Contact Details", fields: filteredAdditionalContactDetails[0].fields});
-      defaultVisiblity.push("per_email_2", "office_email_1", "office_email_2", "mobile_1", "mobile_2", "overseas_mobile1_contact_no", 
-      "overseas_mobile2_contact_no", "office_phone1_number", "office_phone2_number", "ohph1_number", "ohph2_number", "ofc1_number", "ofc2_number",
-      "home_phone2_number");
-    }
-    const filteredPreferedContactForEachClasification = props[0].filter((fields:any)=> fields.field_set_name === "Prefered Contact For Each Clasification");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Prefered Contact For Each Clasification", fields: filteredPreferedContactForEachClasification[0].fields});
-    }
-    const filteredSelectPrimaryContactunderMobilePhone = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Mobile Phone");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Select Primary Contact under Mobile Phone", fields: filteredSelectPrimaryContactunderMobilePhone[0].fields});
-    }
-    const filteredSelectPrimaryContactunderemail = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under email");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Select Primary Contact under email", fields: filteredSelectPrimaryContactunderemail[0].fields});
-    }
-    if(filteredFields[0].length > 0 && getUrl.getJourneyType()==="NTC" && stageInfo.products[0].product_category === 'CA'
-     /*istanbul ignore else */ 
-    // && (stageInfo.products[0].product_type === "317" || stageInfo.products[0].product_type === "314")
-    ){
-      const filteredSelectPrimaryContactunderResidentialTelephoneNo = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Residential Telephone No.");
-      filteredFields[0].push({field_set_name: "Select Primary Contact under Residential Telephone No.", fields: filteredSelectPrimaryContactunderResidentialTelephoneNo[0].fields});
-      const filteredSelectPrimaryContactContactunderOfficeNo = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Office No.");
-      filteredFields[0].push({field_set_name: "Select Primary Contact under Office No.", fields: filteredSelectPrimaryContactContactunderOfficeNo[0].fields});
-    }
-    
-    const filteredForInternalUse = props[0].filter((fields:any)=> fields.field_set_name === "For Internal Use");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "For Internal Use", fields: filteredForInternalUse[0].fields});
-      defaultVisiblity.push("sourcing_id_2", "sales_id_2", "referral_id_2", "closing_id_2");
-    }
-    const filteredOriginalSighted = props[0].filter((fields:any)=> fields.field_set_name === "Original Sighted");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0 && filteredOriginalSighted.length>0){
-      filteredFields[0].push({field_set_name: "Original Sighted", fields: filteredOriginalSighted[0].fields});
-    }
-    /*istanbul ignore else */
-    if((stageInfo.products[0].product_category === "CC" || stageInfo.products[0].product_category === "PL")){
-        /*istanbul ignore else */
-        if(stageInfo.application.journey_type ||getUrl.getJourneyType()  === 'NTC'){
-            /*istanbul ignore else */
-            // if(!stageInfo.applicants["year_of_assessment_fff_1_a_1"]){
-            //     hiddenFields.push("year_of_assessment_fff_1");
-            // }
-            // /*istanbul ignore else */
-            // if(!stageInfo.applicants["annual_income_fff_1_a_1"]){
-            //     hiddenFields.push("annual_income_fff_1");
-            // }
-             defaultVisiblity.push("year_of_assessment_fff_1","year_of_assessment_fff_2","annual_income_fff_1","annual_income_fff_2")
-            // validationObj.modifyVisibility!.push(defaultVisiblity)
-            nonEditableFields.push("annual_income_fff_1","year_of_assessment_fff_1","residential_address");
-       }
-    }
-     /*istanbul ignore else */
-    // if (getUrl.getJourneyType() === "ETC") {
-    //     hiddenFields.push("work_type","name_of_employer","name_of_employer_other","name_of_business","job_title","embossed_name","residential_address","office_phone_number");
-    // }
-    /*istanbul ignore else */
-    if (getUrl.getJourneyType() === "ECC") {
-        const filteredCreditCardDetails = props[0].filter((fields:any)=> fields.field_set_name === 'Credit Card Details');
-        filteredFields[0].unshift({field_set_name: 'Credit Card Details', fields: filteredCreditCardDetails[0].fields});
-    }
-    else{
-        if(stageInfo.products[0].product_category  === "SA"){
-           hiddenFields.push("credit_limit_consent","myinfo_data_cli", "ofc_postal_other_code", "ofc_city", "ofc_state", "signature_crop_from_existing_ac", "existing_account_ccy", "existing_account_no");
-        }
-        /*istanbul ignore else */
-        if(stageInfo.products[0].product_category  === "PL" || stageInfo.products[0].product_category === "CC"){
-            // if(stageInfo.application.journey_type !== 'NTC'){
-            //     hiddenFields.push("annual_income_fff_1","year_of_assessment_fff_1","ownership_status","residential_address");
-            // }
-            defaultVisiblity.push("year_of_assessment_fff_2","annual_income_fff_2")
-            //validationObj.modifyVisibility!.push(defaultVisiblity)
+
+// Mock the getUrl module
+jest.mock('../../utils/common/change.utils', () => ({
+  getUrl: {
+    getJourneyType: jest.fn(),
+  },
+}));
+
+describe('Rules_bd_3 Utility Function', () => {
+  const mockProps = [
+    [
+      {
+        field_set_name: "Employment Details",
+        fields: ["work_type", "name_of_employer", "job_title"]
+      },
+      {
+        field_set_name: "Office Address (Optional)",
+        fields: ["ofc_postal_other_code", "ofc_city", "ofc_state"]
+      },
+      {
+        field_set_name: "Existing Contact Details",
+        fields: ["existing_personal_email_co1", "existing_mobile_mo1"]
+      },
+      {
+        field_set_name: "Additional Contact Details",
+        fields: ["per_email_2", "mobile_1"]
+      },
+      {
+        field_set_name: "Prefered Contact For Each Clasification",
+        fields: ["preferred_contact"]
+      },
+      {
+        field_set_name: "Select Primary Contact under Mobile Phone",
+        fields: ["primary_mobile"]
+      },
+      {
+        field_set_name: "Select Primary Contact under email",
+        fields: ["primary_email"]
+      },
+      {
+        field_set_name: "Select Primary Contact under Residential Telephone No.",
+        fields: ["primary_residential"]
+      },
+      {
+        field_set_name: "Select Primary Contact under Office No.",
+        fields: ["primary_office"]
+      },
+      {
+        field_set_name: "For Internal Use",
+        fields: ["sourcing_id_2", "sales_id_2"]
+      },
+      {
+        field_set_name: "Original Sighted",
+        fields: ["original_sighted"]
+      },
+      {
+        field_set_name: "Credit Card Details",
+        fields: ["credit_limit_consent", "myinfo_data_cli"]
       }
-    }
-    hiddenFields.push("ofc_postal_other_code", "ofc_city", "ofc_state");
-    validationObj.modifyVisibility!.push(defaultVisiblity)
-    validationObj.nonEditable.push(nonEditableFields);
-    validationObj.hidden!.push(hiddenFields);
-    return rulesUtils(filteredFields, validationObj);
-}
- 
-export default Rules_bd_3;
- 
-Please write test cases using jest with RTL
+    ]
+  ];
+
+  const mockStageInfo = {
+    products: [{
+      product_category: 'CA',
+      product_type: '317'
+    }],
+    application: {
+      journey_type: 'NTC'
+    },
+    applicants: {}
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should return filtered fields and validation object for NTC journey type', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    
+    const result = Rules_bd_3(mockProps, mockStageInfo);
+    
+    // Check filtered fields structure
+    expect(Array.isArray(result.filteredFields)).toBe(true);
+    expect(result.filteredFields[0]).toHaveLength(11); // All field sets should be included
+    
+    // Check validation object
+    expect(result.validationObj).toEqual({
+      nonEditable: expect.arrayContaining([expect.any(Array)]),
+      hidden: expect.arrayContaining([expect.any(Array)]),
+      modifyVisibility: expect.arrayContaining([expect.any(Array)])
+    });
+    
+    // Check specific hidden fields
+    expect(result.validationObj.hidden[0]).toContain('ofc_postal_other_code');
+    expect(result.validationObj.hidden[0]).toContain('ofc_city');
+    expect(result.validationObj.hidden[0]).toContain('ofc_state');
+  });
+
+  it('should handle ECC journey type differently', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('ECC');
+    const eccStageInfo = {
+      ...mockStageInfo,
+      products: [{
+        product_category: 'CC',
+        product_type: '123'
+      }]
+    };
+    
+    const result = Rules_bd_3(mockProps, eccStageInfo);
+    
+    // Credit Card Details should be first in the array
+    expect(result.filteredFields[0][0].field_set_name).toBe('Credit Card Details');
+  });
+
+  it('should handle SA product category', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    const saStageInfo = {
+      ...mockStageInfo,
+      products: [{
+        product_category: 'SA',
+        product_type: '456'
+      }]
+    };
+    
+    const result = Rules_bd_3(mockProps, saStageInfo);
+    
+    expect(result.validationObj.hidden[0]).toContain('credit_limit_consent');
+    expect(result.validationObj.hidden[0]).toContain('myinfo_data_cli');
+  });
+
+  it('should handle PL product category', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    const plStageInfo = {
+      ...mockStageInfo,
+      products: [{
+        product_category: 'PL',
+        product_type: '789'
+      }]
+    };
+    
+    const result = Rules_bd_3(mockProps, plStageInfo);
+    
+    expect(result.validationObj.nonEditable[0]).toContain('annual_income_fff_1');
+    expect(result.validationObj.nonEditable[0]).toContain('year_of_assessment_fff_1');
+    expect(result.validationObj.modifyVisibility[0]).toContain('year_of_assessment_fff_2');
+    expect(result.validationObj.modifyVisibility[0]).toContain('annual_income_fff_2');
+  });
+
+  it('should include residential telephone fields for CA product with NTC journey', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    
+    const result = Rules_bd_3(mockProps, mockStageInfo);
+    
+    const fieldSets = result.filteredFields[0].map((fs: any) => fs.field_set_name);
+    expect(fieldSets).toContain('Select Primary Contact under Residential Telephone No.');
+    expect(fieldSets).toContain('Select Primary Contact under Office No.');
+  });
+
+  it('should not include residential telephone fields for non-CA products', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    const nonCaStageInfo = {
+      ...mockStageInfo,
+      products: [{
+        product_category: 'CC',
+        product_type: '123'
+      }]
+    };
+    
+    const result = Rules_bd_3(mockProps, nonCaStageInfo);
+    
+    const fieldSets = result.filteredFields[0].map((fs: any) => fs.field_set_name);
+    expect(fieldSets).not.toContain('Select Primary Contact under Residential Telephone No.');
+    expect(fieldSets).not.toContain('Select Primary Contact under Office No.');
+  });
+
+  it('should handle empty input props', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    
+    const emptyProps = [[]];
+    const result = Rules_bd_3(emptyProps, mockStageInfo);
+    
+    expect(result.filteredFields[0]).toHaveLength(0);
+    expect(result.validationObj.nonEditable[0]).toHaveLength(0);
+    expect(result.validationObj.hidden[0]).toContain('ofc_postal_other_code'); // Still gets added from default logic
+  });
+
+  it('should include default visibility fields', () => {
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
+    
+    const result = Rules_bd_3(mockProps, mockStageInfo);
+    
+    expect(result.validationObj.modifyVisibility[0]).toContain('existing_personal_email_co1');
+    expect(result.validationObj.modifyVisibility[0]).toContain('per_email_2');
+    expect(result.validationObj.modifyVisibility[0]).toContain('sourcing_id_2');
+  });
+});
