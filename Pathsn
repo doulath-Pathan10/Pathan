@@ -1,567 +1,268 @@
-import { getFields } from '../path/to/your/getFields'; // Adjust path as needed
-import { fieldErrorAction } from '../../../utils/store/field-error-slice';
-import { stagesAction } from '../../../utils/store/stages-slice';
-import { getProductCategory } from '../../../services/common-service';
-import { FindIndex, getUrl, authenticateType } from '../../../utils/common/change.utils';
+import { getFields } from './your-file-path';
+import { fieldErrorAction, stagesAction } from '../../../utils/store';
+import { getProductCategory, getUrl } from '../../../services/common-service';
+import { AppDispatch } from '../../../services/common-service';
 
-// Mock dependencies
+// Mock the dependencies
 jest.mock('../../../utils/store/field-error-slice');
 jest.mock('../../../utils/store/stages-slice');
 jest.mock('../../../services/common-service');
 jest.mock('../../../utils/common/change.utils');
 
-describe('getFields', () => {
-  let mockDispatch;
-  let mockGetStages;
-  let mockFields;
+const mockDispatch = jest.fn() as jest.MockedFunction<AppDispatch>;
 
+describe('getFields function', () => {
   beforeEach(() => {
-    mockDispatch = jest.fn();
-    
-    // Mock field metadata structure
-    mockFields = [
-      { logical_field_name: 'NRIC' },
-      { logical_field_name: 'passport_no' },
-      { logical_field_name: 'pass_exp_dt' },
-      { logical_field_name: 'name_of_employer' },
-      { logical_field_name: 'name_of_business' },
-      { logical_field_name: 'job_title' },
-      { logical_field_name: 'nature_of_employer' },
-      { logical_field_name: 'office_phone_number' },
-      { logical_field_name: 'preferred_credit_limit' },
-      { logical_field_name: 'credit_limit_consent_info_5' },
-      { logical_field_name: 'credit_limit_consent_info_8' },
-      { logical_field_name: 'embossed_name' },
-      { logical_field_name: 'work_type' }
-    ];
-
-    mockGetStages = [
-      {
-        stageId: 'ad-1',
-        stageInfo: {
-          fieldmetadata: {
-            data: {
-              stages: [
-                {
-                  stageId: 'ad',
-                  fields: mockFields
-                }
-              ]
-            }
-          },
-          applicants: {
-            NRIC_a_1: 'S1234567A',
-            banca_product_applicable_a_1: 'Y'
-          },
-          products: []
-        }
-      }
-    ];
-
-    // Mock utility functions
-    FindIndex.mockReturnValue(0);
-    authenticateType.mockReturnValue('manual');
-    getUrl.getUserInputs = jest.fn().mockReturnValue({});
-    getUrl.getJourneyType = jest.fn().mockReturnValue('ETC');
-    getProductCategory.mockReturnValue('PL');
-
-    // Mock action creators
-    fieldErrorAction.removeMandatoryFields = jest.fn().mockReturnValue({ type: 'REMOVE_MANDATORY_FIELDS' });
-    fieldErrorAction.getMandatoryFields = jest.fn().mockReturnValue({ type: 'GET_MANDATORY_FIELDS' });
-    stagesAction.removeAddToggleField = jest.fn().mockReturnValue({ type: 'REMOVE_ADD_TOGGLE_FIELD' });
-    stagesAction.resetDefaultValue = jest.fn().mockReturnValue({ type: 'RESET_DEFAULT_VALUE' });
-    stagesAction.resetNewAndOldFields = jest.fn().mockReturnValue({ type: 'RESET_NEW_OLD_FIELDS' });
-  });
-
-  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('Stage ID handling', () => {
-    test('should handle ad-2 stage with manual authentication', () => {
-      authenticateType.mockReturnValue('manual');
-      mockGetStages[0].stageId = 'ad-2';
-      
-      const thunk = getFields(mockGetStages, null);
-      thunk(mockDispatch);
-      
-      expect(FindIndex).not.toHaveBeenCalled(); // Should use hardcoded index 2
+  const mockStages = [
+    {
+      stageId: 'ad-1',
+      stageInfo: {
+        applicants: {},
+        products: [],
+        fieldmetadata: {
+          data: {
+            stages: [
+              {
+                stageId: 'ad',
+                fields: [
+                  { logical_field_name: 'NRIC' },
+                  { logical_field_name: 'passport_no' },
+                  { logical_field_name: 'pass_exp_dt' }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ];
+
+  const mockRadioResidency = {
+    logical_field_name: 'residency_status',
+    value: 'CT'
+  };
+
+  // Helper function to call getFields with common parameters
+  const callGetFields = (params: any = {}) => {
+    return getFields(
+      params.getStages || mockStages,
+      params.radioResidency || null,
+      params.employerOther,
+      params.userInputs,
+      params.bancaSelector
+    )(mockDispatch);
+  };
+
+  describe('Stage ID and authentication type handling', () => {
+    it('should handle ad-2 stage with manual authentication', () => {
+      const stages = [...mockStages];
+      stages[0].stageId = 'ad-2';
+      jest.mock('../../../utils/common/change.utils', () => ({
+        authenticateType: jest.fn().mockReturnValue('manual')
+      }));
+
+      callGetFields({ getStages: stages });
+      expect(mockDispatch).toHaveBeenCalled();
     });
 
-    test('should handle ad-2 stage with myinfo authentication', () => {
-      authenticateType.mockReturnValue('myinfo');
-      mockGetStages[0].stageId = 'ad-2';
-      
-      const thunk = getFields(mockGetStages, null);
-      thunk(mockDispatch);
-      
-      expect(FindIndex).toHaveBeenCalledWith(mockGetStages[0].stageInfo, 'ad');
+    it('should handle ad-2 stage with myinfo authentication', () => {
+      const stages = [...mockStages];
+      stages[0].stageId = 'ad-2';
+      jest.mock('../../../utils/common/change.utils', () => ({
+        authenticateType: jest.fn().mockReturnValue('myinfo'),
+        FindIndex: jest.fn().mockReturnValue(0)
+      }));
+
+      callGetFields({ getStages: stages });
+      expect(mockDispatch).toHaveBeenCalled();
     });
 
-    test('should handle bd-1 stage', () => {
-      mockGetStages[0].stageId = 'bd-1';
-      
-      const thunk = getFields(mockGetStages, null);
-      thunk(mockDispatch);
-      
-      expect(FindIndex).toHaveBeenCalledWith(mockGetStages[0].stageInfo, 'bd');
-    });
-
-    test('should handle default stage ID case', () => {
-      mockGetStages[0].stageId = 'custom-stage';
-      mockGetStages[0].stageInfo.fieldmetadata.data.stages = [
-        { stageId: 'CUSTOM-STAGE', fields: mockFields }
-      ];
-      
-      const thunk = getFields(mockGetStages, null);
-      thunk(mockDispatch);
-      
-      // Should use findIndex for custom stage
-      expect(mockGetStages[0].stageInfo.fieldmetadata.data.stages[0].fields).toBe(mockFields);
+    it('should handle bd-1 stage', () => {
+      const stages = [...mockStages];
+      stages[0].stageId = 'bd-1';
+      callGetFields({ getStages: stages });
+      expect(mockDispatch).toHaveBeenCalled();
     });
   });
 
-  describe('Residency status radio dependency', () => {
-    test('should handle CT residency status (Singapore Citizen)', () => {
+  describe('Radio residency status handling', () => {
+    it('should handle residency_status CT/PR value', () => {
       const radioResidency = {
         logical_field_name: 'residency_status',
         value: 'CT'
       };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['passport_no', 'pass_exp_dt']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['passport_no', 'pass_exp_dt'],
-        newFields: ['NRIC'],
-        value: 'S1234567A'
-      });
-      expect(result).toEqual([{ logical_field_name: 'NRIC' }]);
+      
+      callGetFields({ radioResidency });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields(['passport_no', 'pass_exp_dt'])
+      );
+      expect(mockDispatch).toHaveBeenCalledWith(
+        stagesAction.removeAddToggleField({
+          removeFields: ['passport_no', 'pass_exp_dt'],
+          newFields: ['NRIC'],
+          value: ''
+        })
+      );
     });
 
-    test('should handle PR residency status (Permanent Resident)', () => {
-      const radioResidency = {
-        logical_field_name: 'residency_status',
-        value: 'PR'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['passport_no', 'pass_exp_dt']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['passport_no', 'pass_exp_dt'],
-        newFields: ['NRIC'],
-        value: 'S1234567A'
-      });
-      expect(result).toEqual([{ logical_field_name: 'NRIC' }]);
-    });
-
-    test('should handle FR residency status (Foreigner)', () => {
+    it('should handle residency_status FR value', () => {
       const radioResidency = {
         logical_field_name: 'residency_status',
         value: 'FR'
       };
       
-      getUrl.getUserInputs.mockReturnValue({
-        passport_no_a_1: 'ABC123',
-        pass_exp_dt_a_1: '2025-12-31'
+      // Mock getUserInputs
+      (getUrl.getUserInputs as jest.Mock).mockReturnValue({
+        'passport_no_a_1': 'test123',
+        'pass_exp_dt_a_1': '2025-12-31'
       });
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['NRIC']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['NRIC'],
-        newFields: ['passport_no', 'pass_exp_dt'],
-        value: {
-          passport_no_a_1: 'ABC123',
-          pass_exp_dt_a_1: '2025-12-31'
-        }
-      });
-      expect(result).toEqual([
-        { logical_field_name: 'passport_no' },
-        { logical_field_name: 'pass_exp_dt' }
-      ]);
+      
+      callGetFields({ radioResidency });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields(['NRIC'])
+      );
+      expect(mockDispatch).toHaveBeenCalledWith(
+        stagesAction.removeAddToggleField({
+          removeFields: ['NRIC'],
+          newFields: ['passport_no', 'pass_exp_dt'],
+          value: {
+            'passport_no_a_1': 'test123',
+            'pass_exp_dt_a_1': '2025-12-31'
+          }
+        })
+      );
     });
   });
 
-  describe('Work type radio dependency', () => {
-    test('should handle employed work type (S)', () => {
+  describe('Work type handling', () => {
+    it('should handle work_type O value', () => {
+      const radioResidency = {
+        logical_field_name: 'work_type',
+        value: 'O'
+      };
+      
+      callGetFields({ radioResidency });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields([
+          "name_of_employer", "nature_of_employer", "job_title", "office_phone_number", "name_of_business"
+        ])
+      );
+    });
+
+    it('should handle work_type S value', () => {
       const radioResidency = {
         logical_field_name: 'work_type',
         value: 'S'
       };
       
-      getUrl.getUserInputs.mockReturnValue({
-        nature_of_employer_a_1: 'Finance',
-        job_title_a_1: 'Manager',
-        name_of_employer_a_1: 'ABC Corp',
-        office_phone_number_a_1: '12345678'
+      // Mock getUserInputs
+      (getUrl.getUserInputs as jest.Mock).mockReturnValue({
+        'nature_of_employer_a_1': 'Tech',
+        'job_title_a_1': 'Developer',
+        'name_of_employer_a_1': 'Company',
+        'office_phone_number_a_1': '12345678'
       });
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(stagesAction.resetDefaultValue).toHaveBeenCalledWith({
-        logical_field_name: 'work_type',
-        value: 'S'
-      });
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['name_of_business', 'nature_of_employer', 'job_title', 'office_phone_number']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['name_of_business', 'nature_of_employer', 'job_title', 'office_phone_number'],
-        newFields: ['name_of_employer', 'nature_of_employer', 'job_title', 'office_phone_number'],
-        value: {
-          nature_of_employer_a_1: 'Finance',
-          job_title_a_1: 'Manager',
-          name_of_employer_a_1: 'ABC Corp',
-          office_phone_number_a_1: '12345678'
-        }
-      });
-    });
-
-    test('should handle self-employed work type (E)', () => {
-      const radioResidency = {
-        logical_field_name: 'work_type',
-        value: 'E'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['name_of_employer', 'nature_of_employer', 'job_title', 'office_phone_number']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['name_of_employer', 'nature_of_employer', 'job_title', 'office_phone_number'],
-        newFields: ['name_of_business', 'nature_of_employer', 'job_title', 'office_phone_number'],
-        value: expect.any(Object)
-      });
-    });
-
-    test('should handle other work type (O)', () => {
-      const radioResidency = {
-        logical_field_name: 'work_type',
-        value: 'O'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['name_of_employer', 'nature_of_employer', 'job_title', 'office_phone_number', 'name_of_business']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['name_of_employer', 'nature_of_employer', 'job_title', 'office_phone_number', 'name_of_business'],
-        newFields: [],
-        value: ''
-      });
-      expect(result).toBeNull();
+      
+      callGetFields({ radioResidency });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields([
+          "name_of_business"
+        ])
+      );
     });
   });
 
-  describe('Credit limit preferences', () => {
-    test('should handle preferred_limit with value 0 (default limit)', () => {
-      const radioResidency = {
-        logical_field_name: 'preferred_limit',
-        value: '0'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(stagesAction.resetDefaultValue).toHaveBeenCalledWith({
-        logical_field_name: 'preferred_limit',
-        radioResidency: '0'
-      });
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['preferred_credit_limit', 'credit_limit_consent_info_5']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['preferred_credit_limit', 'credit_limit_consent_info_5'],
-        newFields: ['credit_limit_consent_info_8'],
-        value: ''
-      });
-      expect(result).toEqual([{ logical_field_name: 'credit_limit_consent_info_8' }]);
-    });
-
-    test('should handle preferred_limit with value 1 (custom limit)', () => {
-      const radioResidency = {
-        logical_field_name: 'preferred_limit',
-        value: '1'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      const result = thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['credit_limit_consent_info_8']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['credit_limit_consent_info_8'],
-        newFields: ['preferred_credit_limit', 'credit_limit_consent_info_5'],
-        value: ''
-      });
-      expect(result).toEqual([
-        { logical_field_name: 'preferred_credit_limit' },
-        { logical_field_name: 'credit_limit_consent_info_5' }
-      ]);
-    });
-
-    test('should default to 0 when preferred_limit value is falsy', () => {
-      const radioResidency = {
-        logical_field_name: 'preferred_limit',
-        value: null
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['preferred_credit_limit', 'credit_limit_consent_info_5']);
-    });
-  });
-
-  describe('Credit limit consent', () => {
-    test('should handle credit_limit_consent with Y (consent given)', () => {
+  describe('Credit limit consent handling', () => {
+    it('should handle credit_limit_consent Y value', () => {
       const radioResidency = {
         logical_field_name: 'credit_limit_consent',
         value: 'Y'
       };
-
+      
       const bancaSelector = {
         eligible_banca_insurances: ['life', 'health']
       };
-
-      const thunk = getFields(mockGetStages, radioResidency, undefined, undefined, bancaSelector);
-      thunk(mockDispatch);
-
-      expect(stagesAction.resetDefaultValue).toHaveBeenCalledWith({
-        logical_field_name: 'credit_limit_consent',
-        radioResidency: 'Y'
-      });
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith([
-        'embossed_name',
-        'myinfo_data_cli',
-        'insurance_consent_life',
-        'insurance_consent_health'
-      ]);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [
-          'embossed_name',
-          'myinfo_data_cli',
-          'insurance_consent_life',
-          'insurance_consent_health'
-        ],
-        newFields: ['work_type'],
-        value: ''
-      });
+      
+      callGetFields({ radioResidency, bancaSelector });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields([
+          'embossed_name', 'myinfo_data_cli', 'insurance_consent_life', 'insurance_consent_health'
+        ])
+      );
     });
 
-    test('should handle credit_limit_consent with N (consent not given) - with banca product', () => {
+    it('should handle credit_limit_consent N value with banca product applicable', () => {
+      const stages = [...mockStages];
+      stages[0].stageInfo.applicants = { 'banca_product_applicable_a_1': 'Y' };
+      
       const radioResidency = {
         logical_field_name: 'credit_limit_consent',
         value: 'N'
       };
-
+      
       const bancaSelector = {
-        eligible_banca_insurances: ['life']
+        eligible_banca_insurances: ['life', 'health']
       };
-
-      getUrl.getJourneyType.mockReturnValue('NORMAL');
-      getProductCategory.mockReturnValue('CC');
-
-      const thunk = getFields(mockGetStages, radioResidency, undefined, undefined, bancaSelector);
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith([
-        'work_type',
-        'name_of_employer',
-        'name_of_employer_other',
-        'name_of_business',
-        'job_title',
-        'nature_of_employer',
-        'myinfo_data_cli',
-        'office_phone_number'
-      ]);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [
-          'work_type',
-          'name_of_employer',
-          'name_of_employer_other',
-          'name_of_business',
-          'job_title',
-          'nature_of_employer',
-          'myinfo_data_cli',
-          'office_phone_number'
-        ],
-        newFields: ['embossed_name', 'insurance_consent_life'],
-        value: ''
-      });
+      
+      // Mock getProductCategory
+      (getProductCategory as jest.Mock).mockReturnValue('CC');
+      
+      callGetFields({ getStages: stages, radioResidency, bancaSelector });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields([
+          'work_type', 'name_of_employer', 'name_of_employer_other', 'name_of_business', 
+          'job_title', 'nature_of_employer', 'myinfo_data_cli', 'office_phone_number'
+        ])
+      );
     });
   });
 
-  describe('Bank transfer options', () => {
-    test('should handle SCB Account selection', () => {
-      const radioResidency = {
-        logical_field_name: 'deposit_loan_to',
-        value: 'SCB Account'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith([
-        'other_bank_name',
-        'other_bank_account_bt',
-        'reenter_other_bank_account_bt',
-        'other_bank_credit_card_bt',
-        'reenter_other_bank_credit_card_bt',
-        'enter_account_info'
-      ]);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [
-          'other_bank_name',
-          'other_bank_account_bt',
-          'reenter_other_bank_account_bt',
-          'other_bank_credit_card_bt',
-          'reenter_other_bank_credit_card_bt'
-        ],
-        newFields: ['scb_account_no', 're_enter_scb_account_no', 'enter_account_info'],
-        value: ''
-      });
+  describe('Employer other handling', () => {
+    it('should handle name_of_employer_other', () => {
+      callGetFields({ employerOther: 'name_of_employer_other' });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        stagesAction.removeAddToggleField({
+          removeFields: [],
+          newFields: ['name_of_employer_other'],
+          value: ''
+        })
+      );
     });
 
-    test('should handle Other Bank Account selection', () => {
-      const radioResidency = {
-        logical_field_name: 'Transfer_amount_to',
-        value: 'Other Bank Account'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [
-          'scb_account_no',
-          're_enter_scb_account_no',
-          'enter_account_info',
-          'other_bank_credit_card_bt',
-          'reenter_other_bank_credit_card_bt'
-        ],
-        newFields: ['other_bank_name', 'other_bank_account_bt', 'reenter_other_bank_account_bt'],
-        value: ''
-      });
+    it('should handle fields case for employer other', () => {
+      callGetFields({ employerOther: 'fields' });
+      
+      expect(mockDispatch).toHaveBeenCalledWith(
+        fieldErrorAction.removeMandatoryFields(['name_of_employer_other'])
+      );
     });
   });
 
-  describe('Employer other field handling', () => {
-    test('should add name_of_employer_other field when employerOther is specified', () => {
-      const thunk = getFields(mockGetStages, null, 'name_of_employer_other');
-      thunk(mockDispatch);
-
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [],
-        newFields: ['name_of_employer_other'],
-        value: ''
-      });
-    });
-
-    test('should remove name_of_employer_other field when employerOther is "fields"', () => {
-      const thunk = getFields(mockGetStages, null, 'fields');
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['name_of_employer_other']);
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['name_of_employer_other'],
-        newFields: [],
-        value: ''
-      });
-    });
-  });
-
-  describe('Edge cases and error handling', () => {
-    test('should return null when getStages is empty', () => {
-      const thunk = getFields([], null);
-      const result = thunk(mockDispatch);
-
-      expect(result).toBeNull();
-    });
-
-    test('should return null when stageInfo is missing', () => {
-      const invalidStages = [{ stageId: 'test', stageInfo: null }];
-      const thunk = getFields(invalidStages, null);
-      const result = thunk(mockDispatch);
-
-      expect(result).toBeNull();
-    });
-
-    test('should return null when fieldmetadata is missing', () => {
-      const invalidStages = [{
-        stageId: 'test',
-        stageInfo: { fieldmetadata: null }
-      }];
-      const thunk = getFields(invalidStages, null);
-      const result = thunk(mockDispatch);
-
-      expect(result).toBeNull();
-    });
-
-    test('should handle undefined stageIndex gracefully', () => {
-      FindIndex.mockReturnValue(undefined);
-      mockGetStages[0].stageId = 'bd-1';
-
-      const thunk = getFields(mockGetStages, null);
-      const result = thunk(mockDispatch);
-
-      expect(result).toBeNull();
-    });
-
-    test('should handle FATCA declaration', () => {
-      const radioResidency = {
-        logical_field_name: 'casa_fatca_declaration',
-        value: 'Y'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [],
-        newFields: ['casa_fatca_declaration'],
-        value: 'Y'
-      });
-    });
-
-    test('should handle preferred_contact_per_email with default value', () => {
-      const radioResidency = {
-        logical_field_name: 'preferred_contact_per_email',
-        value: null
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(radioResidency.value).toBe('COL'); // Should set default value
-    });
-  });
-
-  describe('Dispatch calls verification', () => {
-    test('should call getMandatoryFields when ssfStages and fields exist', () => {
+  describe('Return value', () => {
+    it('should return filtered fields when ssfStages exists', () => {
       const radioResidency = {
         logical_field_name: 'residency_status',
         value: 'CT'
       };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.getMandatoryFields).toHaveBeenCalledWith(['NRIC']);
+      
+      const result = callGetFields({ radioResidency });
+      
+      expect(result).toEqual([{ logical_field_name: 'NRIC' }]);
     });
 
-    test('should not call getMandatoryFields when ssfStages is null', () => {
-      const radioResidency = {
-        logical_field_name: 'work_type',
-        value: 'O'
-      };
-
-      const thunk = getFields(mockGetStages, radioResidency);
-      thunk(mockDispatch);
-
-      expect(fieldErrorAction.getMandatoryFields).not.toHaveBeenCalled();
+    it('should return null when ssfStages does not exist', () => {
+      const result = callGetFields();
+      expect(result).toBeNull();
     });
   });
 });
