@@ -1,606 +1,1261 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import '@testing-library/jest-dom';
-import Number from './Number';
-import * as changeUtils from '../../../utils/common/change.utils';
-import { postalCodeValidation } from './number.utils';
+import {
+  KeyWithAnyModel,
+  StoreModel,
+  DocumentModel,
+} from "../../../utils/model/common-model";
+import Footer from "../../../modules/dashboard/footer/footer";
+import "./documet-upload.scss";
+import { useEffect, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { documentUploadAction } from "../../../utils/store/document-slice";
+import {
+  documentClientContext,
+  fileuploadSuccess,
+  fileValidation,
+  filterDocuments,
+  getDocumentMetaData,
+  //getDocumentThumnail,
+  setSuccessStatus,
+  validateMandatoryDoc,
+} from "./document-upload.utils";
+import axios, { AxiosError } from "axios";
+import {
+  checkProductDetails,
+  dispatchCtaLoader,
+  dispatchLoader,
+  documentSubmit,
+  lovRequests,
+  channelReference,
+} from "../../../services/common-service";
+import PopupModel from "../popup-model/popup-model";
+import {
+  nextStage,
+  stateUrl,
+} from "../../../modules/dashboard/fields/stage.utils";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import Model from "../model/model";
+import { authenticateType, getUrl } from "../../../utils/common/change.utils";
+import DocumentUploadRadioButton from "./document-upload-radio-button";
+import DocumentFileUpload from "./document-file-upload";
+import { loaderAction } from "../../../utils/store/loader-slice";
+import { urlParamAction } from "../../../utils/store/urlparam-slice";
+import trackEvents from "../../../services/track-events";
+import { ValueUpdateAction } from "../../../utils/store/value-update-slice";
+import { CONSTANTS } from "../../../utils/common/constants";
+import { store } from "../../../utils/store/store";
+// import { StepCountAction } from "../../../utils/store/step-count-slice";
+import { useNavigate } from "react-router-dom";
 
-// Mock the external dependencies
-jest.mock('../../../utils/common/change.utils');
-jest.mock('./number.utils');
-jest.mock('../../../utils/store/store');
-jest.mock('../../../assets/_json/error.json', () => ({
-  emity: 'Please enter',
-  patterns: 'Invalid format for',
-  bankAccountMinLength: 'Minimum length required is',
-  Normalerror: 'Please enter valid',
-  sgBankAccountMismatch: 'Account numbers do not match',
-  sgBankAccountMismatch_RE: 'Re-entered account number does not match',
-  sgCreditCardNoMismatch: 'Credit card numbers do not match',
-  sgCreditCardNoMismatch_RE: 'Re-entered credit card number does not match'
-}));
-
-// Mock reducers
-const mockStagesReducer = (state = {
-  stages: [{
-    stageId: 'bd-1',
-    stageInfo: {
-      application: { channel_reference: 'CH123' },
-      applicants: { test_field_a_1: 'test_value' },
-      products: [{ product_category: 'TD', product_type: '604' }]
-    }
-  }],
-  userInput: {
-    applicants: { test_field_a_1: 'user_input_value' }
-  },
-  updatedStageInputs: [],
-  journeyType: 'ETC'
-}, action) => state;
-
-const mockFieldErrorReducer = (state = { error: [] }, action) => state;
-const mockPostalCodeReducer = (state = {}, action) => state;
-const mockLastAccessedReducer = (state = {}, action) => state;
-
-const createMockStore = (initialState = {}) => configureStore({
-  reducer: {
-    stages: mockStagesReducer,
-    fielderror: mockFieldErrorReducer,
-    postalcode: mockPostalCodeReducer,
-    lastaccessed: mockLastAccessedReducer
-  },
-  preloadedState: initialState
-});
-
-describe('Number Component', () => {
-  let mockStore;
-  let mockProps;
-
-  beforeEach(() => {
-    mockStore = createMockStore();
-    mockProps = {
-      data: {
-        logical_field_name: 'test_field',
-        rwb_label_name: 'Test Field',
-        type: 'text',
-        mandatory: 'Yes',
-        regex: '^[a-zA-Z0-9]+$',
-        min_length: 3,
-        length: 10,
-        editable: false
-      },
-      handleCallback: jest.fn(),
-      handleFieldDispatch: jest.fn()
-    };
-
-    // Mock utility functions
-    changeUtils.authenticateType = jest.fn(() => 'manual');
-    changeUtils.fieldError = jest.fn(() => false);
-    changeUtils.getUrl = {
-      getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] })),
-      getJourneyType: jest.fn(() => 'ETC')
-    };
-    changeUtils.isFieldUpdate = jest.fn();
-    postalCodeValidation.mockResolvedValue({ data: 'postal_data' });
+export const DocumentUpload = (props: any) => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  let [documentResponse, setDcoumentList] = useState<Array<KeyWithAnyModel>>(
+    []
+  );
+  const documentStore = useSelector(
+    (state: StoreModel) => state.documentUploadList
+  );
+  const valueSelector = useSelector((state: StoreModel) => state.valueUpdate);
+  const applicationJourney = useSelector(
+    (state: StoreModel) => state.stages.journeyType
+  );
+  const cancelFileUpload = useRef({});
+  const [progress, setProgress] = useState<KeyWithAnyModel>({
+    progressPercentage: 0,
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  const [documentArrList, setDocumentArrList] = useState<
+    Array<KeyWithAnyModel>
+  >([]);
+  /*const [mandatoryDocumentsList, setMandatoryDocumentsList] = useState<
+    Array<KeyWithAnyModel>
+  >([]);*/
+  const [mandatoryDocumentsList, setMandatoryDocumentsList] = useState<
+    any
+  >([]);
+  const [uploadEnable, setUploadEnable] = useState(false);
+  const [documentError, setDocumentError] = useState<KeyWithAnyModel>({
+    errorType: null,
+    enableError: null,
+  });
+  const [singleDocPreview, setSingleDocPreview] = useState<KeyWithAnyModel>({
+    previewPopUp: false,
+    imageUrl: null,
+    documentType: null,
+  });
+  const documentStructureSelector = useSelector(
+    (state: StoreModel) => state.documentUploadList
+  );
+  const [documentState, setDocumentState] = useState<any>(null);
+  const [tmpDocumentState, setTmpDocumentState] = useState<any>(null);
+
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const [stageId, setStageId] = useState<string>(stageSelector[0].stageId);
+  const applicantsSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput.applicants
+  );
+  let documentStoreCopy = JSON.parse(
+    JSON.stringify(Object.assign([], documentStore.responseDocuments))
+  );
+  let documentList = JSON.parse(
+    JSON.stringify(
+      Object.assign([], stageSelector[0].stageInfo.applicant_documents)
+    )
+  );
+
+  const [refernceDetails, setRefernceDetails] = useState({
+    channelReference: "",
+    applicationReferenceNo: "",
   });
 
-  const renderComponent = (props = mockProps, storeState = {}) => {
-    const store = createMockStore(storeState);
-    return render(
-      <Provider store={store}>
-        <Number {...props} />
-      </Provider>
+  useEffect(() => {
+    //dispatch(fieldErrorAction.getMandatoryFields(null));
+    dispatch(dispatchLoader(false));
+    setRefernceDetails({
+      channelReference: stageSelector[0].stageInfo.application.channel_reference!,
+      applicationReferenceNo: stageSelector[0].stageInfo.application.application_reference!
+    });
+    dispatch(
+      loaderAction.getState({
+        isFetching: false,
+      })
     );
+    /*istanbul ignore else*/
+    if(getUrl.getParameterByName("auth") === "upload" || store.getState().stages.isDocumentUpload){
+      setUploadEnable(true)
+     }
+    setDocumentState(JSON.parse(JSON.stringify(documentStructureSelector)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if (documentState && documentState.responseDocuments) {
+      documentState.responseDocuments = documentResponse;
+      dispatch(
+        documentUploadAction.getDocumentList(
+          JSON.parse(JSON.stringify(documentState))
+        )
+      );
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tmpDocumentState]);
+
+  const documentHeaders = (header: string) => {
+    /*istanbul ignore else */
+    if (header) {
+      return "Upload your " + header.toLocaleLowerCase();
+    }
   };
 
-  describe('Component Rendering', () => {
-    test('renders input field with correct props', () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toBeInTheDocument();
-      expect(input).toHaveAttribute('type', 'text');
-      expect(input).toHaveAttribute('name', 'test_field');
-      expect(input).toHaveAttribute('id', 'test_field_a_1');
-      expect(input).toHaveAttribute('placeholder', 'Test Field');
-    });
-
-    test('renders label with correct text', () => {
-      renderComponent();
-      
-      const label = screen.getByText('Test Field');
-      expect(label).toBeInTheDocument();
-      expect(label).toHaveAttribute('for', 'test_field');
-    });
-
-    test('hides component when hide state is false', () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'td_term_value_days'
-        }
-      };
-      
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'ad-1',
-            stageInfo: {
-              products: [{ product_category: 'TD' }],
-              applicants: {}
-            }
-          }],
-          userInput: {
-            applicants: { td_term_type_a_1: 'D' }
+  useEffect(() => {
+    if(stageId==='doc-2'){
+      const applicationSourcing = stageSelector[0].stageInfo.applicants["application_sourcing_a_1"];
+      if (applicationSourcing === "2" && authenticateType() === "myinfo"|| 
+          (applicationSourcing === "2" && authenticateType() === "manual") || 
+              (applicationSourcing === "1" && authenticateType() === "manual")) {
+            setDocumentArrList(
+              ((applicationSourcing === "2" && authenticateType() === "manual" && documentStore.responseDocuments[0]?.document_list.length <= 3) || 
+              (documentStore.responseDocuments[0]?.document_list.length <= 1))
+                ? filterDocuments(documentList)
+                : documentStoreCopy
+            );
           }
-        }
-      };
-
-      renderComponent(props, storeState);
-      
-      const input = screen.queryByLabelText('test_field');
-      expect(input).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Input Validation', () => {
-    test('shows error when mandatory field is empty', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: '', validity: { valid: false } } });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Please enter Test Field')).toBeInTheDocument();
-      });
-    });
-
-    test('shows error when input does not match regex pattern', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: 'invalid@value', validity: { valid: false } } });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Invalid format for Test Field')).toBeInTheDocument();
-      });
-    });
-
-    test('shows error when input is below minimum length', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: 'ab', validity: { valid: false } } });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Minimum length required is 3 digits')).toBeInTheDocument();
-      });
-    });
-
-    test('clears error when valid input is entered', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      
-      // First enter invalid input
-      fireEvent.change(input, { target: { value: '', validity: { valid: false } } });
-      await waitFor(() => {
-        expect(screen.getByText('Please enter Test Field')).toBeInTheDocument();
-      });
-      
-      // Then enter valid input
-      fireEvent.change(input, { target: { value: 'valid123', validity: { valid: true } } });
-      await waitFor(() => {
-        expect(screen.queryByText('Please enter Test Field')).not.toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Postal Code Validation', () => {
-    test('triggers postal code validation for postal_code_rwb field', async () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'postal_code_rwb'
-        }
-      };
-
-      renderComponent(props);
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
-      
-      await waitFor(() => {
-        expect(postalCodeValidation).toHaveBeenCalledWith(
-          '123456',
-          'CH123',
-          { test_field_a_1: 'test_value' }
+      else{
+        setDocumentArrList(
+          documentStore.responseDocuments[0]?.document_list.length>0
+            ? documentStoreCopy
+            : filterDocuments(documentList)
         );
+      }
+    }else{
+    setDocumentArrList(
+      documentStore.responseDocuments[0]?.document_list.length > 0
+        ? documentStoreCopy
+        : filterDocuments(documentList)
+    );
+  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if(documentList.finalDocument && documentList.finalDocument.finalDocumentList && documentList.finalDocument.finalDocumentList.length > 0){
+      setDocumentState(documentList.finalDocument);
+      dispatch(documentUploadAction.isDocumentUpdate(true));
+      delete documentList.finalDocument;
+    }
+
+    setDcoumentList(documentArrList);
+    if(getUrl.getParameterByName("auth") === "upload")
+    {setMandatoryDocumentsList(getMandatoryFields(documentArrList));}
+    else if (stageId=="doc" && documentArrList && documentArrList.length > 0 && documentArrList[0].isSignatureDoc===true) {
+      setMandatoryDocumentsList({ R0006: 1 })
+    }
+    else if (stageId=="doc-2" && documentArrList && documentArrList.length > 0 && documentArrList[0].isSignatureDoc===false) {
+      setMandatoryDocumentsList({ R0002: 1 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentStore, documentArrList]);
+
+  const getMandatoryFields = (
+    documentResponseData: DocumentModel | any
+  ): any => {
+    let mandatoryFields: KeyWithAnyModel = [];
+    /*istanbul ignore else*/
+    if (documentResponseData && documentResponseData[0]) {
+      documentResponseData[0].document_list.forEach((doc: KeyWithAnyModel) => {
+        /*istanbul ignore else*/
+        if (doc.min_options_req > 0) {
+          mandatoryFields[doc.document_options[0].document_types[0].document_type_code] = doc.min_options_req;
+        }
       });
-    });
+      return mandatoryFields;
+    }
+  };
 
-    test('shows loading spinner during postal code validation', async () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'postal_code_rwb'
-        }
-      };
-
-      renderComponent(props);
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
-      
-      expect(screen.getByText('')).toHaveClass('circle-spinner');
-    });
-  });
-
-  describe('Account Number Validation', () => {
-    test('validates account number matching for scb_account_no', async () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'scb_account_no'
-        }
-      };
-
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'ad-2',
-            stageInfo: {
-              applicants: { re_enter_scb_account_no_a_1: 'different_value' }
+  /** assigning selected document */
+  const setCheckedFlag = (documentCategory: string, documentCode: string) => {
+    documentResponse[0].document_list.forEach((docOption: KeyWithAnyModel) => {
+      if (docOption.document_category_code === documentCategory) {
+        docOption.document_options.forEach((docList: KeyWithAnyModel) => {
+          docList.document_types.forEach((documentSegment: KeyWithAnyModel) => {
+            if (documentSegment.document_type_code === documentCode) {
+              docOption.docCheck = "Y";
+              documentSegment.uploaded_documents = {
+                tempDocStore: {
+                  isSelected: "Y",
+                },
+              };
+              documentSegment.selectDocument = documentSegment.document_type;
+            } 
+            else {
+              if(docOption?.docCheck!=="Y"){
+              documentSegment.uploaded_documents = null;
+              documentSegment.selectDocument = null;
             }
-          }],
-          userInput: {
-            applicants: {}
           }
-        }
-      };
+          });
+        });
+      }
+    });
+    setDcoumentList([...documentResponse]);
+  };
 
-      renderComponent(props, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Account numbers do not match')).toBeInTheDocument();
+  /** setting flag for uploading document*/
+  const uploadDocument = (
+    documentTypes: KeyWithAnyModel,
+    event: React.FormEvent<EventTarget>
+  ): void => {
+    if(!store.getState().stages.isDocumentUpload && getUrl.getParameterByName("auth") !== "upload"){
+    trackEvents.triggerAdobeEvent("ctaClick", "Upload Document");
+    }
+    if (documentTypes.docCheck === "Y") {
+      documentResponse[0].document_list.forEach(
+        (docOption: KeyWithAnyModel) => {
+          docOption.document_options.forEach((docList: KeyWithAnyModel) => {
+            docList.document_types.forEach((documentSegment: KeyWithAnyModel) => {
+              if (documentSegment.document_type_code === documentTypes.document_options[0].document_types[0].document_type_code) {
+                docOption.isSlectedForUpload = "Y";
+                
+              } 
+            });
+          });
+        }
+      );
+      setDcoumentList([...documentResponse]);
+    } else {
+      setDocumentError({
+        errorType: "selectDocument",
+        enableError: true,
       });
+    }
+    event.preventDefault();
+  };
+
+  /** File uplod -- main method */
+  const changeHandler = async (
+    uploadingDocument: KeyWithAnyModel,
+    documentTypes: KeyWithAnyModel,
+    event: any,
+    indexOfUpload: number
+  ) => {
+    const documentArr = fileValidation(event.target.files, uploadingDocument);
+    if (documentArr.enableError) {
+      setDocumentError(documentArr);
+    } else {
+      await fileUpload(
+        uploadingDocument,
+        event.target.files[0],
+        documentTypes,
+        indexOfUpload
+      )
+        .then((response: any) => {
+          dispatch(documentUploadAction.isDocumentUpdate(true));
+        })
+        .catch((error: AxiosError) => {
+          console.log("catch error--", error);
+        });
+    }
+  };
+
+  /** Single file upload -- child method */
+  const fileUpload = async (
+    uploadingDocument: KeyWithAnyModel,
+    file: any,
+    documentTypes: KeyWithAnyModel,
+    indexOfUpload: number
+  ) => {
+    let selectedDocument: KeyWithAnyModel = [];
+    const url = `applications/${refernceDetails.channelReference}${process.env.REACT_APP_DOCUMENT_UPLOAD}`;
+    selectedDocument = documentTypes.document_options.filter(
+      (doc: KeyWithAnyModel) =>
+        !!doc.document_types[0].uploaded_documents &&
+        doc.document_types[0].uploaded_documents.length >= 0
+    );
+    const getMetaData = getDocumentMetaData(selectedDocument, documentTypes);
+    let scClientContextHeaders = documentClientContext(
+      refernceDetails.channelReference!
+    );
+    let header : any = {}
+    header["SC-CLIENT-CONTEXT"] = JSON.stringify(scClientContextHeaders)
+    /*istanbul ignore else*/
+    if (process.env.REACT_APP_ENVIRONMENT === "uat") {
+      header["Env"] = process.env.REACT_APP_ENVIRONMENT;
+    };
+    selectedDocument[0].document_types[0].documentStatus = "UPLOADING";
+    let data = new FormData();
+    data.append("file", file);
+    data.append("documentJson", JSON.stringify(getMetaData));
+
+    const options = {
+      onUploadProgress: (progressEvent: any) => {
+        setProgressPercentage(documentTypes, progressEvent, uploadingDocument);
+      },
+      cancelToken: new axios.CancelToken(
+        (cancel) => (cancelFileUpload.current = cancel)
+      ),
+    };
+    uploadingDocument.document_name = file.name;
+    uploadingDocument.documentStatus = "UPLOADING";
+    const docaxios = axios.create({
+      headers: header,
+      baseURL: process.env.REACT_APP_RTOB_BASE_URL,
     });
 
-    test('validates account number matching for re_enter_scb_account_no', async () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 're_enter_scb_account_no'
+    await docaxios
+      .post(url, data, options)
+      .then(async (response) => {
+        /*istanbul ignore else*/
+        if (response) {
+          /** setting flag for uploaded document */
+          await dispatch(
+            setSuccessStatus(
+              documentResponse,
+              documentTypes,
+              selectedDocument,
+              response.data,
+              indexOfUpload
+            )
+          ).then(async () => {
+            await dispatch(
+              fileuploadSuccess(
+                selectedDocument[0].document_types,
+                response.data
+              )
+            ).then((successFileResponse: any) => {
+              /** adding the response to an array, to send in acknwoledge document */
+              setDocumentState((prev: any) => {
+                prev.finalDocumentList.push(successFileResponse);
+                /*istanbul ignore else*/
+                if (
+                  prev.optionList.docOption.indexOf(
+                    selectedDocument[0].document_types[0].document_type_code
+                  ) === -1
+                ) {
+                  prev.optionList.docOption.push(
+                    selectedDocument[0].document_types[0].document_type_code
+                  );
+                  prev.optionList.optionsSelected.options.push({
+                    documentCategoryCode: documentTypes.document_category_code,
+                    documentOptionSequence: 1,
+                    documentTypeCode:
+                      selectedDocument[0].document_types[0].document_type_code,
+                  });
+                }
+                return prev;
+              });
+            });
+          });
+          setTmpDocumentState((tmpData: any) => ({
+            ...tmpData,
+            documentState,
+          }));
+          setDcoumentList([...documentResponse]);
+          return Promise.resolve();
         }
-      };
-
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'ad-2',
-            stageInfo: {
-              applicants: { scb_account_no_a_1: 'different_value' }
-            }
-          }],
-          userInput: {
-            applicants: {}
-          }
-        }
-      };
-
-      renderComponent(props, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
-      
-      await waitFor(() => {
-        expect(screen.getByText('Re-entered account number does not match')).toBeInTheDocument();
+      })
+      .catch((err: AxiosError) => {
+        uploadingDocument.documentStatus = "REJECTED";
+        setDcoumentList([...documentResponse]);
       });
-    });
-  });
+  };
 
-  describe('Event Handlers', () => {
-    test('calls handleCallback when input changes', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: 'test123', validity: { valid: true } } });
-      
-      await waitFor(() => {
-        expect(mockProps.handleCallback).toHaveBeenCalledWith(
-          mockProps.data,
-          'test123'
-        );
-      });
-    });
+  /** setting progressBar */
+  const setProgressPercentage = (
+    documentTypes: any,
+    progressEvent: any,
+    uploadingDocument: any
+  ) => {
+    const { loaded, total } = progressEvent;
+    const percent = Math.floor((loaded * 100) / total);
+    setProgress((prevUser: any) => ({
+      ...prevUser,
+      [documentTypes.document_category_code]: { progressPercentage: percent },
+    }));
+    uploadingDocument.progress = percent;
+  };
 
-    test('calls handleFieldDispatch when field value updates', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: 'test123', validity: { valid: true } } });
-      
-      await waitFor(() => {
-        expect(mockProps.handleFieldDispatch).toHaveBeenCalledWith(
-          'test_field',
-          'test123'
-        );
-      });
-    });
-
-    test('handles onBlur event correctly', async () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.change(input, { target: { value: 'test123', validity: { valid: true } } });
-      fireEvent.blur(input, { target: { value: 'test123', validity: { valid: true } } });
-      
-      await waitFor(() => {
-        expect(mockProps.handleCallback).toHaveBeenCalledWith(
-          mockProps.data,
-          'test123'
-        );
-      });
-    });
-
-    test('handles onFocus event correctly', () => {
-      renderComponent();
-      
-      const input = screen.getByLabelText('test_field');
-      fireEvent.focus(input);
-      
-      // Verify that lastAction.getField is dispatched (would need to spy on dispatch)
-      expect(input).toHaveFocus();
-    });
-  });
-
-  describe('Conditional Field Behavior', () => {
-    test('shows existing_account_no field when conditions are met', () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'existing_account_no'
+  const cancelUpload = () => {
+    /*istanbul ignore else*/
+    if (cancelFileUpload.current) {
+      cancelFileUpload.current = "User Cancelled!!!";
+    }
+  };
+  /** fileDelete */
+  const deleteFile = (
+    uploadedDocuments: KeyWithAnyModel,
+    documentTypes: KeyWithAnyModel,
+    indexofUpload: number,
+    status: string
+  ) => {
+    /*istanbul ignore else*/
+    if (
+      uploadedDocuments.length > 0 &&
+      status !== "REJECTED" &&
+      status !== "FAILED"
+    ) {
+      dispatch(documentUploadAction.isDocumentUpdate(true));
+      let isDocAvailable = false;
+      documentState.finalDocumentList.forEach(
+        (uploadList: KeyWithAnyModel, index: number) => {
+          /*istanbul ignore else*/
+          if (uploadList.docId === uploadedDocuments[indexofUpload].docId) {
+            isDocAvailable = true;
+            documentState.finalDocumentList[index].documentStatus = "Rejected"
+          }
         }
-      };
+      );
+      /*istanbul ignore else*/
+      if(!isDocAvailable){
+        uploadedDocuments[indexofUpload].documentStatus = "Rejected";
+        documentState.finalDocumentList.push(uploadedDocuments[indexofUpload])
+      }
+    }
+/*istanbul ignore else*/
+    if (uploadedDocuments.length > 0) {
+      uploadedDocuments.splice(indexofUpload, 1);
+    }
+/*istanbul ignore else*/
+    if (uploadedDocuments.length === 0) {
+      documentResponse[0].document_list.forEach(
+        (docOption: KeyWithAnyModel) => {
+          if (
+            docOption.document_category_code ===
+            documentTypes.document_category_code
+          ) {
+            docOption.docCheck = "N";
+            docOption.isSlectedForUpload = "N";
+          }
+        }
+      );
+    }
+    setTmpDocumentState((tmpData: any) => ({
+      ...tmpData,
+      documentState,
+    }));
+    setDcoumentList([...documentResponse]);
+  };
 
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'bd-3',
-            stageInfo: {
-              products: [{ product_category: 'TD', product_type: '604' }],
-              applicants: {}
+  /** Added for clarification - dont remove */
+
+  const addDocument = (
+    documentType: KeyWithAnyModel,
+    docCategory: KeyWithAnyModel,
+    event: any,
+    index: number
+  ) => {
+    documentResponse[0].document_list.forEach((docOption: KeyWithAnyModel) => {
+      /*istanbul ignore else*/
+      if (docOption.document_category_code === docCategory) {
+        docOption.document_options.forEach((docList: KeyWithAnyModel) => {
+          docList.document_types.forEach((documentSegment: KeyWithAnyModel) => {
+            /*istanbul ignore else*/
+            if (
+              documentSegment.document_type_code ===
+              documentType.document_type_code
+            ) {
+              /*istanbul ignore else*/
+              if (
+                documentSegment.uploaded_documents[index].documentStatus &&
+                documentSegment.uploaded_documents[index].documentStatus !==
+                  null
+              ) {
+                documentSegment.uploaded_documents.push({
+                  document_type_code: documentSegment.document_type_code,
+                  documentStatus: null,
+                  selectDocument: documentType.document_type,
+                });
+              }
             }
-          }],
-          userInput: {
-            applicants: {
-              signature_crop_from_existing_ac_a_1: 'Y',
-              application_sourcing_a_1: '2'
+          });
+        });
+      }
+    });
+    setDcoumentList([...documentResponse]);
+    event.preventDefault();
+  };
+
+  const submitDocument = (event: React.FormEvent<EventTarget>): void => {
+    dispatch(
+      validateMandatoryDoc(documentResponse, mandatoryDocumentsList)
+    ).then((response: any) => {
+      if (Object.keys(response).length > 0) {
+        setDocumentError({
+          errorType: "missingMandatoryDocument",
+          enableError: true,
+        });
+      } else {
+        if(stageId=="doc-2"){
+          dispatch(stagesAction.setLastStageId("doc-2"));
+        }else{
+          dispatch(stagesAction.setLastStageId("doc"));
+        }
+        documentAcknowledge(event);
+      }
+    });
+    event.preventDefault();
+  };
+
+  const documentAcknowledge = (event: React.FormEvent<EventTarget>): void => {
+    dispatch(dispatchCtaLoader(true));
+    /*istanbul ignore else*/
+    if ((getUrl.getDocumentStatus())||uploadEnable) {
+      dispatch(urlParamAction.getUrlEndPoit("acknowledge"));
+      documentSubmit(
+        refernceDetails.applicationReferenceNo!,
+        refernceDetails.channelReference!,
+        documentState
+      )
+      .then(async(res: any) => {
+          dispatch(documentUploadAction.isDocumentUpdate(false));
+          documentState.finalDocumentList = [];
+          dispatch(urlParamAction.getUrlEndPoit("success"));
+          if(!store.getState().stages.isDocumentUpload && getUrl.getParameterByName("auth") !== "upload"){
+          trackEvents.triggerAdobeEvent(
+            "ctaClick",
+            "Continue",
+            documentResponse
+          );
+          }
+          dispatch(dispatchCtaLoader(false));
+          documentState.responseDocuments = documentResponse;
+          dispatch(documentUploadAction.getDocumentList(documentState));
+          if (uploadEnable) {
+            
+            navigate("/sg/thankyou");
+          }
+          
+          else{
+            let channelReferenceBasicData = stageSelector[0].stageInfo.application.channel_reference;
+            const fieldUpdate = JSON.parse(JSON.stringify(stageSelector[0].stageInfo));
+            for (let key in applicantsSelector) {
+              fieldUpdate.applicants[key] = applicantsSelector[key];
+            }
+            let stateInfofield = {...fieldUpdate,
+              applicant_documents:documentResponse,
+              stage:{
+              ...fieldUpdate.stage,
+              page_id: "ad-2",
+            }};       
+            channelReference(stateInfofield,channelReferenceBasicData,dispatch).then((response)=>{
+              if(response){
+                let state:any
+                if(stageId==="doc-2"){
+                  dispatch(
+                    stagesAction.getStage({
+                        id: "rp",
+                        formConfig: response.data,
+                  }));
+                   state = nextStage("doc-2", applicationJourney);
+                }else{
+                  dispatch(
+                    stagesAction.getStage({
+                        id: "ad-2",
+                        formConfig: response.data,
+                  }));
+                   state = nextStage("doc", applicationJourney);
+                }
+              stateUrl(state);
+              dispatch(stagesAction.resetCurrentStage(state));
+              dispatch(stagesAction.updateStageId(state));
+              dispatch(stagesAction.updateLastStageInput(stageSelector[0].stageId));
+              // dispatch(StepCountAction.modifyStepCount(state));
+              /*istanbul ignore else*/
+          if(!store.getState().stages.isDocument){
+            dispatch(lovRequests(stageSelector[0].stageInfo, state));
+          }
+/*istanbul ignore else*/
+          if (getUrl.getJourneyType()) {
+            const productsSelector = stageSelector[0].stageInfo.products;
+            let JourneyType;
+            if (getUrl.getJourneyType() === "ETC") {
+              JourneyType = checkProductDetails(productsSelector)
+                ? "ETC_CASA"
+                : "ETC_CC";
+            } else {
+              JourneyType = checkProductDetails(productsSelector)
+                ? "NON_ETC_CASA"
+                : "NON_ETC_CC";
+            }
+            const nextStage = CONSTANTS[JourneyType];
+            const nextStageId = valueSelector.backNavigation.nextStageId;
+            let stageUpdate =
+              nextStageId && nextStage[state].step > nextStage[nextStageId].step
+                ? true
+                : false;
+            if (
+              nextStageId &&
+              stageUpdate === false &&
+              nextStage[nextStageId].path === "document"
+            ) {
+              stageUpdate = true;
+            }
+            dispatch(stagesAction.setIsDocument(true));
+            if (!nextStageId || stageUpdate) {
+              dispatch(ValueUpdateAction.getNextStageId(state));
             }
           }
         }
-      };
-
-      renderComponent(props, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toBeInTheDocument();
-    });
-
-    test('handles ofc_postal_code field visibility based on country selection', () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'ofc_postal_code'
+        })
         }
-      };
-
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'ad-1',
-            stageInfo: {
-              applicants: { ofc_country_a_1: 'SG' }
-            }
-          }],
-          userInput: {
-            applicants: { ofc_country_a_1: 'SG' }
+        })
+        .catch(() => {
+          dispatch(dispatchCtaLoader(false));
+        });
+    } else {
+      dispatch(urlParamAction.getUrlEndPoit("success"));
+      if(!store.getState().stages.isDocumentUpload && getUrl.getParameterByName("auth") !== "upload"){
+      trackEvents.triggerAdobeEvent("ctaClick", "Continue", documentResponse);
+      }
+      let channelReferenceBasicData = stageSelector[0].stageInfo.application.channel_reference;
+      const fieldUpdate = JSON.parse(JSON.stringify(stageSelector[0].stageInfo));
+      for (let key in applicantsSelector) {
+        fieldUpdate.applicants[key] = applicantsSelector[key];
+      }
+      let stateInfofield:any;
+      if(stageSelector[0].stageInfo.products[0].product_category==="CC"
+      &&stageSelector[0].stageInfo.products[1].product_category==="CC"){
+          stateInfofield = {...fieldUpdate,stage:{
+            ...fieldUpdate.stage,
+            page_id: "ad-1",
+          }}; 
+      }else{
+        if(stageId==="doc-2"){
+          stateInfofield = {...fieldUpdate,stage:{
+            ...fieldUpdate.stage,
+            page_id: "rp",
+          }}; 
+        }else{
+          stateInfofield = {...fieldUpdate,stage:{
+            ...fieldUpdate.stage,
+            page_id: "ad-2",
+          }}; 
+        }
+      }
+      channelReference(stateInfofield,channelReferenceBasicData,dispatch).then((response)=>{
+        if(response){
+        dispatch(
+          stagesAction.getStage({
+              id: response.data.stage.page_id,
+              formConfig: response.data,
+         }));
+         dispatch(dispatchCtaLoader(false));
+        let state:any
+        if(stageSelector[0].stageInfo.products[0].product_category==="CC"
+        &&stageSelector[0].stageInfo.products[1].product_category==="CC"){
+          state="ad-1"
+        }else{
+          if(stageId==="doc-2"){
+            state="rp"
+          }else{
+            state="ad-2"
           }
         }
-      };
-
-      renderComponent(props, storeState);
+        stateUrl(state);
+        dispatch(stagesAction.resetCurrentStage(state));
+        dispatch(stagesAction.updateStageId(state));
+        dispatch(stagesAction.updateLastStageInput(stageSelector[0].stageId));
+      // if(stageSelector[0].stageInfo.applicants['casa_fatca_declaration_a_1']) {
+      // dispatch(isFormUpdate(null));
+      // }
+      if(!store.getState().stages.isDocument){
+        dispatch(lovRequests(stageSelector[0].stageInfo, state));
+      }
+      dispatch(stagesAction.setIsDocument(true));
       
-      const input = screen.getByLabelText('test_field');
-      expect(input).toBeInTheDocument();
+    }
+  })
+  }
+    event.preventDefault();
+  };
+  const documentHandleBack = () => {
+    if(!store.getState().stages.isDocumentUpload && getUrl.getParameterByName("auth") !== "upload"){
+    trackEvents.triggerAdobeEvent("ctaClick", "Back");
+    }
+    setDocumentError({
+      errorType: "",
+      enableError: false,
     });
-  });
+  };
 
-  describe('Field Disabling Logic', () => {
-    test('disables input when editable is false', () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          editable: true
-        }
-      };
+  // const getThumbnail = (uploadedDocList: KeyWithAnyModel, type: string) => {
+  //   if (uploadedDocList.docId || (uploadedDocList.document_id && uploadedDocList.document_id.includes("."))) {
+  //     dispatch(
+  //       getDocumentThumnail(uploadedDocList, type, refernceDetails)
+  //     ).then((res: any) => {
+  //       uploadedDocList.imageUrl = res;
+  //       setDcoumentList([...documentResponse]);
+  //       return uploadedDocList;
+  //     });
+  //   } else {
+  //     return "";
+  //   }
+  // };
 
-      renderComponent(props);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toBeDisabled();
+  // const openDocPreview = (uploadingDocument: KeyWithAnyModel) => {
+  //   const documentName = uploadingDocument.document_id ? uploadingDocument.document_id : uploadingDocument.document_name
+  //   const documentType =documentName.split(".").pop();
+  //   setSingleDocPreview({
+  //     previewPopUp: true,
+  //     imageUrl: uploadingDocument.imageUrl,
+  //     documentType: documentType,
+  //   });
+  // };
+
+  const closePreview = () => {
+    setSingleDocPreview({
+      previewPopUp: false,
+      imageUrl: "",
+      documentType: null,
     });
+  };
 
-    test('disables input in bd-1 stage', () => {
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'bd-1',
-            stageInfo: {
-              applicants: {}
-            }
-          }],
-          userInput: {
-            applicants: {}
-          }
-        }
-      };
+  const documentBackHandler = () => {
+    if (store.getState().stages.isDocument) {
+      // if (valueSelector.backNavigation.nextStageId === "doc") {
+      props.backHandler(false);
+    } else {
+      props.backHandler();
+    }
+  };
 
-      renderComponent(mockProps, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toBeDisabled();
-    });
+  // const documentExtension = (uploadingDocument:KeyWithAnyModel) =>{
+  //   let docName = uploadingDocument.document_id ? uploadingDocument.document_id : uploadingDocument.document_name;
+  //   return docName.split(".").pop()
+  // }
+  return (
+    <>
+      <form className="form" onSubmit={submitDocument}>
+        {documentResponse &&
+          documentResponse.map((docList: KeyWithAnyModel, index_i: number) => {
+            return (
+              <div key={index_i}>
+                <div className="document-upload">
+                  {docList.document_list.map(
+                    (documentTypes: KeyWithAnyModel, index_j: number) => {
+                      return (
+                        <>
+                       {((stageId==="doc" && documentTypes.document_options[0]?.document_types[0]?.document_requested_stage==="BD") || (stageId==="doc-2" && documentTypes.document_options[0]?.document_types[0]?.document_requested_stage==="AD")) &&
+                        <div
+                          className="document-upload__doc-type"
+                          key={index_j}
+                        >
+                          <p className="document-upload__doc-type__header">
+                            {documentHeaders(documentTypes.document_category)}
+                          </p>
+                          <div className="document-upload__doc-list">
+                            {documentTypes.document_options.map(
+                              (
+                                docTypeList: KeyWithAnyModel,
+                                docTypeList_key: number
+                              ) => {
+                                return (
+                                  /** Document with radio button List section */
+                                  <div key={`dockList${docTypeList_key}`}>
+                                    {documentTypes.isSlectedForUpload !==
+                                    "Y" ? (
+                                      <DocumentUploadRadioButton
+                                        documentList={docTypeList}
+                                        documentTypes={documentTypes}
+                                        setCheckedFlag={setCheckedFlag}
+                                      />
+                                    ) : (
+                                      <div className="document-upload__file-upload">
+                                        {docTypeList.document_types.map(
+                                          (
+                                            docType: KeyWithAnyModel,
+                                            docType_key: number
+                                          ) => {
+                                            return (
+                                              <div
+                                                key={`docType${docType_key}`}
+                                              >
+                                                {docType.uploaded_documents &&
+                                                  docType.uploaded_documents
+                                                    .length >= 0 &&
+                                                  docType.uploaded_documents.map(
+                                                    (
+                                                      uploadingDocument: KeyWithAnyModel,
+                                                      upload_Index: number
+                                                    ) => {
+                                                      return (
+                                                        <div
+                                                          key={`uploadDoc${upload_Index}`}
+                                                        >
+                                                          {!uploadingDocument.documentStatus && (
+                                                            <div
+                                                              key={`uploadList${upload_Index}`}
+                                                            >
+                                                              {/* Document upload */}
+                                                              <DocumentFileUpload
+                                                                changeHandler={
+                                                                  changeHandler
+                                                                }
+                                                                documentHeaders={
+                                                                  documentHeaders
+                                                                }
+                                                                index={
+                                                                  upload_Index
+                                                                }
+                                                                documentTypes={
+                                                                  documentTypes
+                                                                }
+                                                                docType={
+                                                                  docType
+                                                                }
+                                                                uploadingDocument={
+                                                                  uploadingDocument
+                                                                }
+                                                              />
+                                                              {/* Document upload */}
+                                                            </div>
+                                                          )}
 
-    test('disables postal_code_rwb when using myinfo authentication', () => {
-      changeUtils.authenticateType = jest.fn(() => 'myinfo');
-      
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'postal_code_rwb'
-        }
-      };
+                                                          {/* Document Upload progress */}
 
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'bd-2',
-            stageInfo: {
-              applicants: {}
-            }
-          }],
-          userInput: {
-            applicants: {}
-          }
-        }
-      };
+                                                          {uploadingDocument.documentStatus &&
+                                                            uploadingDocument.documentStatus !==
+                                                              "Accepted" && uploadingDocument.documentStatus !==
+                                                              "Rejected" && (
+                                                              <div
+                                                                key={`uploadStatus${upload_Index}`}
+                                                                className={`document-upload__file-upload__upload-section ${uploadingDocument.documentStatus} `}
+                                                              >
+                                                                <div
+                                                                  className="documentavatar"
+                                                                  id="documentavatar"
+                                                                >
+                                                                  {!(
+                                                                    uploadingDocument.docId ||
+                                                                    uploadingDocument.document_id
+                                                                  ) &&
+                                                                    !uploadingDocument.imageUrl && (
+                                                                      <span></span>
+                                                                    )}
 
-      renderComponent(props, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toBeDisabled();
-    });
-  });
+                                                                  {(uploadingDocument.docId ||
+                                                                    uploadingDocument.document_id) &&
+                                                                    !uploadingDocument.imageUrl && (
+                                                                      <>
+                                                                        <img
+                                                                          alt="loading..."
+                                                                          className="document-upload__file-upload__hide-upload"
+                                                                          // src={getThumbnail(
+                                                                          //   uploadingDocument,
+                                                                          //   "image"
+                                                                          // )}
+                                                                          id={
+                                                                            "preview_" +
+                                                                            documentTypes.document_category +
+                                                                            "_" +
+                                                                            upload_Index
+                                                                          }
+                                                                        />
+                                                                        <label
+                                                                          className="upload-inprogress"
+                                                                          htmlFor={
+                                                                            "preview_" +
+                                                                            documentTypes.document_category +
+                                                                            "_" +
+                                                                            upload_Index
+                                                                          }
+                                                                        ></label>
+                                                                      </>
+                                                                    )}
+                                                                </div>
 
-  describe('Error Handling', () => {
-    test('shows field error when fieldErrorSelector contains field', async () => {
-      changeUtils.fieldError = jest.fn(() => true);
-      
-      const storeState = {
-        fielderror: {
-          error: [{ field: 'test_field', message: 'Field error' }]
-        }
-      };
+                                                                <div className="document-details">
+                                                                  <span className="document-title">
+                                                                    {documentHeaders(
+                                                                      docType.document_type
+                                                                    )}
+                                                                  </span>
+                                                                  <span
+                                                                    style={{
+                                                                      width: `${
+                                                                        progress[
+                                                                          documentTypes
+                                                                            .document_category_code
+                                                                        ]
+                                                                          ? progress[
+                                                                              documentTypes
+                                                                                .document_category_code
+                                                                            ]
+                                                                              .progressPercentage
+                                                                          : uploadingDocument.progress
+                                                                          ? uploadingDocument.progress
+                                                                          : 0
+                                                                      }%`,
+                                                                    }}
+                                                                    className={`document-description--progress-bar__ ${
+                                                                      documentTypes.document_category_code
+                                                                    } ${
+                                                                      uploadingDocument.documentStatus ===
+                                                                      "REJECTED"
+                                                                        ? "document-rejected"
+                                                                        : ""
+                                                                    } `}
+                                                                  ></span>
 
-      renderComponent(mockProps, storeState);
-      
-      await waitFor(() => {
-        expect(screen.getByText('Invalid format for Test Field')).toBeInTheDocument();
-      });
-    });
+                                                                  {(uploadingDocument.documentStatus ===
+                                                                    "UPLOAD" ||
+                                                                    uploadingDocument.documentStatus ===
+                                                                      "UPLOADING") && (
+                                                                    <span
+                                                                      className={`document-description--progress-status`}
+                                                                      onClick={
+                                                                        cancelUpload
+                                                                      }
+                                                                    >
+                                                                      Uploading
+                                                                      in
+                                                                      progress...{" "}
+                                                                      {
+                                                                        uploadingDocument.progress
+                                                                      }
+                                                                      %
+                                                                    </span>
+                                                                  )}
+                                                                  {uploadingDocument.documentStatus ===
+                                                                    "REJECTED" && (
+                                                                    <span
+                                                                      className={`document-description--progress-status`}
+                                                                    >
+                                                                      Upload
+                                                                      failed...
+                                                                    </span>
+                                                                  )}
+                                                                </div>
+                                                                <label className="upload-icon">
+                                                                  {uploadingDocument.documentStatus ===
+                                                                    "REJECTED" && (
+                                                                    <span
+                                                                      className="upload-icon--failure"
+                                                                      onClick={() => {
+                                                                        deleteFile(
+                                                                          docType.uploaded_documents,
+                                                                          documentTypes,
+                                                                          upload_Index,
+                                                                          "FAILED"
+                                                                        );
+                                                                      }}
+                                                                    ></span>
+                                                                  )}
+                                                                  {uploadingDocument.documentStatus ===
+                                                                    "UPLOADING" && (
+                                                                    <span className="upload-icon--progress"></span>
+                                                                  )}
+                                                                </label>
+                                                              </div>
+                                                            )}
 
-    test('clears error when field is not in fieldErrorSelector', async () => {
-      changeUtils.fieldError = jest.fn(() => false);
-      
-      renderComponent();
-      
-      // Should not show any error
-      expect(screen.queryByText(/Invalid format for/)).not.toBeInTheDocument();
-    });
-  });
+                                                          {/* Document Upload progress */}
 
-  describe('Default Value Handling', () => {
-    test('sets default value from userInput', () => {
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'bd-1',
-            stageInfo: {
-              applicants: {}
-            }
-          }],
-          userInput: {
-            applicants: { test_field_a_1: 'default_value' }
-          }
-        }
-      };
+                                                          {/* Document upload success */}
 
-      renderComponent(mockProps, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toHaveValue('default_value');
-    });
+                                                          {uploadingDocument.documentStatus ===
+                                                            "Accepted" && (
+                                                            <>
+                                                              <div
+                                                                className={`document-upload__file-upload__upload-section ${uploadingDocument.documentStatus} `}
+                                                              >
+                                                                <div
+                                                                  className="documentavatar"
+                                                                  id="documentavatar"
+                                                                >
+                                                                  {!(
+                                                                    uploadingDocument.docId ||
+                                                                    uploadingDocument.document_id
+                                                                  ) &&
+                                                                    uploadingDocument &&
+                                                                    !uploadingDocument.imageUrl && (
+                                                                      <>
+                                                                        <img
+                                                                          alt="loading..."
+                                                                          className="document-upload__file-upload__hide-upload"
+                                                                          // src={getThumbnail(
+                                                                          //   uploadingDocument,
+                                                                          //   "image"
+                                                                          // )}
+                                                                          id={
+                                                                            "preview_" +
+                                                                            documentTypes.document_category +
+                                                                            "_" +
+                                                                            upload_Index
+                                                                          }
+                                                                        />
+                                                                        <label
+                                                                          className="upload-inprogress"
+                                                                          htmlFor={
+                                                                            "preview_" +
+                                                                            documentTypes.document_category +
+                                                                            "_" +
+                                                                            upload_Index
+                                                                          }
+                                                                        ></label>
+                                                                      </>
+                                                                    )}
+                                                                  {(uploadingDocument.docId ||
+                                                                    uploadingDocument.document_id) && (
+                                                                    <>
+                                                                      <div
+                                                                        className="documentavatar--pfdPreview"
+                                                                        // onClick={() =>
+                                                                        //   openDocPreview(
+                                                                        //     uploadingDocument
+                                                                        //   )
+                                                                        // }
+                                                                      >
+                                                                        {/* {documentExtension(uploadingDocument) === "pdf" ? (
+                                                                            <Pdf
+                                                                              fileName={
+                                                                                uploadingDocument.imageUrl
+                                                                              }
+                                                                              numPages={
+                                                                                1
+                                                                              }
+                                                                              continueBtn={
+                                                                                false
+                                                                              }
+                                                                            />
+                                                                          ) : (
+                                                                            // <img
+                                                                            //   alt="loading..."
+                                                                            //   src={
+                                                                            //     uploadingDocument.imageUrl
+                                                                            //   }
+                                                                            //   onClick={() =>
+                                                                            //     openDocPreview(
+                                                                            //       uploadingDocument
+                                                                            //     )
+                                                                            //   }
+                                                                            // />
+                                                                          )} */}
+                                                                        <span className="document-completion"></span>
+                                                                      </div>
+                                                                    </>
+                                                                  )}
+                                                                </div>
+                                                                <div className="document-details">
+                                                                  <span className="document-title">
+                                                                    {documentHeaders(
+                                                                      docType.document_type
+                                                                    )}
+                                                                  </span>
+                                                                  <span
+                                                                    className={`document-description--progress-bar__ ${documentTypes.document_category_code}`}
+                                                                  ></span>
+                                                                  <span className="document-description--progress-status">
+                                                                    File is
+                                                                    successfully
+                                                                    uploaded.
+                                                                  </span>
+                                                                </div>
+                                                                <label className="upload-icon">
+                                                                  <span
+                                                                    className="upload-icon--success"
+                                                                    onClick={() => {
+                                                                      deleteFile(
+                                                                        docType.uploaded_documents,
+                                                                        documentTypes,
+                                                                        upload_Index,
+                                                                        "SUCCESS"
+                                                                      );
+                                                                    }}
+                                                                  ></span>
+                                                                </label>
+                                                              </div>
+                                                            </>
+                                                          )}
 
-    test('sets default value from stage info when userInput is empty', () => {
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'bd-1',
-            stageInfo: {
-              applicants: { test_field_a_1: 'stage_value' }
-            }
-          }],
-          userInput: {
-            applicants: {}
-          }
-        }
-      };
+                                                          {/* Document upload success */}
 
-      renderComponent(mockProps, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toHaveValue('stage_value');
-    });
-  });
+                                                          {/* Document add button */}
+                                                          {(uploadingDocument.documentStatus ===
+                                                            "Accepted" ||
+                                                            uploadingDocument.documentStatus ===
+                                                              "UPLOADED") &&
+                                                            docType
+                                                              .uploaded_documents
+                                                              .length -
+                                                              1 ===
+                                                              upload_Index && (
+                                                              <div className="document-upload__doc-type__upload">
+                                                                <button data-testid="upload" id="jestUpload"
+                                                                  className="document-upload__doc-type__upload-btn"
+                                                                  onClick={(
+                                                                    event
+                                                                  ) =>
+                                                                    addDocument(
+                                                                      docType,
+                                                                      documentTypes.document_category_code,
+                                                                      event,
+                                                                      upload_Index
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  Upload
+                                                                </button>
+                                                              </div>
+                                                            )}
+                                                          {/* Document add button */}
+                                                        </div>
+                                                      );
+                                                    }
+                                                  )}
+                                              </div>
+                                            );
+                                          }
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  /** Document with radio button List section */
+                                );
+                              }
+                            )}
+                          </div>
 
-  describe('Alternative Address Handling', () => {
-    test('clears postal code when alternative address is deselected', () => {
-      const props = {
-        ...mockProps,
-        data: {
-          ...mockProps.data,
-          logical_field_name: 'per_postal_code'
-        }
-      };
+                          {/* Document upload section */}
+                          {documentTypes.isSlectedForUpload !== "Y" && (
+                            <div className="document-upload__doc-type__upload">
+                              <button data-testid="upload" id="jestUpload"
+                                className="document-upload__doc-type__upload-btn"
+                                onClick={(e) =>
+                                  uploadDocument(documentTypes, e)
+                                }
+                              >
+                                Upload
+                              </button>
+                            </div>
+                      
+                          )}
+                        </div>
+                      }
+                      </>
+                     );
+                    }
+                   
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
-      const storeState = {
-        stages: {
-          stages: [{
-            stageId: 'bd-2',
-            stageInfo: {
-              applicants: {}
-            }
-          }],
-          userInput: {
-            applicants: {
-              select_alt_addresses_a_1: 'AL1,AL2' // PER not selected
-            }
-          }
-        }
-      };
+        <div className="document-upload__footer-notes">
+          Please ensure that the attached file(s) is of the following
+          specification:
+          <ul>
+            {documentResponse &&
+              documentResponse[0] &&
+              documentResponse[0].isSignatureDoc && (
+                <li>JPG and PNG formats only for Signature Specimen.</li>
+              )}
+            <li>JPG, PNG, TIFF, and PDF formats</li>
+            <li>less than 10 MB.</li>
+            <li>Taken without flash.</li>
+            <li>File is not encrypted with passwords.</li>
+            <li>Your full name is included in all files.</li>
+            <li>File is clear and visible to read.</li>
+          </ul>
+          {documentResponse &&
+            documentResponse[0] &&
+            documentResponse[0].isSignatureDoc && (
+              <p className="signature-doc-notes">
+                <span>*</span>I confirm that the electronic image of my
+                signature provided is correct and it is also the specimen
+                signature that will be used to verify my instruction(s) for this
+                account.
+              </p>
+            )}
+        </div>
+        <div className="app__footer">
+          <Footer
+            otherMyinfo={false}
+            backHandler={documentBackHandler}
+            documentFlag={true}
+            uploadJourney={uploadEnable}
+          />
+        </div>
+      </form>
 
-      renderComponent(props, storeState);
-      
-      const input = screen.getByLabelText('test_field');
-      expect(input).toHaveValue('');
-    });
-  });
-});
+      {/* Error pop up */}
+      {documentError.enableError && (
+        <PopupModel displayPopup={true}>
+          <Model
+            name={documentError.errorType}
+            handlebuttonClick={documentHandleBack}
+            callBackMethod={true}
+          />
+        </PopupModel>
+      )}
+      {/* Error pop up */}
+
+      {/* Preview pop up */}
+      {singleDocPreview.previewPopUp && (
+        <PopupModel displayPopup={true}>
+          <span
+            className="document_preview-pop-up__close-btn"
+            onClick={() => closePreview()}
+          >
+            X
+          </span>
+          <div className="document_preview-pop-up popup">
+            <div
+              id={singleDocPreview.documentType}
+              className="popup-container1"
+            >
+                <img alt="loading..." src={singleDocPreview.imageUrl} />
+            </div>
+          </div>
+        </PopupModel>
+      )}
+      {/* Preview pop up */}
+    </>
+  );
+};
+
+export default DocumentUpload;
+
+Please write test cases using jest with RTL
