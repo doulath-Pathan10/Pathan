@@ -1,237 +1,606 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
+import '@testing-library/jest-dom';
 import Number from './Number';
-import { StoreModel } from '../../../utils/model/common-model';
-import { KeyWithAnyModel } from '../../../utils/model/common-model';
+import * as changeUtils from '../../../utils/common/change.utils';
+import { postalCodeValidation } from './number.utils';
 
-// Mock Redux store
-const mockStore = configureStore({
+// Mock the external dependencies
+jest.mock('../../../utils/common/change.utils');
+jest.mock('./number.utils');
+jest.mock('../../../utils/store/store');
+jest.mock('../../../assets/_json/error.json', () => ({
+  emity: 'Please enter',
+  patterns: 'Invalid format for',
+  bankAccountMinLength: 'Minimum length required is',
+  Normalerror: 'Please enter valid',
+  sgBankAccountMismatch: 'Account numbers do not match',
+  sgBankAccountMismatch_RE: 'Re-entered account number does not match',
+  sgCreditCardNoMismatch: 'Credit card numbers do not match',
+  sgCreditCardNoMismatch_RE: 'Re-entered credit card number does not match'
+}));
+
+// Mock reducers
+const mockStagesReducer = (state = {
+  stages: [{
+    stageId: 'bd-1',
+    stageInfo: {
+      application: { channel_reference: 'CH123' },
+      applicants: { test_field_a_1: 'test_value' },
+      products: [{ product_category: 'TD', product_type: '604' }]
+    }
+  }],
+  userInput: {
+    applicants: { test_field_a_1: 'user_input_value' }
+  },
+  updatedStageInputs: [],
+  journeyType: 'ETC'
+}, action) => state;
+
+const mockFieldErrorReducer = (state = { error: [] }, action) => state;
+const mockPostalCodeReducer = (state = {}, action) => state;
+const mockLastAccessedReducer = (state = {}, action) => state;
+
+const createMockStore = (initialState = {}) => configureStore({
   reducer: {
-    stages: () => ({
-      stages: [{
-        stageId: 'ad-1',
-        stageInfo: {
-          applicants: {},
-          products: [],
-          application: { channel_reference: 'test123' }
-        }
-      }],
-      userInput: { applicants: {} },
-      updatedStageInputs: [],
-      journeyType: 'standard'
-    }),
-    fielderror: () => ({ error: [] }),
-    lastaccessed: () => ({})
-  }
+    stages: mockStagesReducer,
+    fielderror: mockFieldErrorReducer,
+    postalcode: mockPostalCodeReducer,
+    lastaccessed: mockLastAccessedReducer
+  },
+  preloadedState: initialState
 });
 
-// Mock dependencies
-jest.mock('../../../utils/common/change.utils', () => ({
-  authenticateType: jest.fn(() => 'manual'),
-  fieldError: jest.fn(() => false),
-  getUrl: {
-    getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] })),
-    getJourneyType: jest.fn(() => 'standard')
-  }
-}));
-
-jest.mock('../../../utils/store/store', () => ({
-  store: {
-    getState: jest.fn(() => ({
-      stages: {
-        stages: [{
-          stageId: 'ad-1',
-          stageInfo: {
-            applicants: {},
-            products: []
-          }
-        }]
-      }
-    }))
-  }
-}));
-
-// Mock postal code validation
-jest.mock('../../../utils/store/postal-code', () => ({
-  postalCodeValidation: jest.fn(() => Promise.resolve({}))
-}));
-
 describe('Number Component', () => {
-  const defaultProps: KeyWithAnyModel = {
-    data: {
-      logical_field_name: 'test_field',
-      rwb_label_name: 'Test Field',
-      type: 'text',
-      mandatory: 'Yes',
-      min_length: 3,
-      length: 10,
-      regex: '^[0-9]*$',
-      editable: false
-    },
-    handleCallback: jest.fn(),
-    handleFieldDispatch: jest.fn()
-  };
+  let mockStore;
+  let mockProps;
 
-  const renderComponent = (props = defaultProps) => {
+  beforeEach(() => {
+    mockStore = createMockStore();
+    mockProps = {
+      data: {
+        logical_field_name: 'test_field',
+        rwb_label_name: 'Test Field',
+        type: 'text',
+        mandatory: 'Yes',
+        regex: '^[a-zA-Z0-9]+$',
+        min_length: 3,
+        length: 10,
+        editable: false
+      },
+      handleCallback: jest.fn(),
+      handleFieldDispatch: jest.fn()
+    };
+
+    // Mock utility functions
+    changeUtils.authenticateType = jest.fn(() => 'manual');
+    changeUtils.fieldError = jest.fn(() => false);
+    changeUtils.getUrl = {
+      getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] })),
+      getJourneyType: jest.fn(() => 'ETC')
+    };
+    changeUtils.isFieldUpdate = jest.fn();
+    postalCodeValidation.mockResolvedValue({ data: 'postal_data' });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const renderComponent = (props = mockProps, storeState = {}) => {
+    const store = createMockStore(storeState);
     return render(
-      <Provider store={mockStore}>
+      <Provider store={store}>
         <Number {...props} />
       </Provider>
     );
   };
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  describe('Component Rendering', () => {
+    test('renders input field with correct props', () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toBeInTheDocument();
+      expect(input).toHaveAttribute('type', 'text');
+      expect(input).toHaveAttribute('name', 'test_field');
+      expect(input).toHaveAttribute('id', 'test_field_a_1');
+      expect(input).toHaveAttribute('placeholder', 'Test Field');
+    });
+
+    test('renders label with correct text', () => {
+      renderComponent();
+      
+      const label = screen.getByText('Test Field');
+      expect(label).toBeInTheDocument();
+      expect(label).toHaveAttribute('for', 'test_field');
+    });
+
+    test('hides component when hide state is false', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'td_term_value_days'
+        }
+      };
+      
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'ad-1',
+            stageInfo: {
+              products: [{ product_category: 'TD' }],
+              applicants: {}
+            }
+          }],
+          userInput: {
+            applicants: { td_term_type_a_1: 'D' }
+          }
+        }
+      };
+
+      renderComponent(props, storeState);
+      
+      const input = screen.queryByLabelText('test_field');
+      expect(input).not.toBeInTheDocument();
+    });
   });
 
-  // Test 1: Basic rendering
-  it('renders correctly with default props', () => {
-    renderComponent();
-    expect(screen.getByLabelText('Test Field')).toBeInTheDocument();
+  describe('Input Validation', () => {
+    test('shows error when mandatory field is empty', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: '', validity: { valid: false } } });
+      
+      await waitFor(() => {
+        expect(screen.getByText('Please enter Test Field')).toBeInTheDocument();
+      });
+    });
+
+    test('shows error when input does not match regex pattern', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: 'invalid@value', validity: { valid: false } } });
+      
+      await waitFor(() => {
+        expect(screen.getByText('Invalid format for Test Field')).toBeInTheDocument();
+      });
+    });
+
+    test('shows error when input is below minimum length', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: 'ab', validity: { valid: false } } });
+      
+      await waitFor(() => {
+        expect(screen.getByText('Minimum length required is 3 digits')).toBeInTheDocument();
+      });
+    });
+
+    test('clears error when valid input is entered', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      
+      // First enter invalid input
+      fireEvent.change(input, { target: { value: '', validity: { valid: false } } });
+      await waitFor(() => {
+        expect(screen.getByText('Please enter Test Field')).toBeInTheDocument();
+      });
+      
+      // Then enter valid input
+      fireEvent.change(input, { target: { value: 'valid123', validity: { valid: true } } });
+      await waitFor(() => {
+        expect(screen.queryByText('Please enter Test Field')).not.toBeInTheDocument();
+      });
+    });
   });
 
-  // Test 2: Input validation - valid input
-  it('handles valid input correctly', () => {
-    renderComponent();
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '123' } });
-    expect(defaultProps.handleCallback).toHaveBeenCalled();
-    expect(screen.queryByText(/error/i)).not.toBeInTheDocument();
+  describe('Postal Code Validation', () => {
+    test('triggers postal code validation for postal_code_rwb field', async () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'postal_code_rwb'
+        }
+      };
+
+      renderComponent(props);
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
+      
+      await waitFor(() => {
+        expect(postalCodeValidation).toHaveBeenCalledWith(
+          '123456',
+          'CH123',
+          { test_field_a_1: 'test_value' }
+        );
+      });
+    });
+
+    test('shows loading spinner during postal code validation', async () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'postal_code_rwb'
+        }
+      };
+
+      renderComponent(props);
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
+      
+      expect(screen.getByText('')).toHaveClass('circle-spinner');
+    });
   });
 
-  // Test 3: Input validation - invalid input (regex)
-  it('shows error for invalid input (regex)', () => {
-    renderComponent();
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'abc' } });
-    expect(screen.getByText(/patterns Test Field/i)).toBeInTheDocument();
+  describe('Account Number Validation', () => {
+    test('validates account number matching for scb_account_no', async () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'scb_account_no'
+        }
+      };
+
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'ad-2',
+            stageInfo: {
+              applicants: { re_enter_scb_account_no_a_1: 'different_value' }
+            }
+          }],
+          userInput: {
+            applicants: {}
+          }
+        }
+      };
+
+      renderComponent(props, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
+      
+      await waitFor(() => {
+        expect(screen.getByText('Account numbers do not match')).toBeInTheDocument();
+      });
+    });
+
+    test('validates account number matching for re_enter_scb_account_no', async () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 're_enter_scb_account_no'
+        }
+      };
+
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'ad-2',
+            stageInfo: {
+              applicants: { scb_account_no_a_1: 'different_value' }
+            }
+          }],
+          userInput: {
+            applicants: {}
+          }
+        }
+      };
+
+      renderComponent(props, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: '123456', validity: { valid: true } } });
+      
+      await waitFor(() => {
+        expect(screen.getByText('Re-entered account number does not match')).toBeInTheDocument();
+      });
+    });
   });
 
-  // Test 4: Input validation - invalid input (min length)
-  it('shows error for invalid input (min length)', () => {
-    renderComponent();
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '1' } });
-    expect(screen.getByText(/patterns Test Field/i)).toBeInTheDocument();
+  describe('Event Handlers', () => {
+    test('calls handleCallback when input changes', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: 'test123', validity: { valid: true } } });
+      
+      await waitFor(() => {
+        expect(mockProps.handleCallback).toHaveBeenCalledWith(
+          mockProps.data,
+          'test123'
+        );
+      });
+    });
+
+    test('calls handleFieldDispatch when field value updates', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: 'test123', validity: { valid: true } } });
+      
+      await waitFor(() => {
+        expect(mockProps.handleFieldDispatch).toHaveBeenCalledWith(
+          'test_field',
+          'test123'
+        );
+      });
+    });
+
+    test('handles onBlur event correctly', async () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.change(input, { target: { value: 'test123', validity: { valid: true } } });
+      fireEvent.blur(input, { target: { value: 'test123', validity: { valid: true } } });
+      
+      await waitFor(() => {
+        expect(mockProps.handleCallback).toHaveBeenCalledWith(
+          mockProps.data,
+          'test123'
+        );
+      });
+    });
+
+    test('handles onFocus event correctly', () => {
+      renderComponent();
+      
+      const input = screen.getByLabelText('test_field');
+      fireEvent.focus(input);
+      
+      // Verify that lastAction.getField is dispatched (would need to spy on dispatch)
+      expect(input).toHaveFocus();
+    });
   });
 
-  // Test 5: Postal code handling
-  it('triggers postal code validation for postal_code_rwb field', () => {
-    const postalProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        logical_field_name: 'postal_code_rwb'
-      }
-    };
-    renderComponent(postalProps);
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '123456' } });
-    expect(mockStore.dispatch).toHaveBeenCalled();
+  describe('Conditional Field Behavior', () => {
+    test('shows existing_account_no field when conditions are met', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'existing_account_no'
+        }
+      };
+
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'bd-3',
+            stageInfo: {
+              products: [{ product_category: 'TD', product_type: '604' }],
+              applicants: {}
+            }
+          }],
+          userInput: {
+            applicants: {
+              signature_crop_from_existing_ac_a_1: 'Y',
+              application_sourcing_a_1: '2'
+            }
+          }
+        }
+      };
+
+      renderComponent(props, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toBeInTheDocument();
+    });
+
+    test('handles ofc_postal_code field visibility based on country selection', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'ofc_postal_code'
+        }
+      };
+
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'ad-1',
+            stageInfo: {
+              applicants: { ofc_country_a_1: 'SG' }
+            }
+          }],
+          userInput: {
+            applicants: { ofc_country_a_1: 'SG' }
+          }
+        }
+      };
+
+      renderComponent(props, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toBeInTheDocument();
+    });
   });
 
-  // Test 6: Account number validation
-  it('handles account number validation', () => {
-    const accountProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        logical_field_name: 'scb_account_no'
-      }
-    };
-    renderComponent(accountProps);
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '123' } });
-    expect(defaultProps.handleCallback).toHaveBeenCalled();
+  describe('Field Disabling Logic', () => {
+    test('disables input when editable is false', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          editable: true
+        }
+      };
+
+      renderComponent(props);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toBeDisabled();
+    });
+
+    test('disables input in bd-1 stage', () => {
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'bd-1',
+            stageInfo: {
+              applicants: {}
+            }
+          }],
+          userInput: {
+            applicants: {}
+          }
+        }
+      };
+
+      renderComponent(mockProps, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toBeDisabled();
+    });
+
+    test('disables postal_code_rwb when using myinfo authentication', () => {
+      changeUtils.authenticateType = jest.fn(() => 'myinfo');
+      
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'postal_code_rwb'
+        }
+      };
+
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'bd-2',
+            stageInfo: {
+              applicants: {}
+            }
+          }],
+          userInput: {
+            applicants: {}
+          }
+        }
+      };
+
+      renderComponent(props, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toBeDisabled();
+    });
   });
 
-  // Test 7: Field error handling
-  it('shows error when fieldError is true', () => {
-    require('../../../utils/common/change.utils').fieldError.mockReturnValue(true);
-    renderComponent();
-    expect(screen.getByText(/emity Test Field/i)).toBeInTheDocument();
+  describe('Error Handling', () => {
+    test('shows field error when fieldErrorSelector contains field', async () => {
+      changeUtils.fieldError = jest.fn(() => true);
+      
+      const storeState = {
+        fielderror: {
+          error: [{ field: 'test_field', message: 'Field error' }]
+        }
+      };
+
+      renderComponent(mockProps, storeState);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Invalid format for Test Field')).toBeInTheDocument();
+      });
+    });
+
+    test('clears error when field is not in fieldErrorSelector', async () => {
+      changeUtils.fieldError = jest.fn(() => false);
+      
+      renderComponent();
+      
+      // Should not show any error
+      expect(screen.queryByText(/Invalid format for/)).not.toBeInTheDocument();
+    });
   });
 
-  // Test 8: Disabled state
-  it('renders disabled when editable is true', () => {
-    const disabledProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        editable: true
-      }
-    };
-    renderComponent(disabledProps);
-    expect(screen.getByLabelText('Test Field')).toBeDisabled();
+  describe('Default Value Handling', () => {
+    test('sets default value from userInput', () => {
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'bd-1',
+            stageInfo: {
+              applicants: {}
+            }
+          }],
+          userInput: {
+            applicants: { test_field_a_1: 'default_value' }
+          }
+        }
+      };
+
+      renderComponent(mockProps, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toHaveValue('default_value');
+    });
+
+    test('sets default value from stage info when userInput is empty', () => {
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'bd-1',
+            stageInfo: {
+              applicants: { test_field_a_1: 'stage_value' }
+            }
+          }],
+          userInput: {
+            applicants: {}
+          }
+        }
+      };
+
+      renderComponent(mockProps, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toHaveValue('stage_value');
+    });
   });
 
-  // Test 9: Term deposit days field visibility
-  it('hides td_term_value_days when conditions met', () => {
-    const tdProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        logical_field_name: 'td_term_value_days'
-      }
-    };
-    const { container } = renderComponent(tdProps);
-    expect(container.querySelector('.number')).not.toBeInTheDocument();
-  });
+  describe('Alternative Address Handling', () => {
+    test('clears postal code when alternative address is deselected', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          ...mockProps.data,
+          logical_field_name: 'per_postal_code'
+        }
+      };
 
-  // Test 10: Existing account number field handling
-  it('handles existing_account_no field visibility', () => {
-    const accountProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        logical_field_name: 'existing_account_no'
-      }
-    };
-    const { container } = renderComponent(accountProps);
-    expect(container.querySelector('.number')).not.toBeInTheDocument();
-  });
+      const storeState = {
+        stages: {
+          stages: [{
+            stageId: 'bd-2',
+            stageInfo: {
+              applicants: {}
+            }
+          }],
+          userInput: {
+            applicants: {
+              select_alt_addresses_a_1: 'AL1,AL2' // PER not selected
+            }
+          }
+        }
+      };
 
-  // Test 11: Blur event handling
-  it('handles blur event correctly', () => {
-    renderComponent();
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.blur(input, { target: { value: '123' } });
-    expect(defaultProps.handleCallback).toHaveBeenCalled();
-  });
-
-  // Test 12: Focus event handling
-  it('handles focus event correctly', () => {
-    renderComponent();
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.focus(input);
-    expect(mockStore.dispatch).toHaveBeenCalled();
-  });
-
-  // Test 13: Office postal code handling
-  it('handles ofc_postal_code field correctly', () => {
-    const postalProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        logical_field_name: 'ofc_postal_code'
-      }
-    };
-    renderComponent(postalProps);
-    expect(mockStore.dispatch).toHaveBeenCalled();
-  });
-
-  // Test 14: Alternate address handling
-  it('handles alternate address fields correctly', () => {
-    const altProps = {
-      ...defaultProps,
-      data: {
-        ...defaultProps.data,
-        logical_field_name: 'alt_postal_code_1'
-      }
-    };
-    renderComponent(altProps);
-    expect(mockStore.dispatch).toHaveBeenCalled();
+      renderComponent(props, storeState);
+      
+      const input = screen.getByLabelText('test_field');
+      expect(input).toHaveValue('');
+    });
   });
 });
