@@ -1,686 +1,353 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { createStore, combineReducers } from 'redux';
-import '@testing-library/jest-dom';
-import Model from './Model';
+import { AppDispatch } from "../../../services/common-service";
+import { FindIndex, getUrl, authenticateType } from "../../../utils/common/change.utils";
+import { KeyWithAnyModel, RadioDependecyModel, StageDetails} from "../../../utils/model/common-model";
+import { fieldErrorAction } from "../../../utils/store/field-error-slice";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import { getProductCategory } from "../../../services/common-service";
 
-// Mock external dependencies
-jest.mock('../../../assets/_json/model.json', () => [
-  {
-    name: 'postal_code',
-    header_content: 'Enter Postal Code',
-    header_content_second: 'Rate Information',
-    body_content: ['Please enter your postal code'],
-    buttons: ['Check Rate'],
-    PostalCodebuttons: ['Continue'],
-    postal_code_lable: 'Postal Code',
-    errorDesc: 'Please enter a valid postal code',
-    popupDescription: 'Your rate information'
-  },
-  {
-    name: 'ageHardStop',
-    header_content: 'ageHardStop',
-    body_content: ['You must be at least 18 years old'],
-    buttons: ['OK']
-  },
-  {
-    name: 'usHardStop',
-    header_content: 'usHardStop',
-    body_content: ['US residents cannot open accounts'],
-    buttons: ['OK']
-  },
-  {
-    name: 'referral_code',
-    header_content: 'Referral Code',
-    body_content: ['Do you have a referral code?'],
-    buttons: ['Yes', 'No']
-  },
-  {
-    name: 'CCThankYou',
-    header_content: 'Thank You',
-    body_content: ['Thank you for your application'],
-    buttons: ['Continue Without Activation', 'Continue']
-  },
-  {
-    name: 'CCCardActivation',
-    header_content: 'Card Activation',
-    body_content: ['Please activate your card'],
-    buttons: ['Activate']
-  },
-  {
-    name: 'nationalityHardStop',
-    header_content: 'Nationality Issue',
-    body_content: ['Nationality restriction'],
-    buttons: ['OK']
-  },
-  {
-    name: 'preferred_limit',
-    header_content: 'Preferred Limit',
-    body_content: ['Select your preferred limit', 'More information available in'],
-    buttons: ['Continue']
-  }
-]);
-
-jest.mock('../../../assets/_json/lottie/oops.json', () => ({}));
-jest.mock('../../../assets/_json/error.json', () => ({
-  referralcodeerror: 'Invalid referral code'
-}));
-
-const mockTrackEvents = {
-  triggerAdobeEvent: jest.fn()
-};
-jest.mock('../../../services/track-events', () => mockTrackEvents);
-
-const mockUtils = {
-  getUrl: {
-    getParameterByName: jest.fn(() => null),
-    getUpdatedStage: jest.fn(() => ({ ccplChannel: '' }))
-  },
-  FindIndex: jest.fn(() => 0),
-  getTokenChno: jest.fn(() => ({ channelRefNo: 'test123' }))
-};
-jest.mock('../../../utils/common/change.utils', () => mockUtils);
-
-const mockServices = {
-  redirectingToIbanking: jest.fn(),
-  rateRequest: jest.fn(() => ({ type: 'RATE_REQUEST' })),
-  formConfig: jest.fn(() => ({ type: 'FORM_CONFIG' })),
-  submitBasicDataMyInfo: jest.fn(),
-  channelReference: jest.fn(() => Promise.resolve({ data: { success: true } }))
-};
-jest.mock('../../../services/common-service', () => mockServices);
-
-const mockValidationService = {
-  allowOnlyCharacter: jest.fn()
-};
-jest.mock('../../../services/validation-service', () => mockValidationService);
-
-jest.mock('@lottiefiles/react-lottie-player', () => ({
-  Player: ({ className }) => <div className={className} data-testid="lottie-player" />
-}));
-
-const mockFieldsUtils = {
-  stageFields: jest.fn(() => ({}))
-};
-jest.mock('../../../modules/dashboard/fields/fields.utils', () => mockFieldsUtils);
-
-const mockStageUtils = {
-  stateUrl: jest.fn()
-};
-jest.mock('../../../modules/dashboard/fields/stage.utils', () => mockStageUtils);
-
-// Mock environment variables
-process.env.REACT_APP_IBANKING_SC_MOBILE = 'https://mobile.bank.com';
-process.env.REACT_APP_HOME_PAGE_URL = 'https://bank.com';
-process.env.REACT_APP_PREFERRED_LIMIT_FAQS = 'https://bank.com/faqs';
-
-// Redux reducers
-const referralcodeReducer = (state = { refer: null, referralErrorMsg: '' }, action) => {
-  switch (action.type) {
-    case 'referralcode/setReferralErrorMsg':
-      return { ...state, referralErrorMsg: action.payload };
-    default:
-      return state;
-  }
-};
-
-const stagesReducer = (state = {
-  stages: [{
-    stageId: 'bd',
-    stageInfo: {
-      fieldmetaData: {
-        data: {
-          stages: [{
-            fields: [{
-              logical_field_name: 'postal_code',
-              min_length: 6
-            }]
-          }]
+export const getFields = (getStages: Array<StageDetails>, radioResidency: RadioDependecyModel | null, employerOther?: any, userInputs?: any, bancaSelector?: KeyWithAnyModel): any => {
+    return (dispatch: AppDispatch) => {
+        let fields: Array<KeyWithAnyModel> | undefined;
+        let stageIndex : number | undefined;
+        if (getStages && getStages[0].stageInfo && getStages[0].stageInfo.fieldmetadata && getStages[0].stageInfo.fieldmetadata.data.stages) {
+            let stageId:any;
+            if(getStages[0].stageId === 'ad-2' && authenticateType() == "manual"){
+                stageId = "ad";  
+                stageIndex = 2;
+            }
+            else if(getStages[0].stageId === 'ad-2' && authenticateType() == "myinfo"){
+                stageId = "ad";  
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if(getStages[0].stageId === 'ad-1' && (authenticateType() === "manual"|| authenticateType() === "myinfo")){
+                stageId = "ad";  
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if(getStages[0].stageId === 'bd-1' ){
+                stageId = "bd";  
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if(getStages[0].stageId === 'ssf-1' || getStages[0].stageId === "bd-2" || getStages[0].stageId === "ld-1" || getStages[0].stageId === "bd-3"  && authenticateType() == "manual"){
+                stageId = "bd";
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if((getStages[0].stageId === 'ssf-1' || getStages[0].stageId === "bd-2" || getStages[0].stageId === 'bd-3') && authenticateType() == "myinfo"){
+                stageId = "bd";
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else{
+                stageId = getStages[0].stageId;
+                stageIndex =  getStages[0].stageInfo.fieldmetadata.data.stages.findIndex(
+                   (id: any) => id.stageId.toLowerCase() === stageId.toLowerCase()
+                 );
+               }
+            if(stageIndex !== undefined){
+             fields = getStages[0].stageInfo.fieldmetadata.data.stages[stageIndex].fields;
+            }
         }
-      },
-      applicants: {
-        full_name_a_1: 'John Doe',
-        auth_mode_a_1: 'IX'
-      },
-      products: [{
-        product_category: 'PL'
-      }, {
-        product_category: 'CC'
-      }]
+
+        let ssfStages: Array<string> | null = null;
+        
+        if (radioResidency) {
+           if (radioResidency.logical_field_name === 'residency_status') {
+                const foreigner = ["passport_no","pass_exp_dt"];
+                const singapore = ["NRIC"];
+                if (radioResidency.value === "CT" || radioResidency.value === "PR") {
+                    ssfStages = singapore;
+                    dispatch(fieldErrorAction.removeMandatoryFields(foreigner));
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: foreigner,
+                            newFields: singapore,
+                            value: getStages[0].stageInfo.applicants.NRIC_a_1 ? getStages[0].stageInfo.applicants.NRIC_a_1 : ''
+                        })
+                        
+                    );
+                } else if (radioResidency.value === "FR") {
+                    ssfStages = foreigner;
+                    dispatch(fieldErrorAction.removeMandatoryFields(singapore));
+                    const valObj:any = {
+                        'passport_no_a_1': '',
+                        'pass_exp_dt_a_1': '',
+                    }
+                    for(let key in valObj) {
+                        valObj[key] = getUrl.getUserInputs()[key] || '';
+                    }
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: singapore,
+                            newFields: foreigner,
+                            value: valObj
+                        })
+                    );
+                }
+            }
+            else if (radioResidency.logical_field_name === 'work_type') {
+                const earner = ["name_of_employer", "nature_of_employer", "job_title","office_phone_number"];
+                const selfEmployed = ["name_of_business", "nature_of_employer", "job_title","office_phone_number"];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name, 
+                    value: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                dispatch(stagesAction.resetNewAndOldFields());
+                if (radioResidency.value === 'O') {
+                    ssfStages = null;
+                    const mergedFields = earner.concat(selfEmployed.filter(item => earner.every(value => value !== item)));
+                    dispatch(fieldErrorAction.removeMandatoryFields(mergedFields));
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: mergedFields,
+                            newFields: [],
+                            value: ''
+                        })
+                    );
+                } else if (radioResidency.value === 'S' || radioResidency.value === 'C') {
+                    ssfStages = earner;
+                    dispatch(fieldErrorAction.removeMandatoryFields(selfEmployed));
+                    const valObj:any = {
+                        'nature_of_employer_a_1': '',
+                        'job_title_a_1': '',
+                        'name_of_employer_a_1': '',
+                        'office_phone_number_a_1': ''
+                    }
+                    for(let key in valObj) {
+                        valObj[key] = getUrl.getUserInputs()[key] || '';
+                    }
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: selfEmployed,
+                            newFields: earner,
+                            value: valObj
+                        })
+                    );
+                } else if (radioResidency.value === 'E') {
+                    ssfStages = selfEmployed;
+                    dispatch(fieldErrorAction.removeMandatoryFields(earner));
+                    const valObj:any = {
+                        'nature_of_employer_a_1': '',
+                        'job_title_a_1': '',
+                        'name_of_business_a_1': '',
+                        'office_phone_number_a_1': ''
+                    }
+                    for(let key in valObj) {
+                        valObj[key] = getUrl.getUserInputs()[key] || '';
+                    }
+                   dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: earner,
+                            newFields: selfEmployed,
+                            value: valObj
+                        })
+                    );
+                } else {
+                    dispatch(fieldErrorAction.removeMandatoryFields(["name_of_employer", "nature_of_employer", "job_title", "office_phone_number", "name_of_business"]));
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: ["name_of_employer", "nature_of_employer", "job_title", "office_phone_number", "name_of_business"],
+                            newFields: []
+                        })
+                    );
+                }
+            } 
+            
+            else if (radioResidency.logical_field_name === 'casa_fatca_declaration') {
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: [],
+                        newFields: ["casa_fatca_declaration"],
+                        value: radioResidency.value
+                    })
+                );
+            } else if (radioResidency.logical_field_name === "preferred_limit") {
+                 let showFields: Array<string> = ['credit_limit_consent_info_8'];
+                 let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if(!radioResidency.value) {
+                    radioResidency.value = '0'
+                }
+                if (radioResidency.value === '0') {
+                    showFields = ['credit_limit_consent_info_8'];
+                    removeFields = ['preferred_credit_limit','credit_limit_consent_info_5'];
+                } else if (radioResidency.value === '1') {
+                    showFields = ['preferred_credit_limit','credit_limit_consent_info_5'];
+                    removeFields = ['credit_limit_consent_info_8'];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            } //ETC CLI Changes
+            else if (radioResidency.logical_field_name === "credit_limit_consent") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === 'Y') {
+                    showFields = ['work_type'];
+                    removeFields = ['embossed_name','myinfo_data_cli'];
+                    if(bancaSelector && bancaSelector.eligible_banca_insurances)
+                    {
+                        bancaSelector.eligible_banca_insurances.forEach((eligibleBancaInsurance: any) => {
+                            removeFields.push("insurance_consent_" + eligibleBancaInsurance);
+                        });
+                    }
+                } else if (radioResidency.value === 'N') {
+                    const productCategory = getProductCategory(getStages[0].stageInfo.products);
+                    if (getStages[0].stageInfo.applicants['banca_product_applicable_a_1'] === "Y") {
+                        if (getUrl.getJourneyType() !== "ETC" || productCategory !== 'PL') {
+                            showFields = ['embossed_name'];
+                            if(bancaSelector && bancaSelector.eligible_banca_insurances)
+                            {
+                                bancaSelector.eligible_banca_insurances.forEach((eligibleBancaInsurance: any) => {
+                                    showFields.push("insurance_consent_" + eligibleBancaInsurance);
+                                });
+                            }
+                        } else {
+                            if(bancaSelector && bancaSelector.eligible_banca_insurances)
+                            {
+                                bancaSelector.eligible_banca_insurances.forEach((eligibleBancaInsurance: any) => {
+                                    showFields.push("insurance_consent_" + eligibleBancaInsurance);
+                                });
+                            }
+                        }
+                    }
+                    else {
+                        if (getUrl.getJourneyType() !== "ETC" || productCategory !== 'PL') {
+                            showFields = ['embossed_name'];
+                        }
+                    }
+                    removeFields = ['work_type','name_of_employer','name_of_employer_other','name_of_business','job_title','nature_of_employer','myinfo_data_cli','office_phone_number'];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            }else if (radioResidency.logical_field_name === "preferred_contact_per_email"){
+                if(!radioResidency.value) {
+                    radioResidency.value = "COL"
+                }
+            }else if (radioResidency.logical_field_name === "preferred_limit_etc") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === '0') {
+                    showFields = [];
+                    removeFields = ['preferred_credit_limit_etc'];
+                } else if (radioResidency.value === '1') {
+                    showFields = ['preferred_credit_limit_etc'];
+                    removeFields = [];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            } else if (radioResidency.logical_field_name === "deposit_loan_to" || radioResidency.logical_field_name === "Transfer_amount_to" || radioResidency.logical_field_name === "transfer_amount_to") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === 'SCB Account') {
+                    showFields = ['scb_account_no', 're_enter_scb_account_no', 'enter_account_info'];
+                    removeFields = ['other_bank_name', 'other_bank_account_bt', 'reenter_other_bank_account_bt', 'other_bank_credit_card_bt', 'reenter_other_bank_credit_card_bt'];
+                } else if (radioResidency.value === 'Other Bank Account') {
+                    showFields = ['other_bank_name', 'other_bank_account_bt', 'reenter_other_bank_account_bt'];
+                    removeFields = ['scb_account_no', 're_enter_scb_account_no', 'enter_account_info', 'other_bank_credit_card_bt', 'reenter_other_bank_credit_card_bt'];
+                } else if (radioResidency.value === 'Other Bank Credit Card') {
+                    showFields = ['other_bank_name', 'other_bank_credit_card_bt', 'reenter_other_bank_credit_card_bt'];
+                    removeFields = ['scb_account_no', 're_enter_scb_account_no', 'other_bank_account_bt', 'reenter_other_bank_account_bt', ];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields([...removeFields, "enter_account_info"]));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            } else if (radioResidency.logical_field_name === "Customer_Agree_for_Phoenix_Limit_porting") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === 'N') {
+                    showFields = [];
+                    removeFields = ['min_limit'];
+                } else if (radioResidency.value === 'Y') {
+                    showFields = ['min_limit'];
+                    removeFields = [];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            }
+        } else if (employerOther === 'name_of_employer_other') {
+            ssfStages = ['name_of_employer_other'];
+            dispatch(
+                stagesAction.removeAddToggleField({
+                    removeFields: [],
+                    newFields: ssfStages,
+                    value: ''
+                })
+            );
+        } else if (employerOther === 'fields') {
+            ssfStages = null;
+            dispatch(fieldErrorAction.removeMandatoryFields(['name_of_employer_other']));
+            dispatch(
+                stagesAction.removeAddToggleField({
+                    removeFields: ['name_of_employer_other'],
+                    newFields: [],
+                    value: ''
+                })
+            );
+        } 
+        if (ssfStages && fields) {
+            dispatch(fieldErrorAction.getMandatoryFields(ssfStages));
+            return fields.filter((field: KeyWithAnyModel) =>
+                ssfStages!.includes(field.logical_field_name)
+            );
+        }
+        return null;
     }
-  }]
-}, action) => {
-  switch (action.type) {
-    case 'stages/updateLastStageInput':
-    case 'stages/resetCurrentStage':
-    case 'stages/updateStageId':
-      return state;
-    default:
-      return state;
-  }
-};
+}
 
-const rateReducer = (state = { ar: '', eir: '' }, action) => {
-  switch (action.type) {
-    case 'RATE_REQUEST':
-      return { ...state, ar: '5.5', eir: '6.0' };
-    default:
-      return state;
-  }
-};
-
-const urlParamReducer = (state = { resume: false }, action) => state;
-
-const rootReducer = combineReducers({
-  referralcode: referralcodeReducer,
-  stages: stagesReducer,
-  rate: rateReducer,
-  urlParam: urlParamReducer
-});
-
-const createMockStore = (initialState = {}) => {
-  return createStore(rootReducer, initialState);
-};
-
-// Mock window.location
-delete window.location;
-window.location = { href: '' };
-
-describe('Model Component', () => {
-  let mockStore;
-  let mockProps;
-
-  beforeEach(() => {
-    mockStore = createMockStore();
-    mockProps = {
-      name: 'postal_code',
-      handlebuttonClick: jest.fn(),
-      body_content: '',
-      isTooltip: false
-    };
-    jest.clearAllMocks();
-    window.location.href = '';
-  });
-
-  describe('Component Rendering', () => {
-    test('renders postal code popup with all elements', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByText('Enter Postal Code')).toBeInTheDocument();
-      expect(screen.getByText('Please enter your postal code')).toBeInTheDocument();
-      expect(screen.getByText('Postal Code')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Enter postal code')).toBeInTheDocument();
-      expect(screen.getByText('Check Rate')).toBeInTheDocument();
-    });
-
-    test('renders age hard stop popup correctly', () => {
-      mockProps.name = 'ageHardStop';
-      mockProps.body_content = 'to apply for this service';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByText('Age Hard Stop')).toBeInTheDocument();
-      expect(screen.getByText('You must be at least 18 years old to apply for this service')).toBeInTheDocument();
-      expect(screen.getByTestId('lottie-player')).toBeInTheDocument();
-    });
-
-    test('renders us hard stop popup correctly', () => {
-      mockProps.name = 'usHardStop';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByText('We are unable to open accounts for US residents')).toBeInTheDocument();
-      expect(screen.getByText('US residents cannot open accounts')).toBeInTheDocument();
-    });
-
-    test('renders preferred limit popup with FAQ link', () => {
-      mockProps.name = 'preferred_limit';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByText('Preferred Limit')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'FAQs' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'FAQs' })).toHaveAttribute('href', 'https://bank.com/faqs');
-    });
-
-    test('renders tooltip when isTooltip is true', () => {
-      mockProps.name = 'ageHardStop';
-      mockProps.isTooltip = true;
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByRole('generic')).toHaveClass('popup__question');
-      expect(screen.queryByTestId('lottie-player')).not.toBeInTheDocument();
-    });
-
-    test('does not render when model data is not found', () => {
-      mockProps.name = 'nonexistent_popup';
-
-      const { container } = render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(container.firstChild).toBeNull();
-    });
-  });
-
-  describe('Postal Code Input Functionality', () => {
-    test('handles postal code input change', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.change(input, { target: { value: '123456' } });
-
-      expect(input.value).toBe('123456');
-    });
-
-    test('shows error when postal code is too short', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.change(input, { target: { value: '12345' } });
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      expect(screen.getByText('Please enter a valid postal code')).toBeInTheDocument();
-    });
-
-    test('does not show error when postal code is valid length', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.change(input, { target: { value: '123456' } });
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      expect(screen.queryByText('Please enter a valid postal code')).not.toBeInTheDocument();
-    });
-
-    test('handles key press validation', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.keyPress(input, { key: 'a', code: 'KeyA' });
-
-      expect(mockValidationService.allowOnlyCharacter).toHaveBeenCalled();
-    });
-
-    test('respects maxLength attribute', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      expect(input).toHaveAttribute('maxLength', '6');
-    });
-  });
-
-  describe('Rate Information Display', () => {
-    test('displays rate information when available', () => {
-      const storeWithRate = createMockStore({
-        rate: { ar: '5.5', eir: '6.0' }
-      });
-
-      render(
-        <Provider store={storeWithRate}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByText('Rate Information')).toBeInTheDocument();
-      expect(screen.getByText('5.5% p.a.')).toBeInTheDocument();
-      expect(screen.getByText('(EIR 6.0% p.a.)')).toBeInTheDocument();
-      expect(screen.getByText('Continue')).toBeInTheDocument();
-    });
-
-    test('handles continue button click when rate is available', () => {
-      const storeWithRate = createMockStore({
-        rate: { ar: '5.5', eir: '6.0' }
-      });
-
-      render(
-        <Provider store={storeWithRate}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const continueButton = screen.getByText('Continue');
-      fireEvent.click(continueButton);
-
-      expect(mockProps.handlebuttonClick).toHaveBeenCalled();
-    });
-  });
-
-  describe('Button Click Handling', () => {
-    test('handles CCThankYou continue without activation', () => {
-      mockProps.name = 'CCThankYou';
-      mockProps.handleContinueWithoutActivation = jest.fn();
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('Continue Without Activation');
-      fireEvent.click(button);
-
-      expect(mockProps.handleContinueWithoutActivation).toHaveBeenCalled();
-    });
-
-    test('handles CCThankYou continue button', () => {
-      mockProps.name = 'CCThankYou';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('Continue');
-      fireEvent.click(button);
-
-      expect(mockProps.handlebuttonClick).toHaveBeenCalled();
-    });
-
-    test('handles CCCardActivation button', () => {
-      mockProps.name = 'CCCardActivation';
-      mockProps.handleOTPSuccessClick = jest.fn();
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('Activate');
-      fireEvent.click(button);
-
-      expect(mockProps.handleOTPSuccessClick).toHaveBeenCalled();
-    });
-
-    test('handles nationalityHardStop button', () => {
-      mockProps.name = 'nationalityHardStop';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('OK');
-      fireEvent.click(button);
-
-      expect(mockProps.handlebuttonClick).toHaveBeenCalled();
-    });
-
-    test('redirects to home page on default button click', () => {
-      mockProps.name = 'ageHardStop';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('OK');
-      fireEvent.click(button);
-
-      expect(window.location.href).toBe('https://bank.com');
-    });
-  });
-
-  describe('Referral Code Functionality', () => {
-    test('shows referral popup content when referral code exists', () => {
-      mockProps.name = 'referral_code';
-      const storeWithReferral = createMockStore({
-        referralcode: { refer: 'test123', referralErrorMsg: '' },
-        urlParam: { resume: false }
-      });
-
-      render(
-        <Provider store={storeWithReferral}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(screen.getByText('Referral Code')).toBeInTheDocument();
-      expect(screen.getByText('Do you have a referral code?')).toBeInTheDocument();
-    });
-
-    test('handles referral code Yes button click', () => {
-      mockProps.name = 'referral_code';
-      mockProps.setContinueWithoutReferralcode = jest.fn();
-      mockProps.setShowReferralcodePopup = jest.fn();
-      
-      const storeWithReferral = createMockStore({
-        referralcode: { refer: 'test123', referralErrorMsg: '' }
-      });
-
-      render(
-        <Provider store={storeWithReferral}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const yesButton = screen.getByText('Yes');
-      fireEvent.click(yesButton);
-
-      expect(mockProps.setContinueWithoutReferralcode).toHaveBeenCalledWith(false);
-      expect(mockProps.setShowReferralcodePopup).toHaveBeenCalledWith(false);
-    });
-
-    test('handles referral code No button click', () => {
-      mockProps.name = 'referral_code';
-      mockProps.setContinueWithoutReferralcode = jest.fn();
-      mockProps.setShowReferralcodePopup = jest.fn();
-      
-      const storeWithReferral = createMockStore({
-        referralcode: { refer: 'test123', referralErrorMsg: '' }
-      });
-
-      render(
-        <Provider store={storeWithReferral}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const noButton = screen.getByText('No');
-      fireEvent.click(noButton);
-
-      expect(mockProps.setContinueWithoutReferralcode).toHaveBeenCalledWith(true);
-      expect(mockProps.setShowReferralcodePopup).toHaveBeenCalledWith(false);
-    });
-  });
-
-  describe('Event Tracking', () => {
-    test('triggers Adobe event on popup view', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(mockTrackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
-        'popupViewed',
-        'Enter Postal Code'
-      );
-    });
-
-    test('triggers Adobe event on button click', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.change(input, { target: { value: '123456' } });
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      expect(mockTrackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
-        'ctaClick',
-        expect.stringContaining('Check Rate'),
-        {},
-        'Enter Postal Code'
-      );
-    });
-  });
-
-  describe('CSS Classes and Styling', () => {
-    test('applies correct CSS classes for postal code popup', () => {
-      const { container } = render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.popup')).toHaveClass('postal__code__popup');
-      expect(container.querySelector('.popup__info__head')).toHaveClass('popup__info__head__underline');
-    });
-
-    test('applies correct CSS classes for regular popup', () => {
-      mockProps.name = 'ageHardStop';
-
-      const { container } = render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.popup')).not.toHaveClass('postal__code__popup');
-      expect(container.querySelector('.waring__icon')).toBeInTheDocument();
-    });
-
-    test('applies referral popup icon class when showing referral content', () => {
-      mockProps.name = 'referral_code';
-      const storeWithReferral = createMockStore({
-        referralcode: { refer: 'test123', referralErrorMsg: '' }
-      });
-
-      const { container } = render(
-        <Provider store={storeWithReferral}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.referralcode-popup-icon')).toBeInTheDocument();
-    });
-  });
-
-  describe('Edge Cases and Error Handling', () => {
-    test('handles empty button click without crashing', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      // Should not crash and should show error
-      expect(screen.getByText('Please enter a valid postal code')).toBeInTheDocument();
-    });
-
-    test('handles channel reference API call', async () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.change(input, { target: { value: '123456' } });
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      await waitFor(() => {
-        expect(mockServices.channelReference).toHaveBeenCalled();
-      });
-    });
-
-    test('handles missing props gracefully', () => {
-      const minimalProps = {
-        name: 'postal_code'
-      };
-
-      expect(() => {
-        render(
-          <Provider store={mockStore}>
-            <Model {...minimalProps} />
-          </Provider>
-        );
-      }).not.toThrow();
-    });
-
-    test('handles special popup names', () => {
-      const specialNames = [
-        'country_of_tax_residence',
-        'crs_reason_code',
-        'casa_fatca_declaration_1',
-        'confirmationPopup',
-        'contact_preference_casa',
-        'missingMandatoryDocument',
-        'selectDocument'
-      ];
-
-      specialNames.forEach(name => {
-        mockProps.name = name;
-        expect(() => {
-          render(
-            <Provider store={mockStore}>
-              <Model {...mockProps} />
-            </Provider>
-          );
-        }).not.toThrow();
-      });
-    });
-  });
-});
+Please write test cases using jest with RTL
