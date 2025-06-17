@@ -1,450 +1,243 @@
-import "./model.scss";
-import { FieldModel, KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import modelInfo from "../../../assets/_json/model.json";
-import trackEvents from "../../../services/track-events";
-import { useSelector, useDispatch } from "react-redux";
-import { getUrl, FindIndex, getTokenChno } from "../../../utils/common/change.utils";
-import { redirectingToIbanking, rateRequest, formConfig, submitBasicDataMyInfo, channelReference } from "../../../services/common-service";
-import { Player } from "@lottiefiles/react-lottie-player";
-import lottieSrc from "../../../assets/_json/lottie/oops.json";
-import validateService from "../../../services/validation-service";
-import { useState, useEffect } from "react";
-import { referralcodeAction } from "../../../utils/store/referral-code-slice";
-import errorMsg from "../../../assets/_json/error.json";
-import { stagesAction } from "../../../utils/store/stages-slice";
-import { stageFields } from "../../../modules/dashboard/fields/fields.utils";
-import { stateUrl } from "../../../modules/dashboard/fields/stage.utils";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import configureStore from 'redux-mock-store';
+import Model from './Model';
+import * as trackEvents from '../../../services/track-events';
+import * as commonService from '../../../services/common-service';
+import * as changeUtils from '../../../utils/common/change.utils';
 
-const Model = (props: KeyWithAnyModel) => {
-  const modelsData: KeyWithAnyModel = modelInfo;
-  let modelData = modelsData.find((model: any) => model.name === props.name);
-  
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  const [showReferralPopupContent, setShowReferralPopupContent] =
-    useState(false);
-  const referralcodeSelector = useSelector((state: any) => state.referralcode);
-  const resumeSelector = useSelector(
-    (state: StoreModel) => state.urlParam.resume
-  );
-  
-  //Start code for postal popup
-  const rateSelector = useSelector((state: StoreModel) => state.rate);
-  const [ar, setAr] = useState("");
-  const [eir, setEir] = useState("");
-  const [pincode, setPincode] = useState("");
-  const [buttonClicked, setButtonClicked] = useState(false);
-  const [postalMinLen, setPostalMinLen] = useState(6);
-  const [basicResponse,setBasicResponse]=useState();
-  const [fields, setFields] = useState<FieldModel | null>();
-  const dispatch = useDispatch();
-  useEffect(() => {
-    if (props.name === "postal_code" && rateSelector.ar) {
-      setAr(rateSelector.ar);
-      setEir(rateSelector.eir);
-     // modelData.header_content = modelData.header_content_second;
-     // modelData.body_content = [""];
-     // modelData.buttons = modelData.buttons_second;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rateSelector]);
+// Mock external dependencies
+jest.mock('../../../services/track-events');
+jest.mock('../../../services/common-service');
+jest.mock('../../../utils/common/change.utils');
+jest.mock('@lottiefiles/react-lottie-player', () => ({
+  Player: () => <div>Lottie Player</div>
+}));
 
-  const changeHandler = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.value.length >= postalMinLen) {
-      setPincode(event.target.value);
-    } else {
-      setPincode("");
-    }
+// Mock Redux store
+const mockStore = configureStore([]);
+
+describe('Model Component', () => {
+  const mockModelData = {
+    name: 'test_model',
+    header_content: 'Test Header',
+    body_content: ['Test content line 1', 'Test content line 2'],
+    buttons: ['Button 1', 'Button 2'],
+    postal_code_lable: 'Enter Postal Code',
+    errorDesc: 'Invalid postal code',
+    header_content_second: 'Second Header',
+    popupDescription: 'Popup description text',
+    PostalCodebuttons: ['Postal Button 1', 'Postal Button 2']
   };
 
-  useEffect(() => {
-    if (props.name === "postal_code") {
-      const stageIndex = FindIndex(stageSelector[0].stageInfo, 'bd');
-      if (stageIndex) {
-        const postalProp = (stageSelector[0].stageInfo.fieldmetaData.data.stages[stageIndex].fields.filter((field: KeyWithAnyModel) => field.logical_field_name === 'postal_code'));
-        if (postalProp) {
-          setPostalMinLen(postalProp[0].min_length);
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
-
-  const allowOnlyNumber = (event: any, fieldName: string) => {
-    if (pincode && pincode.length > postalMinLen) {
-      return false;
-    }
-    validateService.allowOnlyCharacter(event, fieldName);
+  const mockProps = {
+    name: 'test_model',
+    handlebuttonClick: jest.fn(),
+    handleContinueWithoutActivation: jest.fn(),
+    handleOTPSuccessClick: jest.fn(),
+    setContinueWithoutReferralcode: jest.fn(),
+    setShowReferralcodePopup: jest.fn(),
+    isTooltip: false,
+    body_content: 'Additional body content'
   };
 
- //End code for postal popup
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Mock the modelInfo import
+    jest.mock('../../../assets/_json/model.json', () => [mockModelData], { virtual: true });
+  });
 
- 
-  let header_content = modelData.header_content
-  
-    ? modelData.header_content
-    : props.name;
-  if (header_content === "ageHardStop") {
-    header_content = "Age Hard Stop";
-  } 
-  else if (header_content === "usHardStop") {
-    header_content = "We are unable to open accounts for US residents";
-  }
-  trackEvents.triggerAdobeEvent("popupViewed", header_content);
-
-  const handlebuttonClick = (index: number) => {
-    if (props.name === "postal_code") {
-      setButtonClicked(true);
-      trackEvents.triggerAdobeEvent(
-        "ctaClick",
-        `${modelData.buttons[index],modelData.PostalCodebuttons[index]}:${header_content}`,
-        {},
-        modelData.header_content
-      );
-      if (rateSelector.ar) {
-        props.handlebuttonClick();
-      } else {
-        if (pincode && pincode.length >= postalMinLen) {
-         dispatch(formConfig('manual',stageSelector[0].stageInfo))
-          dispatch(stagesAction.updateLastStageInput); 
-          let stateInfofield = stageSelector[0].stageInfo;
-          const productCategory = stageSelector[0].stageInfo.products.map((product:any)=>product.product_category);
-          const productCategories=productCategory.join(",");
-          let fieldUpdate:any;
-          fieldUpdate = {...stateInfofield,
-            applicants:{
-              ...stateInfofield.applicants,
-              first_name_a_1:stateInfofield.applicants.full_name_a_1,
-              address_usage_indicator_a_1: "MIF",
-              product_categories:productCategories
+  const renderComponent = (props = {}, storeState = {}) => {
+    const initialState = {
+      stages: {
+        stages: [{
+          stageId: 'test-stage',
+          stageInfo: {
+            fieldmetaData: {
+              data: {
+                stages: [{
+                  fields: [{
+                    logical_field_name: 'postal_code',
+                    min_length: 6
+                  }]
+                }]
+              }
+            },
+            products: [{ product_category: 'CC' }, { product_category: 'PL' }],
+            applicants: {
+              full_name_a_1: 'Test User',
+              auth_mode_a_1: 'IX'
             }
-            }
-            let channelReferenceNumber = getTokenChno().channelRefNo;
-          channelReference(fieldUpdate,channelReferenceNumber,dispatch).then((response:any)=>{
-            setBasicResponse(response.data);
-            if(stageSelector[0].stageInfo.products[1].product_category === 'PL'){
-              //  dispatch(rateRequest("34567",stageSelector[0].stageInfo))
-               dispatch(stagesAction.updateLastStageInput(stageSelector[0].stageId));
-               setFields(
-                 stageFields(
-                   stageSelector,
-                   "ld-1",
-                )
-               );
-               stateUrl("ld-1");
-               dispatch(stagesAction.resetCurrentStage("ld-1"));
-               dispatch(stagesAction.updateStageId("ld-1"));
-             }
-          } )
+          }
+        }]
+      },
+      referralcode: {
+        refer: null,
+        referralErrorMsg: ''
+      },
+      urlParam: {
+        resume: false
+      },
+      rate: {
+        ar: '',
+        eir: ''
+      },
+      ...storeState
+    };
 
-      }
-    }}
-    else if (props.name === "nationalityHardStop" || props.name === "showTrustInfo" || props.name === "showLoanInfo" || props.name === "showEIRInfo" || props.name === "preferred_limit" || props.name === "preferred_credit_limit" || props.name === "contact_preference" || props.name === "enter_account_info") {
-      props.handlebuttonClick();
-      trackEvents.triggerAdobeEvent(
-        "ctaClick",
-        `${modelData.buttons[index]}:${header_content}`,
-        {},
-        header_content 
-      );
-    } else {
-      trackEvents.triggerAdobeEvent(
-        "ctaClick",
-        `${modelData.buttons[index]}:${header_content}`,
-        {},
-        header_content
-      );
-      if (props.name === "CCThankYou") {
-        if (index === 0) {
-          if (props.handleContinueWithoutActivation) {
-            props.handleContinueWithoutActivation();
-          } else {
-            props.handlebuttonClick();
-          }
-        } else {
-          props.handlebuttonClick();
-        }
-      } else if (props.name === "CCCardActivation") {
-        if (props.handleOTPSuccessClick) {
-          props.handleOTPSuccessClick();
-        } else {
-          props.handlebuttonClick();  
-         }
-                 
-      } else if (index === 0 && !props.callBackMethod && (referralcodeSelector  && referralcodeSelector.refer && referralcodeSelector.refer !== "true")) {
-        if (
-          (getUrl.getParameterByName("SSCode") || getUrl.getParameterByName("transfer-token")) || getUrl.getUpdatedStage().ccplChannel =="IBK" || getUrl.getUpdatedStage().ccplChannel =="MBNK" ||
-          (stageSelector && stageSelector.length > 0  &&
-            (stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IX" || stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IM")
-        )) {
-          if (getUrl.getParameterByName("source") === "scm") {
-            //Ibanking redirection for app
-            window.location.href = `${process.env.REACT_APP_IBANKING_SC_MOBILE}`;
-          } else {
-            redirectingToIbanking();
-          }
-        } else {
-          window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`;
-        }
-      }else if (
-        props.name === "referral_code" &&
-        (referralcodeSelector.refer !== null ||
-          (referralcodeSelector.refer === null && resumeSelector))
-      ) {
-        if (index === 0) {
-          props.setContinueWithoutReferralcode(false);
-          props.setShowReferralcodePopup(false);
-          dispatch(
-            referralcodeAction.setReferralErrorMsg(
-                errorMsg.referralcodeerror 
-            )
-          );
-        } else {
-          props.setContinueWithoutReferralcode(true);
-          props.setShowReferralcodePopup(false);
-          dispatch(
-            referralcodeAction.setReferralErrorMsg("")
-          );
-        }
-      } else if(props.name==="country_of_tax_residence"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="country_of_tax_residence_1"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="country_of_tax_residence_2"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="country_of_tax_residence_3"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="country_of_tax_residence_4"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="crs_reason_code"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="crs_reason_code_1"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="crs_reason_code_2"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="crs_reason_code_3"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="crs_reason_code_4"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="casa_fatca_declaration_1"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="casa_fatca_declaration_2"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="casa_fatca_declaration_3"){
-        props.handlebuttonClick()
-      }
-      else if(props.name==="confirmationPopup"){
-        props.handlebuttonClick();
-      }
-      else if(props.name==="contact_preference_casa"){
-        props.handlebuttonClick();
-      }
-      else if(props.name==="missingMandatoryDocument"){
-        props.handlebuttonClick();
-      }
-      else if(props.name==="selectDocument"){
-        props.handlebuttonClick();
-      }
-      else if (props.handlebuttonClick) {
-        if(index===0&&props.name!=="other_name_or_alias"){
-        window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`};
-        props.handlebuttonClick();
-      }
-    }
+    const store = mockStore(initialState);
     
-  };
-  useEffect(() => {
-    if (
-      props.name === "referral_code" &&
-      (referralcodeSelector.refer !== null ||
-        (referralcodeSelector.refer === null && resumeSelector))
-    ) {
-      setShowReferralPopupContent(true);
-    }
- // eslint-disable-next-line react-hooks/exhaustive-deps    
-  }, [referralcodeSelector.refer,showReferralPopupContent]);
-
-  const handleRatebuttonClick = (index: number) =>{
-    if (props.name === "postal_code") {
-      setButtonClicked(true);
-      trackEvents.triggerAdobeEvent(
-        "ctaClick",
-        `${modelData.buttons[index],modelData.PostalCodebuttons[index]}:${header_content}`,
-        {},
-        modelData.header_content
-      );
-      if (pincode && pincode.length >= postalMinLen) {
-        dispatch(rateRequest(pincode,stageSelector[0].stageInfo));  
-      }
-    }
+    return render(
+      <Provider store={store}>
+        <Model {...mockProps} {...props} />
+      </Provider>
+    );
   };
 
-  return (
-    <>
-      {modelData && (
-       <div className={`popup ${props.name === "postal_code" ? "postal__code__popup": ""}`}>
-          <div className="popup__container" id={modelData.buttons[1]}>
-            {props.name !== "postal_code" && (
-              <div className={`${
-                showReferralPopupContent
-                  ? "referralcode-popup-icon"
-                  : "waring__icon"
-              }`}>
-                {!props.isTooltip && !showReferralPopupContent && (
-                  <Player src={lottieSrc} className="player" loop autoplay />
-                )}
-                {props.isTooltip && !showReferralPopupContent && <div className="popup__question"></div>}
-              </div>
-            )}
-            <div className="popup__info">
-              {modelData.header_content && (
-                <div
-                  className={`popup__info__head ${
-                    props.name === "postal_code"
-                      ? "popup__info__head__underline"
-                      : ""
-                  }`}
-                >
-                  {modelData.header_content}
-                </div>
-              )}
-              <div className="popup__info__desc">
-                <div className="model__content">
-                  {props.name !== "ageHardStop" &&
-                    modelData.body_content.map(
-                      (content: string, index: number) => {
-                        return (
-                          <p key={`${content}${index}`}>
-                            {content}
-                            {(props.name === "preferred_limit" ||
-                              (props.name === "preferred_credit_limit" &&
-                                index === 1)) && (
-                              <a
-                                rel="noreferrer"
-                                href={
-                                  process.env.REACT_APP_PREFERRED_LIMIT_FAQS
-                                }
-                                target="_blank"
-                              >
-                                FAQs
-                              </a>
-                            )}
-                          </p>
-                        );
-                      }
-                    )}
-                  {props.name === "ageHardStop" &&
-                    modelData.body_content.map(
-                      (content: string, index: number) => {
-                        return (
-                          <p
-                            key={`${content}${index}`}
-                          >{`${content} ${props.body_content}`}</p>
-                        );
-                      }
-                    )}
-                  {props.name === "postal_code" && (
-                    <>
-                    <div className='postal_code_lable'>{modelData.postal_code_lable}</div>
-                    <div className="postalCode" >
-                      {(
-                        <input
-                          className="postalCodeText"
-                          type="text"
-                          placeholder="Enter postal code"
-                          name="postCode"
-                          onChange={changeHandler.bind(this)}
-                          onKeyPress={event =>
-                            allowOnlyNumber(event, "postal_code")
-                          }
-                          maxLength={6}
-                        />
-                        
-                      )}
-                    {modelData.buttons &&
-                    modelData.buttons.map((button: string, index: number) => {
-                    return (
-                      <div className="postalCodeTextButton">
-                        <p
-                          className="btnRate"
-                          onClick={() => handleRatebuttonClick(index)}
-                          key={`${button}${index}`}>
-                          {button}
-                        </p>
-                      </div>
-                    );
-                   })}
-                  </div>
-                      {buttonClicked && !pincode && (
-                        <div className="postal__error">
-                          {modelData.errorDesc}
-                        </div>
-                      )}
-                      {ar && (
-                        <>
-                        <div className="postal_image_main"> 
-                          <div className="postal_image"></div>
-                        </div>
-                         <div className='header_second'>{modelData.header_content_second}</div>
-                            <div className="ar__rate">
-                              <div>{ar}% p.a.</div>
-                              <div>(EIR {eir}% p.a.)</div>
-                            </div>
-                            <p> {modelData.popupDescription} </p>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-                {props.name === "postal_code" && ar && modelData.PostalCodebuttons &&
-                  modelData.PostalCodebuttons.map((button: string, index: number) => {
-                    return (
-                      <div className="postalcode_conti_btn">
-                        <p
-                          className="btn"
-                          onClick={() => handlebuttonClick(index)}
-                          key={`${button}${index}`}
-                        >
-                          {button}
-                        </p>
-                      </div>
-                    );
-                  })}
-                {props.name !== "postal_code" && modelData.buttons &&
-                  modelData.buttons.map((button: string, index: number) => {
-                    return (
-                      <div className="postal__code__btn">
-                        <p
-                          className="btn" 
-                          onClick={() => handlebuttonClick(index)}
-                          key={`${button}${index}`}
-                        >
-                          {button}
-                        </p>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+  test('renders the component with basic props', () => {
+    renderComponent();
     
-  );
-};
+    expect(screen.getByText('Test Header')).toBeInTheDocument();
+    expect(screen.getByText('Test content line 1')).toBeInTheDocument();
+    expect(screen.getByText('Test content line 2')).toBeInTheDocument();
+    expect(screen.getByText('Button 1')).toBeInTheDocument();
+    expect(screen.getByText('Button 2')).toBeInTheDocument();
+  });
 
-export default Model;
+  test('triggers track event on render', () => {
+    renderComponent();
+    
+    expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
+      'popupViewed',
+      'Test Header'
+    );
+  });
 
-Please write test cases using jest with RTL
+  test('handles button click for non-special cases', () => {
+    renderComponent();
+    
+    fireEvent.click(screen.getByText('Button 1'));
+    expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
+      'ctaClick',
+      'Button 1:Test Header',
+      {},
+      'Test Header'
+    );
+    expect(mockProps.handlebuttonClick).toHaveBeenCalled();
+  });
+
+  test('renders postal code popup correctly', () => {
+    renderComponent({ name: 'postal_code' });
+    
+    expect(screen.getByText('Enter Postal Code')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter postal code')).toBeInTheDocument();
+    expect(screen.getByText('Postal Button 1')).toBeInTheDocument();
+    expect(screen.getByText('Postal Button 2')).toBeInTheDocument();
+  });
+
+  test('handles postal code input change', () => {
+    renderComponent({ name: 'postal_code' });
+    
+    const input = screen.getByPlaceholderText('Enter postal code');
+    fireEvent.change(input, { target: { value: '123456' } });
+    
+    expect(input).toHaveValue('123456');
+  });
+
+  test('shows error for invalid postal code length', () => {
+    renderComponent({ name: 'postal_code' });
+    
+    const input = screen.getByPlaceholderText('Enter postal code');
+    fireEvent.change(input, { target: { value: '123' } });
+    fireEvent.click(screen.getByText('Postal Button 1'));
+    
+    expect(screen.getByText('Invalid postal code')).toBeInTheDocument();
+  });
+
+  test('displays rate information when available', () => {
+    renderComponent(
+      { name: 'postal_code' },
+      { rate: { ar: '5.5', eir: '6.0' } }
+    );
+    
+    expect(screen.getByText('Second Header')).toBeInTheDocument();
+    expect(screen.getByText('5.5% p.a.')).toBeInTheDocument();
+    expect(screen.getByText('(EIR 6.0% p.a.)')).toBeInTheDocument();
+    expect(screen.getByText('Popup description text')).toBeInTheDocument();
+  });
+
+  test('handles referral code popup case', () => {
+    renderComponent(
+      { name: 'referral_code' },
+      { referralcode: { refer: 'test', referralErrorMsg: 'Error' } }
+    );
+    
+    expect(screen.queryByText('Lottie Player')).not.toBeInTheDocument();
+  });
+
+  test('renders age hard stop with additional content', () => {
+    renderComponent({ 
+      name: 'ageHardStop',
+      body_content: '18 years' 
+    });
+    
+    expect(screen.getByText(/18 years/)).toBeInTheDocument();
+  });
+
+  test('renders tooltip variant', () => {
+    renderComponent({ isTooltip: true });
+    
+    expect(screen.queryByText('Lottie Player')).not.toBeInTheDocument();
+    expect(screen.getByTestId('popup-question')).toBeInTheDocument();
+  });
+
+  test('handles CCThankYou case with continue without activation', () => {
+    renderComponent({ name: 'CCThankYou' });
+    
+    fireEvent.click(screen.getByText('Button 1'));
+    expect(mockProps.handleContinueWithoutActivation).toHaveBeenCalled();
+  });
+
+  test('handles CCCardActivation case with OTP success', () => {
+    renderComponent({ name: 'CCCardActivation' });
+    
+    fireEvent.click(screen.getByText('Button 1'));
+    expect(mockProps.handleOTPSuccessClick).toHaveBeenCalled();
+  });
+
+  test('redirects to home page when no special cases match', () => {
+    delete window.location;
+    window.location = { href: '' } as any;
+    
+    renderComponent({ callBackMethod: false }, { 
+      referralcode: { refer: false },
+      urlParam: { resume: false }
+    });
+    
+    fireEvent.click(screen.getByText('Button 1'));
+    expect(window.location.href).toBe('http://localhost/');
+  });
+
+  test('dispatches rate request for postal code with valid input', async () => {
+    const mockDispatch = jest.fn();
+    jest.spyOn(commonService, 'rateRequest').mockResolvedValue({});
+    
+    renderComponent({ name: 'postal_code' });
+    
+    const input = screen.getByPlaceholderText('Enter postal code');
+    fireEvent.change(input, { target: { value: '123456' } });
+    fireEvent.click(screen.getByText('Postal Button 1'));
+    
+    await waitFor(() => {
+      expect(commonService.rateRequest).toHaveBeenCalled();
+    });
+  });
+
+  test('handles preferred limit case with FAQ link', () => {
+    renderComponent({ name: 'preferred_limit' });
+    
+    expect(screen.getByText('FAQs')).toBeInTheDocument();
+    expect(screen.getByText('FAQs').closest('a')).toHaveAttribute('target', '_blank');
+  });
+});
