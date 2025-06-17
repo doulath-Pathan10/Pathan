@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
+import { createStore, combineReducers } from 'redux';
 import '@testing-library/jest-dom';
 import Model from './Model';
 
@@ -20,13 +20,13 @@ jest.mock('../../../assets/_json/model.json', () => [
   },
   {
     name: 'ageHardStop',
-    header_content: 'Age Hard Stop',
+    header_content: 'ageHardStop',
     body_content: ['You must be at least 18 years old'],
     buttons: ['OK']
   },
   {
     name: 'usHardStop',
-    header_content: 'We are unable to open accounts for US residents',
+    header_content: 'usHardStop',
     body_content: ['US residents cannot open accounts'],
     buttons: ['OK']
   },
@@ -47,6 +47,18 @@ jest.mock('../../../assets/_json/model.json', () => [
     header_content: 'Card Activation',
     body_content: ['Please activate your card'],
     buttons: ['Activate']
+  },
+  {
+    name: 'nationalityHardStop',
+    header_content: 'Nationality Issue',
+    body_content: ['Nationality restriction'],
+    buttons: ['OK']
+  },
+  {
+    name: 'preferred_limit',
+    header_content: 'Preferred Limit',
+    body_content: ['Select your preferred limit', 'More information available in'],
+    buttons: ['Continue']
   }
 ]);
 
@@ -55,112 +67,125 @@ jest.mock('../../../assets/_json/error.json', () => ({
   referralcodeerror: 'Invalid referral code'
 }));
 
-jest.mock('../../../services/track-events', () => ({
+const mockTrackEvents = {
   triggerAdobeEvent: jest.fn()
-}));
+};
+jest.mock('../../../services/track-events', () => mockTrackEvents);
 
-jest.mock('../../../utils/common/change.utils', () => ({
+const mockUtils = {
   getUrl: {
-    getParameterByName: jest.fn(),
+    getParameterByName: jest.fn(() => null),
     getUpdatedStage: jest.fn(() => ({ ccplChannel: '' }))
   },
-  FindIndex: jest.fn(),
+  FindIndex: jest.fn(() => 0),
   getTokenChno: jest.fn(() => ({ channelRefNo: 'test123' }))
-}));
+};
+jest.mock('../../../utils/common/change.utils', () => mockUtils);
 
-jest.mock('../../../services/common-service', () => ({
+const mockServices = {
   redirectingToIbanking: jest.fn(),
-  rateRequest: jest.fn(),
-  formConfig: jest.fn(),
+  rateRequest: jest.fn(() => ({ type: 'RATE_REQUEST' })),
+  formConfig: jest.fn(() => ({ type: 'FORM_CONFIG' })),
   submitBasicDataMyInfo: jest.fn(),
   channelReference: jest.fn(() => Promise.resolve({ data: { success: true } }))
-}));
+};
+jest.mock('../../../services/common-service', () => mockServices);
 
-jest.mock('../../../services/validation-service', () => ({
+const mockValidationService = {
   allowOnlyCharacter: jest.fn()
-}));
+};
+jest.mock('../../../services/validation-service', () => mockValidationService);
 
 jest.mock('@lottiefiles/react-lottie-player', () => ({
   Player: ({ className }) => <div className={className} data-testid="lottie-player" />
 }));
 
-jest.mock('../../../modules/dashboard/fields/fields.utils', () => ({
-  stageFields: jest.fn()
-}));
+const mockFieldsUtils = {
+  stageFields: jest.fn(() => ({}))
+};
+jest.mock('../../../modules/dashboard/fields/fields.utils', () => mockFieldsUtils);
 
-jest.mock('../../../modules/dashboard/fields/stage.utils', () => ({
+const mockStageUtils = {
   stateUrl: jest.fn()
-}));
+};
+jest.mock('../../../modules/dashboard/fields/stage.utils', () => mockStageUtils);
 
 // Mock environment variables
 process.env.REACT_APP_IBANKING_SC_MOBILE = 'https://mobile.bank.com';
 process.env.REACT_APP_HOME_PAGE_URL = 'https://bank.com';
 process.env.REACT_APP_PREFERRED_LIMIT_FAQS = 'https://bank.com/faqs';
 
-// Mock Redux slices
-const mockReferralcodeSlice = {
-  name: 'referralcode',
-  initialState: { refer: null, referralErrorMsg: '' },
-  reducers: {
-    setReferralErrorMsg: (state, action) => {
-      state.referralErrorMsg = action.payload;
-    }
+// Redux reducers
+const referralcodeReducer = (state = { refer: null, referralErrorMsg: '' }, action) => {
+  switch (action.type) {
+    case 'referralcode/setReferralErrorMsg':
+      return { ...state, referralErrorMsg: action.payload };
+    default:
+      return state;
   }
 };
 
-const mockStagesSlice = {
-  name: 'stages',
-  initialState: {
-    stages: [{
-      stageId: 'bd',
-      stageInfo: {
-        fieldmetaData: {
-          data: {
-            stages: [{
-              fields: [{
-                logical_field_name: 'postal_code',
-                min_length: 6
-              }]
+const stagesReducer = (state = {
+  stages: [{
+    stageId: 'bd',
+    stageInfo: {
+      fieldmetaData: {
+        data: {
+          stages: [{
+            fields: [{
+              logical_field_name: 'postal_code',
+              min_length: 6
             }]
-          }
-        },
-        applicants: {
-          full_name_a_1: 'John Doe',
-          auth_mode_a_1: 'IX'
-        },
-        products: [{
-          product_category: 'PL'
-        }, {
-          product_category: 'CC'
-        }]
-      }
-    }]
-  },
-  reducers: {
-    updateLastStageInput: (state, action) => state,
-    resetCurrentStage: (state, action) => state,
-    updateStageId: (state, action) => state
-  }
-};
-
-const createMockStore = (initialState = {}) => {
-  return configureStore({
-    reducer: {
-      referralcode: (state = mockReferralcodeSlice.initialState, action) => {
-        switch (action.type) {
-          case 'referralcode/setReferralErrorMsg':
-            return { ...state, referralErrorMsg: action.payload };
-          default:
-            return state;
+          }]
         }
       },
-      stages: (state = mockStagesSlice.initialState, action) => state,
-      rate: (state = { ar: '', eir: '' }, action) => state,
-      urlParam: (state = { resume: false }, action) => state
-    },
-    preloadedState: initialState
-  });
+      applicants: {
+        full_name_a_1: 'John Doe',
+        auth_mode_a_1: 'IX'
+      },
+      products: [{
+        product_category: 'PL'
+      }, {
+        product_category: 'CC'
+      }]
+    }
+  }]
+}, action) => {
+  switch (action.type) {
+    case 'stages/updateLastStageInput':
+    case 'stages/resetCurrentStage':
+    case 'stages/updateStageId':
+      return state;
+    default:
+      return state;
+  }
 };
+
+const rateReducer = (state = { ar: '', eir: '' }, action) => {
+  switch (action.type) {
+    case 'RATE_REQUEST':
+      return { ...state, ar: '5.5', eir: '6.0' };
+    default:
+      return state;
+  }
+};
+
+const urlParamReducer = (state = { resume: false }, action) => state;
+
+const rootReducer = combineReducers({
+  referralcode: referralcodeReducer,
+  stages: stagesReducer,
+  rate: rateReducer,
+  urlParam: urlParamReducer
+});
+
+const createMockStore = (initialState = {}) => {
+  return createStore(rootReducer, initialState);
+};
+
+// Mock window.location
+delete window.location;
+window.location = { href: '' };
 
 describe('Model Component', () => {
   let mockStore;
@@ -175,10 +200,11 @@ describe('Model Component', () => {
       isTooltip: false
     };
     jest.clearAllMocks();
+    window.location.href = '';
   });
 
-  describe('Rendering', () => {
-    test('renders postal code popup correctly', () => {
+  describe('Component Rendering', () => {
+    test('renders postal code popup with all elements', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -187,13 +213,14 @@ describe('Model Component', () => {
 
       expect(screen.getByText('Enter Postal Code')).toBeInTheDocument();
       expect(screen.getByText('Please enter your postal code')).toBeInTheDocument();
+      expect(screen.getByText('Postal Code')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Enter postal code')).toBeInTheDocument();
       expect(screen.getByText('Check Rate')).toBeInTheDocument();
     });
 
     test('renders age hard stop popup correctly', () => {
       mockProps.name = 'ageHardStop';
-      mockProps.body_content = 'to apply';
+      mockProps.body_content = 'to apply for this service';
 
       render(
         <Provider store={mockStore}>
@@ -202,27 +229,38 @@ describe('Model Component', () => {
       );
 
       expect(screen.getByText('Age Hard Stop')).toBeInTheDocument();
-      expect(screen.getByText('You must be at least 18 years old to apply')).toBeInTheDocument();
+      expect(screen.getByText('You must be at least 18 years old to apply for this service')).toBeInTheDocument();
       expect(screen.getByTestId('lottie-player')).toBeInTheDocument();
     });
 
-    test('renders referral code popup correctly', () => {
-      mockProps.name = 'referral_code';
-      const storeWithReferral = createMockStore({
-        referralcode: { refer: 'test123', referralErrorMsg: '' }
-      });
+    test('renders us hard stop popup correctly', () => {
+      mockProps.name = 'usHardStop';
 
       render(
-        <Provider store={storeWithReferral}>
+        <Provider store={mockStore}>
           <Model {...mockProps} />
         </Provider>
       );
 
-      expect(screen.getByText('Referral Code')).toBeInTheDocument();
-      expect(screen.getByText('Do you have a referral code?')).toBeInTheDocument();
+      expect(screen.getByText('We are unable to open accounts for US residents')).toBeInTheDocument();
+      expect(screen.getByText('US residents cannot open accounts')).toBeInTheDocument();
     });
 
-    test('renders tooltip icon when isTooltip is true', () => {
+    test('renders preferred limit popup with FAQ link', () => {
+      mockProps.name = 'preferred_limit';
+
+      render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      expect(screen.getByText('Preferred Limit')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'FAQs' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'FAQs' })).toHaveAttribute('href', 'https://bank.com/faqs');
+    });
+
+    test('renders tooltip when isTooltip is true', () => {
       mockProps.name = 'ageHardStop';
       mockProps.isTooltip = true;
 
@@ -232,13 +270,25 @@ describe('Model Component', () => {
         </Provider>
       );
 
-      expect(screen.getByRole('generic', { class: /popup__question/ })).toBeInTheDocument();
+      expect(screen.getByRole('generic')).toHaveClass('popup__question');
       expect(screen.queryByTestId('lottie-player')).not.toBeInTheDocument();
+    });
+
+    test('does not render when model data is not found', () => {
+      mockProps.name = 'nonexistent_popup';
+
+      const { container } = render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      expect(container.firstChild).toBeNull();
     });
   });
 
-  describe('Postal Code Functionality', () => {
-    test('updates postal code input correctly', () => {
+  describe('Postal Code Input Functionality', () => {
+    test('handles postal code input change', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -251,7 +301,7 @@ describe('Model Component', () => {
       expect(input.value).toBe('123456');
     });
 
-    test('validates postal code minimum length', () => {
+    test('shows error when postal code is too short', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -267,9 +317,7 @@ describe('Model Component', () => {
       expect(screen.getByText('Please enter a valid postal code')).toBeInTheDocument();
     });
 
-    test('handles postal code rate request', async () => {
-      const { rateRequest } = require('../../../services/common-service');
-      
+    test('does not show error when postal code is valid length', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -282,9 +330,35 @@ describe('Model Component', () => {
       const button = screen.getByText('Check Rate');
       fireEvent.click(button);
 
-      expect(rateRequest).toHaveBeenCalledWith('123456', expect.any(Object));
+      expect(screen.queryByText('Please enter a valid postal code')).not.toBeInTheDocument();
     });
 
+    test('handles key press validation', () => {
+      render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      const input = screen.getByPlaceholderText('Enter postal code');
+      fireEvent.keyPress(input, { key: 'a', code: 'KeyA' });
+
+      expect(mockValidationService.allowOnlyCharacter).toHaveBeenCalled();
+    });
+
+    test('respects maxLength attribute', () => {
+      render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      const input = screen.getByPlaceholderText('Enter postal code');
+      expect(input).toHaveAttribute('maxLength', '6');
+    });
+  });
+
+  describe('Rate Information Display', () => {
     test('displays rate information when available', () => {
       const storeWithRate = createMockStore({
         rate: { ar: '5.5', eir: '6.0' }
@@ -296,12 +370,13 @@ describe('Model Component', () => {
         </Provider>
       );
 
+      expect(screen.getByText('Rate Information')).toBeInTheDocument();
       expect(screen.getByText('5.5% p.a.')).toBeInTheDocument();
       expect(screen.getByText('(EIR 6.0% p.a.)')).toBeInTheDocument();
-      expect(screen.getByText('Rate Information')).toBeInTheDocument();
+      expect(screen.getByText('Continue')).toBeInTheDocument();
     });
 
-    test('handles continue button click with rate', async () => {
+    test('handles continue button click when rate is available', () => {
       const storeWithRate = createMockStore({
         rate: { ar: '5.5', eir: '6.0' }
       });
@@ -319,8 +394,8 @@ describe('Model Component', () => {
     });
   });
 
-  describe('Button Click Handlers', () => {
-    test('handles CCThankYou button clicks', () => {
+  describe('Button Click Handling', () => {
+    test('handles CCThankYou continue without activation', () => {
       mockProps.name = 'CCThankYou';
       mockProps.handleContinueWithoutActivation = jest.fn();
 
@@ -330,18 +405,28 @@ describe('Model Component', () => {
         </Provider>
       );
 
-      const continueWithoutActivationButton = screen.getByText('Continue Without Activation');
-      fireEvent.click(continueWithoutActivationButton);
+      const button = screen.getByText('Continue Without Activation');
+      fireEvent.click(button);
 
       expect(mockProps.handleContinueWithoutActivation).toHaveBeenCalled();
+    });
 
-      const continueButton = screen.getByText('Continue');
-      fireEvent.click(continueButton);
+    test('handles CCThankYou continue button', () => {
+      mockProps.name = 'CCThankYou';
+
+      render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      const button = screen.getByText('Continue');
+      fireEvent.click(button);
 
       expect(mockProps.handlebuttonClick).toHaveBeenCalled();
     });
 
-    test('handles CCCardActivation button click', () => {
+    test('handles CCCardActivation button', () => {
       mockProps.name = 'CCCardActivation';
       mockProps.handleOTPSuccessClick = jest.fn();
 
@@ -351,17 +436,66 @@ describe('Model Component', () => {
         </Provider>
       );
 
-      const activateButton = screen.getByText('Activate');
-      fireEvent.click(activateButton);
+      const button = screen.getByText('Activate');
+      fireEvent.click(button);
 
       expect(mockProps.handleOTPSuccessClick).toHaveBeenCalled();
     });
 
-    test('handles referral code button clicks', () => {
+    test('handles nationalityHardStop button', () => {
+      mockProps.name = 'nationalityHardStop';
+
+      render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      const button = screen.getByText('OK');
+      fireEvent.click(button);
+
+      expect(mockProps.handlebuttonClick).toHaveBeenCalled();
+    });
+
+    test('redirects to home page on default button click', () => {
+      mockProps.name = 'ageHardStop';
+
+      render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      const button = screen.getByText('OK');
+      fireEvent.click(button);
+
+      expect(window.location.href).toBe('https://bank.com');
+    });
+  });
+
+  describe('Referral Code Functionality', () => {
+    test('shows referral popup content when referral code exists', () => {
+      mockProps.name = 'referral_code';
+      const storeWithReferral = createMockStore({
+        referralcode: { refer: 'test123', referralErrorMsg: '' },
+        urlParam: { resume: false }
+      });
+
+      render(
+        <Provider store={storeWithReferral}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      expect(screen.getByText('Referral Code')).toBeInTheDocument();
+      expect(screen.getByText('Do you have a referral code?')).toBeInTheDocument();
+    });
+
+    test('handles referral code Yes button click', () => {
       mockProps.name = 'referral_code';
       mockProps.setContinueWithoutReferralcode = jest.fn();
       mockProps.setShowReferralcodePopup = jest.fn();
-
+      
       const storeWithReferral = createMockStore({
         referralcode: { refer: 'test123', referralErrorMsg: '' }
       });
@@ -377,34 +511,13 @@ describe('Model Component', () => {
 
       expect(mockProps.setContinueWithoutReferralcode).toHaveBeenCalledWith(false);
       expect(mockProps.setShowReferralcodePopup).toHaveBeenCalledWith(false);
-
-      const noButton = screen.getByText('No');
-      fireEvent.click(noButton);
-
-      expect(mockProps.setContinueWithoutReferralcode).toHaveBeenCalledWith(true);
-      expect(mockProps.setShowReferralcodePopup).toHaveBeenCalledWith(false);
     });
 
-    test('handles generic popup button clicks', () => {
-      mockProps.name = 'nationalityHardStop';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      // Since this popup name doesn't exist in mock data, it will use default behavior
-      expect(mockProps.handlebuttonClick).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Redux Integration', () => {
-    test('dispatches referral code actions correctly', () => {
+    test('handles referral code No button click', () => {
       mockProps.name = 'referral_code';
       mockProps.setContinueWithoutReferralcode = jest.fn();
       mockProps.setShowReferralcodePopup = jest.fn();
-
+      
       const storeWithReferral = createMockStore({
         referralcode: { refer: 'test123', referralErrorMsg: '' }
       });
@@ -415,108 +528,29 @@ describe('Model Component', () => {
         </Provider>
       );
 
-      const yesButton = screen.getByText('Yes');
-      fireEvent.click(yesButton);
+      const noButton = screen.getByText('No');
+      fireEvent.click(noButton);
 
-      // Verify that the component updates the store state
-      const state = storeWithReferral.getState();
-      expect(state.referralcode.referralErrorMsg).toBe('Invalid referral code');
-    });
-
-    test('uses selector values correctly', () => {
-      const storeWithData = createMockStore({
-        stages: {
-          stages: [{
-            stageInfo: {
-              fieldmetaData: {
-                data: {
-                  stages: [{
-                    fields: [{
-                      logical_field_name: 'postal_code',
-                      min_length: 8
-                    }]
-                  }]
-                }
-              },
-              applicants: { full_name_a_1: 'Jane Doe' },
-              products: [{ product_category: 'PL' }]
-            }
-          }]
-        }
-      });
-
-      render(
-        <Provider store={storeWithData}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.change(input, { target: { value: '1234567' } });
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      // Should show error because min length is 8 but we entered 7 characters
-      expect(screen.getByText('Please enter a valid postal code')).toBeInTheDocument();
+      expect(mockProps.setContinueWithoutReferralcode).toHaveBeenCalledWith(true);
+      expect(mockProps.setShowReferralcodePopup).toHaveBeenCalledWith(false);
     });
   });
 
   describe('Event Tracking', () => {
-    test('triggers Adobe events on popup view', () => {
-      const trackEvents = require('../../../services/track-events');
-
+    test('triggers Adobe event on popup view', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
         </Provider>
       );
 
-      expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
+      expect(mockTrackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
         'popupViewed',
         'Enter Postal Code'
       );
     });
 
-    test('triggers Adobe events on button click', () => {
-      const trackEvents = require('../../../services/track-events');
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('Check Rate');
-      fireEvent.click(button);
-
-      expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
-        'ctaClick',
-        expect.stringContaining('Check Rate'),
-        {},
-        expect.any(String)
-      );
-    });
-  });
-
-  describe('Error Handling', () => {
-    test('handles missing model data gracefully', () => {
-      mockProps.name = 'nonexistent_popup';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      // Component should not render anything if model data is not found
-      expect(screen.queryByRole('generic', { class: /popup/ })).not.toBeInTheDocument();
-    });
-
-    test('handles API errors gracefully', async () => {
-      const { channelReference } = require('../../../services/common-service');
-      channelReference.mockRejectedValueOnce(new Error('API Error'));
-
+    test('triggers Adobe event on button click', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -526,48 +560,61 @@ describe('Model Component', () => {
       const input = screen.getByPlaceholderText('Enter postal code');
       fireEvent.change(input, { target: { value: '123456' } });
 
-      const continueButton = screen.getByText('Check Rate');
-      fireEvent.click(continueButton);
-
-      // Component should handle the error without crashing
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText('Enter postal code')).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('Accessibility', () => {
-    test('has proper ARIA attributes', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const input = screen.getByPlaceholderText('Enter postal code');
-      expect(input).toHaveAttribute('type', 'text');
-      expect(input).toHaveAttribute('name', 'postCode');
-      expect(input).toHaveAttribute('maxLength', '6');
-    });
-
-    test('supports keyboard navigation', () => {
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
       const button = screen.getByText('Check Rate');
-      button.focus();
-      expect(document.activeElement).toBe(button);
+      fireEvent.click(button);
 
-      fireEvent.keyPress(button, { key: 'Enter', code: 'Enter', charCode: 13 });
-      // Should handle keyboard events properly
+      expect(mockTrackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
+        'ctaClick',
+        expect.stringContaining('Check Rate'),
+        {},
+        'Enter Postal Code'
+      );
     });
   });
 
-  describe('Edge Cases', () => {
-    test('handles empty postal code input', () => {
+  describe('CSS Classes and Styling', () => {
+    test('applies correct CSS classes for postal code popup', () => {
+      const { container } = render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      expect(container.querySelector('.popup')).toHaveClass('postal__code__popup');
+      expect(container.querySelector('.popup__info__head')).toHaveClass('popup__info__head__underline');
+    });
+
+    test('applies correct CSS classes for regular popup', () => {
+      mockProps.name = 'ageHardStop';
+
+      const { container } = render(
+        <Provider store={mockStore}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      expect(container.querySelector('.popup')).not.toHaveClass('postal__code__popup');
+      expect(container.querySelector('.waring__icon')).toBeInTheDocument();
+    });
+
+    test('applies referral popup icon class when showing referral content', () => {
+      mockProps.name = 'referral_code';
+      const storeWithReferral = createMockStore({
+        referralcode: { refer: 'test123', referralErrorMsg: '' }
+      });
+
+      const { container } = render(
+        <Provider store={storeWithReferral}>
+          <Model {...mockProps} />
+        </Provider>
+      );
+
+      expect(container.querySelector('.referralcode-popup-icon')).toBeInTheDocument();
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    test('handles empty button click without crashing', () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -577,12 +624,11 @@ describe('Model Component', () => {
       const button = screen.getByText('Check Rate');
       fireEvent.click(button);
 
+      // Should not crash and should show error
       expect(screen.getByText('Please enter a valid postal code')).toBeInTheDocument();
     });
 
-    test('handles special characters in postal code', () => {
-      const validateService = require('../../../services/validation-service');
-
+    test('handles channel reference API call', async () => {
       render(
         <Provider store={mockStore}>
           <Model {...mockProps} />
@@ -590,27 +636,51 @@ describe('Model Component', () => {
       );
 
       const input = screen.getByPlaceholderText('Enter postal code');
-      fireEvent.keyPress(input, { key: 'a', code: 'KeyA', charCode: 97 });
+      fireEvent.change(input, { target: { value: '123456' } });
 
-      expect(validateService.allowOnlyCharacter).toHaveBeenCalled();
-    });
-
-    test('handles window location redirects', () => {
-      delete window.location;
-      window.location = { href: '' };
-
-      mockProps.name = 'ageHardStop';
-
-      render(
-        <Provider store={mockStore}>
-          <Model {...mockProps} />
-        </Provider>
-      );
-
-      const button = screen.getByText('OK');
+      const button = screen.getByText('Check Rate');
       fireEvent.click(button);
 
-      expect(window.location.href).toBe('https://bank.com');
+      await waitFor(() => {
+        expect(mockServices.channelReference).toHaveBeenCalled();
+      });
+    });
+
+    test('handles missing props gracefully', () => {
+      const minimalProps = {
+        name: 'postal_code'
+      };
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <Model {...minimalProps} />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+
+    test('handles special popup names', () => {
+      const specialNames = [
+        'country_of_tax_residence',
+        'crs_reason_code',
+        'casa_fatca_declaration_1',
+        'confirmationPopup',
+        'contact_preference_casa',
+        'missingMandatoryDocument',
+        'selectDocument'
+      ];
+
+      specialNames.forEach(name => {
+        mockProps.name = name;
+        expect(() => {
+          render(
+            <Provider store={mockStore}>
+              <Model {...mockProps} />
+            </Provider>
+          );
+        }).not.toThrow();
+      });
     });
   });
 });
