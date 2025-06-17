@@ -1,154 +1,444 @@
-import { getFields } from './your-file-path';
-import { fieldErrorAction, stagesAction } from '../../../utils/store';
+import React, { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import {
+  authenticateType,
+  fieldError,
+  getUrl,
+  isFieldUpdate,
+} from "../../../utils/common/change.utils";
+import errorMsg from "../../../assets/_json/error.json";
+import { lastAction } from "../../../utils/store/last-accessed-slice";
+import { postalCodeValidation } from "./number.utils";
+import { postalCodeAction } from "../../../utils/store/postal-code";
+import "./number.scss";
+import { fieldErrorAction } from "../../../utils/store/field-error-slice";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import { store } from "../../../utils/store/store";
 
-// Minimal mocks
-jest.mock('../../../utils/store/field-error-slice', () => ({
-  removeMandatoryFields: jest.fn(),
-  getMandatoryFields: jest.fn()
-}));
+const Number = (props: KeyWithAnyModel) => {
+  const [error, setError] = useState("");  
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const userInputSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput
+  );
+  const updatedStageInputsSelector = useSelector(
+    (state: StoreModel) => state.stages.updatedStageInputs
+  );
+  const applicantsSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput.applicants
+  );
+  const fieldErrorSelector = useSelector(
+    (state: StoreModel) => state.fielderror.error
+  );
+  const journeyType = useSelector(
+    (state: StoreModel) => state.stages.journeyType
+  );
+    const dispatch = useDispatch();
+  const [defaultValue, setDefaultValue] = useState("");
+  const [valueUpdate, setValueUpdate] = useState("");
+  const [isPostalCodeFetch, setIsPostalCodeFetch] = useState(false);
+  const [isPostalValue , setPostalValue] = useState("");
+  const [hide, setHide] = useState(true);
+  const changeHandler = (
+    fieldName: string,
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const inputValue = event.target.value;
+    setDefaultValue(inputValue);
+    if (!event.target.validity.valid) {
+      props.handleCallback(props.data, inputValue);        
+      if ((props.data.mandatory === "Yes" || props.data.mandatory ==="Conditional") && inputValue.length < 1) {
+        setError(`${errorMsg.emity} ${props.data.rwb_label_name}`);
+      } else if (props.data.regex && !(`${inputValue}`.match(props.data.regex))) {
+        setError(`${errorMsg.patterns} ${props.data.rwb_label_name}`)
+      } else if (props.data.min_length && `${inputValue}`.length < props.data.min_length) {
+        setError(`${errorMsg.bankAccountMinLength} ${props.data.min_length} digits`)
+      } else {
+        setError((`${errorMsg.patterns} ${props.data.rwb_label_name}`));
+      }
+    }else{
+      setError("");
+      const fieldValue = event.target.value;
+      setValueUpdate(fieldValue)
+      if (
+        fieldValue &&
+        isPostalValue !== fieldValue && 
+        fieldName === "postal_code_rwb" &&
+        event.target.validity.valid
+      ) {
+        setPostalValue(fieldValue)
+        const channelrefNumber =
+          stageSelector[0].stageInfo.application["channel_reference"];
+        setIsPostalCodeFetch(true);
+        dispatch(
+          postalCodeValidation(
+            fieldValue,
+            channelrefNumber,
+            stageSelector[0].stageInfo.applicants
+          )
+        ).then((response: any) => {
+          dispatch(postalCodeAction.setPostalCode(response));
+          setIsPostalCodeFetch(false);
+        });
+      }
+      else if (fieldName==="postal_code_rwb"&&inputValue==="" && authenticateType()==="manual") {
+        setError(`${errorMsg.Normalerror} ${props.data.rwb_label_name}`)
+      }
+      else if (stageSelector[0].stageId !== "ad-2") {
+        props.handleCallback(props.data, event.target.value);     
+      } else {
+        dispatch(isFieldUpdate(props, event.target.value, fieldName));
+        if (accountNumValidation(inputValue,props)) {     
+          props.handleCallback(props.data, inputValue);
+        } else {
+          props.handleCallback(props.data, "");            
+          showAccountNumError();           
+        }           
+       }
+    } 
+  };
+  const showAccountNumError = () => {
+    if (        
+      props.data.logical_field_name === "scb_account_no" ||
+      props.data.logical_field_name === "other_bank_account_bt"
+    ) {
+      setError(errorMsg.sgBankAccountMismatch);
+    } else if (
+      props.data.logical_field_name === "re_enter_scb_account_no" ||
+      props.data.logical_field_name === "reenter_other_bank_account_bt"
+    ) {
+      setError(errorMsg.sgBankAccountMismatch_RE);
+    } else if (props.data.logical_field_name === "other_bank_credit_card_bt") {
+      setError(errorMsg.sgCreditCardNoMismatch);
+    }else if (props.data.logical_field_name === "reenter_other_bank_credit_card_bt") {
+      setError(errorMsg.sgCreditCardNoMismatch_RE);
+    } else {
+      setError(`${errorMsg.emity} ${props.data.rwb_label_name}`);
+    }
+  }
+  const isValidInput = (inputValue:string, props:KeyWithAnyModel) => {
+    if (props.data.regex && !(`${inputValue}`.match(props.data.regex))) {
+      return false;
+    } else if (props.data.min_length && `${inputValue}`.length < props.data.min_length) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+  const accountNumValidation = (inputValue:string, props:KeyWithAnyModel) => {
+    const validFields = ["scb_account_no", "re_enter_scb_account_no", "other_bank_account_bt", "reenter_other_bank_account_bt", "other_bank_credit_card_bt", "reenter_other_bank_credit_card_bt"];
+    if (validFields.indexOf(props.data.logical_field_name) === -1) {
+      return true;
+    }
+    let storeValue: string | null = null;
+    let fieldName: string | null = null;
+    if (props.data.logical_field_name === "scb_account_no") {
+      fieldName = "re_enter_scb_account_no";              
+    } else if (props.data.logical_field_name === "re_enter_scb_account_no") {
+      fieldName = "scb_account_no";
+    } else if (props.data.logical_field_name === "other_bank_account_bt") {
+      fieldName = "reenter_other_bank_account_bt";   
+    } else if (props.data.logical_field_name === "reenter_other_bank_account_bt") {
+      fieldName = "other_bank_account_bt";
+    } else if (props.data.logical_field_name === "other_bank_credit_card_bt") {
+      fieldName = "reenter_other_bank_credit_card_bt";
+    } else if (props.data.logical_field_name === "reenter_other_bank_credit_card_bt") {
+      fieldName = "other_bank_credit_card_bt";      
+    }
+    fieldName = fieldName + "_a_1";
+    if (
+      stageSelector &&
+      stageSelector[0] &&
+      stageSelector[0].stageInfo &&
+      stageSelector[0].stageInfo.applicants
+    ) {
+      let userUpdateValue = null;
+      const userUpdateStageSelector = updatedStageInputsSelector.findIndex(
+        (ref: any) => ref && ref.stageId === stageSelector[0].stageId
+      );
+      if (userUpdateStageSelector > -1) {
+        userUpdateValue = updatedStageInputsSelector[userUpdateStageSelector].applicants[fieldName];
+      }
+      const userInputResponse = userInputSelector.applicants[fieldName];
+      storeValue =
+        userInputResponse ||
+        userUpdateValue ||
+        stageSelector[0].stageInfo.applicants[fieldName];
+    }    
+    return !(storeValue && (inputValue !== storeValue));
+  }; 
+  useEffect(() => {
+    if (
+      stageSelector &&
+      stageSelector[0] &&
+      stageSelector[0].stageInfo &&
+      stageSelector[0].stageInfo.applicants
+    ) {
+      const userInputResponse =
+        userInputSelector.applicants[props.data.logical_field_name + "_a_1"];
+      const stageIndex = getUrl
+        .getUpdatedStage()
+        .updatedStageInputs.findIndex(
+          (ref: any) => ref && ref.stageId === stageSelector[0].stageId
+        );
+      let updatedVal = null;
+      if (stageIndex > -1) {
+        updatedVal =
+          getUrl.getUpdatedStage().updatedStageInputs[stageIndex].applicants[
+            props.data.logical_field_name + "_a_1"
+          ];
+      }
+      let fieldValue = "";
+      if (updatedVal) {
+        fieldValue = updatedVal;
+      } else if (userInputResponse) {
+        fieldValue = userInputResponse;
+      } else if (
+        stageSelector[0].stageInfo.applicants[
+          props.data.logical_field_name + "_a_1"
+        ] &&
+        updatedVal !== ""
+      ) {
+        fieldValue =
+          stageSelector[0].stageInfo.applicants[
+            props.data.logical_field_name + "_a_1"
+          ];
+      }
+      if(props.data.logical_field_name === "sourcing_id_2" || props.data.logical_field_name === "sales_id_2" || props.data.logical_field_name === "referral_id_2" || props.data.logical_field_name === "closing_id_2"){
+        fieldValue = userInputSelector.applicants[props.data.logical_field_name + "_a_1"]?userInputSelector.applicants[props.data.logical_field_name + "_a_1"] : stageSelector[0].stageInfo.applicants[props.data.logical_field_name + "_a_1"]
+      }
+      if(props.data.logical_field_name === "ofc_postal_code"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        if(existingData.ofc_existing_postal_code_a_1){
+          fieldValue = existingData.ofc_existing_postal_code_a_1;
+        }
+      }
+      setDefaultValue(fieldValue);   
+      setValueUpdate(fieldValue)   
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);    
+useEffect(() => {  
+  if (
+    isValidInput(userInputSelector.applicants[props.data.logical_field_name + "_a_1"], props) &&
+    accountNumValidation(
+      userInputSelector.applicants[props.data.logical_field_name + "_a_1"],
+      props
+    )
+  ) {    
+    setError("");
+    props.handleCallback(
+      props.data,
+      userInputSelector.applicants[props.data.logical_field_name + "_a_1"]
+    );
+  }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [userInputSelector.applicants]);
 
-jest.mock('../../../utils/store/stages-slice', () => ({
-  removeAddToggleField: jest.fn(),
-  resetDefaultValue: jest.fn(),
-  resetNewAndOldFields: jest.fn()
-}));
-
-const mockDispatch = jest.fn();
-
-// Helper to create basic stage config
-const createStage = (stageId: string, fields: string[]) => ({
-  stageId,
-  stageInfo: {
-    applicants: {},
-    products: [],
-    fieldmetadata: {
-      data: {
-        stages: [{
-          stageId: stageId.split('-')[0], // Extract base stage ID
-          fields: fields.map(name => ({ logical_field_name: name }))
-        }]
+useEffect(() => {  
+  if(props.data.logical_field_name === "ofc_postal_code"){
+    const stageIndex = getUrl
+        .getUpdatedStage()
+        .updatedStageInputs.filter(
+          (ref: any) => ref && ref.stageId === 'ad-1'
+        );
+    if(userInputSelector.applicants.ofc_country_a_1 || stageSelector[0].stageInfo.applicants.ofc_country_a_1){
+      dispatch(fieldErrorAction.getMandatoryFields(["ofc_postal_code"]));
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: [],
+          newFields: ["ofc_postal_code"],
+          value: userInputSelector.applicants.ofc_postal_code_a_1?userInputSelector.applicants.ofc_postal_code_a_1:stageSelector[0].stageInfo.applicants.ofc_postal_code_a_1,
+        })
+      );            
+    }
+    if(applicantsSelector?.["ofc_country_a_1"]===''){
+      if(applicantsSelector?.ofc_postal_code_a_1 || stageSelector[0].stageInfo.applicants.ofc_country_a_1 === ""){
+        setDefaultValue('');
       }
     }
   }
-});
+}, [userInputSelector.applicants.ofc_country_a_1]);
 
-describe('getFields function', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Default mock implementations
-    jest.mock('../../../utils/common/change.utils', () => ({
-      authenticateType: () => 'manual',
-      FindIndex: () => 0,
-      getUrl: () => ({ getUserInputs: () => ({}) })
-    }));
-  });
+  useEffect(() => {
+    if(stageSelector[0].stageId === "bd-2"){
+      const postalMapping: Record<string, string[]> = {
+        PER: ["per_postal_code"],
+        AL1: ["alt_postal_code_1"],
+        AL2: ["alt_postal_code_2"],
+        AL3: ["alt_postal_code_3"],
+        AL4: ["alt_postal_code_4"],
+        AL5: ["alt_postal_code_5"],
+      };
 
-  // Test 1: Basic residency status handling (CT/PR)
-  it('handles Singaporean/PR residency status', () => {
-    const stages = [createStage('ad-1', ['NRIC', 'passport_no', 'pass_exp_dt'])];
-    const radioResidency = { logical_field_name: 'residency_status', value: 'CT' };
-    
-    const result = getFields(stages, radioResidency)(mockDispatch);
-    
-    expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['passport_no', 'pass_exp_dt']);
-    expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-      removeFields: ['passport_no', 'pass_exp_dt'],
-      newFields: ['NRIC'],
-      value: ''
-    });
-    expect(result).toEqual([{ logical_field_name: 'NRIC' }]);
-  });
+      // empty particular selected fields options other address field at Personal Details Page   
+      if (userInputSelector.applicants.select_alt_addresses_a_1) {
+        const selectedValues = userInputSelector.applicants.select_alt_addresses_a_1.split(",");
+        Object.entries(postalMapping).forEach(([key, fields]) => {
+          const removePostalCode = fields[0];
+          if (!selectedValues.includes(key)) {
+            if (removePostalCode === props.data.logical_field_name) {
+              setDefaultValue("")
+              dispatch(stagesAction.removeAddToggleField({
+                removeFields: [removePostalCode],
+                newFields: [],
+              }))
+            }
+          }
+        });
+      }
+      // empty all fields when removed all options other address field at Personal Details Page
+      if (!userInputSelector.applicants.select_alt_addresses_a_1 && !stageSelector[0].stageInfo.applicants?.select_alt_addresses_a_1) {
+        Object.entries(postalMapping).forEach(([key, fields]) => {
 
-  // Test 2: Foreigner residency status
-  it('handles Foreigner residency status', () => {
-    const stages = [createStage('ad-1', ['NRIC', 'passport_no', 'pass_exp_dt'])];
-    const radioResidency = { logical_field_name: 'residency_status', value: 'FR' };
-    
-    // Mock getUserInputs
-    require('../../../utils/common/change.utils').getUrl = () => ({
-      getUserInputs: () => ({
-        'passport_no_a_1': 'AB123456',
-        'pass_exp_dt_a_1': '2030-01-01'
-      })
-    });
-    
-    const result = getFields(stages, radioResidency)(mockDispatch);
-    
-    expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['NRIC']);
-    expect(result).toEqual([
-      { logical_field_name: 'passport_no' },
-      { logical_field_name: 'pass_exp_dt' }
-    ]);
-  });
+          if (fields[0] === props.data.logical_field_name) {
+            setDefaultValue("")
+            dispatch(stagesAction.removeAddToggleField({
+              removeFields: [fields[0]],
+              newFields: [],
+            }))
+          }
+        });
+      }
+    }
+  }, [userInputSelector.applicants.select_alt_addresses_a_1])
 
-  // Test 3: Work type employed
-  it('handles employed work type', () => {
-    const stages = [createStage('bd-1', [
-      'work_type', 'name_of_employer', 'name_of_business'
-    ])];
-    const radioResidency = { logical_field_name: 'work_type', value: 'S' };
-    
-    const result = getFields(stages, radioResidency)(mockDispatch);
-    
-    expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(['name_of_business']);
-    expect(result).toEqual([
-      { logical_field_name: 'work_type' },
-      { logical_field_name: 'name_of_employer' }
-    ]);
-  });
 
-  // Test 4: Credit limit consent (Y)
-  it('handles credit limit consent (Y)', () => {
-    const stages = [createStage('bd-1', [
-      'credit_limit_consent', 'work_type', 'embossed_name'
-    ])];
-    const radioResidency = { logical_field_name: 'credit_limit_consent', value: 'Y' };
-    
-    const result = getFields(stages, radioResidency, undefined, undefined, {
-      eligible_banca_insurances: ['life']
-    })(mockDispatch);
-    
-    expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith([
-      'embossed_name', 'myinfo_data_cli', 'insurance_consent_life'
-    ]);
-    expect(result).toEqual([
-      { logical_field_name: 'credit_limit_consent' },
-      { logical_field_name: 'work_type' }
-    ]);
-  });
+  useEffect(() => {
+      dispatch(isFieldUpdate(props, defaultValue, props.data.logical_field_name));
+      if (stageSelector[0].stageId !== "ad-2") {
+        props.handleCallback(props.data, defaultValue);
+      }
+      props.handleFieldDispatch(props.data.logical_field_name, defaultValue);         
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valueUpdate]);
 
-  // Test 5: Preferred limit (0)
-  it('handles preferred limit (0)', () => {
-    const stages = [createStage('bd-1', [
-      'preferred_limit', 'credit_limit_consent_info_8', 'preferred_credit_limit'
-    ])];
-    const radioResidency = { logical_field_name: 'preferred_limit', value: '0' };
-    
-    const result = getFields(stages, radioResidency)(mockDispatch);
-    
-    expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith([
-      'preferred_credit_limit', 'credit_limit_consent_info_5'
-    ]);
-    expect(result).toEqual([{ logical_field_name: 'credit_limit_consent_info_8' }]);
-  });
+  const bindHandler = (
+    fieldName: string,
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {    
+    const fieldValue = event.target.value;    
+    if (
+      fieldValue &&
+      fieldName !== "postal_code" &&
+      event.target.validity.valid
+    ) {
+      if (stageSelector[0].stageId !== "ad-2") {
+        props.handleCallback(props.data, event.target.value);
+      }   
+      setValueUpdate(fieldValue)
+    }    
 
-  // Test 6: No radioResidency provided
-  it('returns null when no radioResidency provided', () => {
-    const stages = [createStage('ad-1', ['NRIC'])];
-    const result = getFields(stages)(mockDispatch);
-    expect(result).toBeNull();
-  });
+  };
 
-  // Test 7: Employer other field
-  it('handles employerOther parameter', () => {
-    const stages = [createStage('bd-1', ['name_of_employer_other'])];
-    const result = getFields(stages, null, 'name_of_employer_other')(mockDispatch);
-    
-    expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-      removeFields: [],
-      newFields: ['name_of_employer_other'],
-      value: ''
-    });
-    expect(result).toEqual([{ logical_field_name: 'name_of_employer_other' }]);
-  });
-});
+  useEffect(() => {
+    if (fieldError(fieldErrorSelector, props)) {
+      if (!error) { 
+        if (stageSelector[0].stageId !== "ad-2") {           
+          setError(`${errorMsg.patterns} ${props.data.rwb_label_name}`);        
+        } else if (isValidInput(userInputSelector.applicants[props.data.logical_field_name + "_a_1"], props) && !accountNumValidation(userInputSelector.applicants[props.data.logical_field_name + "_a_1"], props)){
+          showAccountNumError();
+        } else {
+          setError(`${errorMsg.patterns} ${props.data.rwb_label_name}`);
+        }
+      }
+    } else {
+      setError("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldErrorSelector]);
+  useEffect(() => {
+    if (fieldError(fieldErrorSelector, props)) {
+      setError(`${errorMsg.emity} ${props.data.rwb_label_name}`);
+    } else {
+      setError("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldErrorSelector]);
+
+  useEffect(() => {
+    if(props.data.logical_field_name === "td_term_value_days"){
+      if(stageSelector[0].stageId === "ad-1" && stageSelector[0].stageInfo.products[0].product_category === "TD" && userInputSelector.applicants["td_term_type_a_1"] === "D") {
+      setHide(true);
+      }else{
+        setHide(false);
+      }
+    }else{
+      setHide(true);
+    }
+  },[userInputSelector.applicants["td_term_type_a_1"]]);
+  //employment screen based Non Face to Face selection enable existing_account_no at Term Deposit product
+  useEffect(() => {
+    if(props.data.logical_field_name === "existing_account_no"){
+      if(stageSelector[0].stageId === "bd-3" && ((stageSelector[0].stageInfo.products[0].product_category === "TD" && (stageSelector[0].stageInfo.products[0].product_type === "604" || stageSelector[0].stageInfo.products[0].product_type === "617"))|| (stageSelector[0].stageInfo.products[0].product_category==='SA' && getUrl.getJourneyType()==="ETC") || (stageSelector[0].stageInfo.products[0].product_category === "CA" && (stageSelector[0].stageInfo.products[0].product_type === "317" || (stageSelector[0].stageInfo.products[0].product_type === "318" || stageSelector[0].stageInfo.products[0].product_type==='154' || stageSelector[0].stageInfo.products[0].product_type==='339' || stageSelector[0].stageInfo.products[0].product_type==='342' || stageSelector[0].stageInfo.products[0].product_type==='314' || stageSelector[0].stageInfo.products[0].product_type==='329'|| stageSelector[0].stageInfo.products[0].product_type==='330' && getUrl.getJourneyType()==="ETC")))) && (userInputSelector.applicants["signature_crop_from_existing_ac_a_1"] === "Y" && userInputSelector.applicants["application_sourcing_a_1"] === "2")) {
+        setHide(true);
+        dispatch(fieldErrorAction.getMandatoryFields(["existing_account_no"]));
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: [],
+            newFields: ["existing_account_no"],
+            value: userInputSelector.applicants.existing_account_no_a_1?userInputSelector.applicants.existing_account_no_a_1:stageSelector[0].stageInfo.applicants.existing_account_no_a_1,
+          })
+        );  
+      }else if(userInputSelector.applicants["signature_crop_from_existing_ac_a_1"] === "N"){
+        setHide(false);
+        dispatch(fieldErrorAction.removeMandatoryFields(["existing_account_no"]));
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["existing_account_no"],
+            newFields: [],
+            value: "",
+          })
+        );
+        setDefaultValue("");
+      }
+    }else{
+      setHide(true);
+    }
+  },[userInputSelector.applicants["signature_crop_from_existing_ac_a_1"], userInputSelector.applicants["application_sourcing_a_1"]]);
+  const placeHolderText = () => {
+    return props.data.rwb_label_name;
+  };
+
+  const focusHandler = (
+    fieldName: string,
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    dispatch(lastAction.getField(fieldName));
+  };
+  return (
+    <>
+      {hide && (<div className="number text">
+        <label htmlFor={props.data.logical_field_name}>
+          {props.data.rwb_label_name}
+        </label>
+        <input
+          type={props.data.type}
+          name={props.data.logical_field_name}
+          aria-label={props.data.logical_field_name}
+          id={props.data.logical_field_name + "_a_1"}
+          placeholder={placeHolderText()}
+          value={defaultValue}
+          required={(props.data.logical_field_name === "sourcing_id_2" || props.data.logical_field_name === "sales_id_2" || props.data.logical_field_name === "referral_id_2" || props.data.logical_field_name === "closing_id_2" || (userInputSelector.applicants.ofc_country_a_1 && props.data.logical_field_name === "ofc_postal_code")) ? props.data.mandatory : ""}
+          minLength={props.data.min_length}
+          maxLength={props.data.length}
+          pattern={props.data.regex}
+          onChange={changeHandler.bind(this, props.data.logical_field_name)}
+          onBlur={bindHandler.bind(this, props.data.logical_field_name)}
+          disabled={props.data.editable || stageSelector[0].stageId === "bd-1"||(stageSelector[0].stageId === "bd-3" &&userInputSelector.applicants["ofc_country_a_1"] ===""&&props.data.logical_field_name!=="sourcing_id_2"&&props.data.logical_field_name!=="sales_id_2"&&props.data.logical_field_name!=="referral_id_2"&&props.data.logical_field_name!=="closing_id_2" && props.data.logical_field_name!=="existing_account_no")||(stageSelector[0].stageId === "bd-2" && authenticateType() === "myinfo" && props.data.logical_field_name==="postal_code_rwb") || (stageSelector[0].stageId === "bd-3" && store.getState().stages.stages[0].stageInfo.applicants.ofc_existing_country_a_1 && props.data.logical_field_name === "ofc_postal_code")}
+          onFocus={focusHandler.bind(this, props.data.logical_field_name)}
+          className={`${
+            isPostalCodeFetch ? "disabled" : ""
+          }`}
+        />
+        {isPostalCodeFetch && <span className={`${props.data.logical_field_name} circle-spinner`}></span>}
+        {error && <span className="error-msg">{error}</span>}
+      </div>)}
+    </>
+  );
+};
+
+export default Number;
+
+Please write test cases using jest with RTL
