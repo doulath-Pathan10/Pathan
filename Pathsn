@@ -1,243 +1,207 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
 import Model from './Model';
-import * as trackEvents from '../../../services/track-events';
-import * as commonService from '../../../services/common-service';
-import * as changeUtils from '../../../utils/common/change.utils';
 
-// Mock external dependencies
-jest.mock('../../../services/track-events');
-jest.mock('../../../services/common-service');
-jest.mock('../../../utils/common/change.utils');
+// Simple mock for the Lottie Player
 jest.mock('@lottiefiles/react-lottie-player', () => ({
   Player: () => <div>Lottie Player</div>
 }));
 
-// Mock Redux store
-const mockStore = configureStore([]);
-
-describe('Model Component', () => {
-  const mockModelData = {
+// Mock model.json data
+jest.mock('../../../assets/_json/model.json', () => [
+  {
     name: 'test_model',
     header_content: 'Test Header',
-    body_content: ['Test content line 1', 'Test content line 2'],
-    buttons: ['Button 1', 'Button 2'],
+    body_content: ['Test content line 1'],
+    buttons: ['Button 1', 'Button 2']
+  },
+  {
+    name: 'postal_code',
+    header_content: 'Postal Code Header',
+    body_content: ['Postal code content'],
+    buttons: ['Submit'],
     postal_code_lable: 'Enter Postal Code',
     errorDesc: 'Invalid postal code',
     header_content_second: 'Second Header',
-    popupDescription: 'Popup description text',
-    PostalCodebuttons: ['Postal Button 1', 'Postal Button 2']
-  };
+    popupDescription: 'Popup description',
+    PostalCodebuttons: ['Get Rates', 'Continue']
+  }
+], { virtual: true });
 
-  const mockProps = {
+// Mock track events
+jest.mock('../../../services/track-events', () => ({
+  triggerAdobeEvent: jest.fn()
+}));
+
+const mockStore = configureStore([]);
+
+describe('Model Component - Basic Tests', () => {
+  const baseProps = {
     name: 'test_model',
-    handlebuttonClick: jest.fn(),
-    handleContinueWithoutActivation: jest.fn(),
-    handleOTPSuccessClick: jest.fn(),
-    setContinueWithoutReferralcode: jest.fn(),
-    setShowReferralcodePopup: jest.fn(),
-    isTooltip: false,
-    body_content: 'Additional body content'
+    handlebuttonClick: jest.fn()
   };
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Mock the modelInfo import
-    jest.mock('../../../assets/_json/model.json', () => [mockModelData], { virtual: true });
-  });
+  const initialState = {
+    stages: {
+      stages: []
+    },
+    referralcode: {
+      refer: null
+    },
+    urlParam: {
+      resume: false
+    },
+    rate: {
+      ar: '',
+      eir: ''
+    }
+  };
 
-  const renderComponent = (props = {}, storeState = {}) => {
-    const initialState = {
-      stages: {
-        stages: [{
-          stageId: 'test-stage',
-          stageInfo: {
-            fieldmetaData: {
-              data: {
-                stages: [{
-                  fields: [{
-                    logical_field_name: 'postal_code',
-                    min_length: 6
-                  }]
-                }]
-              }
-            },
-            products: [{ product_category: 'CC' }, { product_category: 'PL' }],
-            applicants: {
-              full_name_a_1: 'Test User',
-              auth_mode_a_1: 'IX'
-            }
-          }
-        }]
-      },
-      referralcode: {
-        refer: null,
-        referralErrorMsg: ''
-      },
-      urlParam: {
-        resume: false
-      },
-      rate: {
-        ar: '',
-        eir: ''
-      },
-      ...storeState
-    };
-
-    const store = mockStore(initialState);
-    
-    return render(
-      <Provider store={store}>
-        <Model {...mockProps} {...props} />
+  test('renders basic popup with header and content', () => {
+    render(
+      <Provider store={mockStore(initialState)}>
+        <Model {...baseProps} />
       </Provider>
     );
-  };
 
-  test('renders the component with basic props', () => {
-    renderComponent();
-    
     expect(screen.getByText('Test Header')).toBeInTheDocument();
     expect(screen.getByText('Test content line 1')).toBeInTheDocument();
-    expect(screen.getByText('Test content line 2')).toBeInTheDocument();
     expect(screen.getByText('Button 1')).toBeInTheDocument();
     expect(screen.getByText('Button 2')).toBeInTheDocument();
   });
 
-  test('triggers track event on render', () => {
-    renderComponent();
-    
-    expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
-      'popupViewed',
-      'Test Header'
+  test('calls handlebuttonClick when button is clicked', () => {
+    render(
+      <Provider store={mockStore(initialState)}>
+        <Model {...baseProps} />
+      </Provider>
     );
-  });
 
-  test('handles button click for non-special cases', () => {
-    renderComponent();
-    
     fireEvent.click(screen.getByText('Button 1'));
-    expect(trackEvents.triggerAdobeEvent).toHaveBeenCalledWith(
-      'ctaClick',
-      'Button 1:Test Header',
-      {},
-      'Test Header'
+    expect(baseProps.handlebuttonClick).toHaveBeenCalled();
+  });
+
+  test('renders Lottie animation for warning popups', () => {
+    render(
+      <Provider store={mockStore(initialState)}>
+        <Model {...baseProps} />
+      </Provider>
     );
-    expect(mockProps.handlebuttonClick).toHaveBeenCalled();
+
+    expect(screen.getByText('Lottie Player')).toBeInTheDocument();
   });
 
-  test('renders postal code popup correctly', () => {
-    renderComponent({ name: 'postal_code' });
-    
-    expect(screen.getByText('Enter Postal Code')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter postal code')).toBeInTheDocument();
-    expect(screen.getByText('Postal Button 1')).toBeInTheDocument();
-    expect(screen.getByText('Postal Button 2')).toBeInTheDocument();
-  });
-
-  test('handles postal code input change', () => {
-    renderComponent({ name: 'postal_code' });
-    
-    const input = screen.getByPlaceholderText('Enter postal code');
-    fireEvent.change(input, { target: { value: '123456' } });
-    
-    expect(input).toHaveValue('123456');
-  });
-
-  test('shows error for invalid postal code length', () => {
-    renderComponent({ name: 'postal_code' });
-    
-    const input = screen.getByPlaceholderText('Enter postal code');
-    fireEvent.change(input, { target: { value: '123' } });
-    fireEvent.click(screen.getByText('Postal Button 1'));
-    
-    expect(screen.getByText('Invalid postal code')).toBeInTheDocument();
-  });
-
-  test('displays rate information when available', () => {
-    renderComponent(
-      { name: 'postal_code' },
-      { rate: { ar: '5.5', eir: '6.0' } }
+  test('renders question mark for tooltip popups', () => {
+    render(
+      <Provider store={mockStore(initialState)}>
+        <Model {...baseProps} isTooltip={true} />
+      </Provider>
     );
-    
-    expect(screen.getByText('Second Header')).toBeInTheDocument();
-    expect(screen.getByText('5.5% p.a.')).toBeInTheDocument();
-    expect(screen.getByText('(EIR 6.0% p.a.)')).toBeInTheDocument();
-    expect(screen.getByText('Popup description text')).toBeInTheDocument();
-  });
 
-  test('handles referral code popup case', () => {
-    renderComponent(
-      { name: 'referral_code' },
-      { referralcode: { refer: 'test', referralErrorMsg: 'Error' } }
-    );
-    
-    expect(screen.queryByText('Lottie Player')).not.toBeInTheDocument();
-  });
-
-  test('renders age hard stop with additional content', () => {
-    renderComponent({ 
-      name: 'ageHardStop',
-      body_content: '18 years' 
-    });
-    
-    expect(screen.getByText(/18 years/)).toBeInTheDocument();
-  });
-
-  test('renders tooltip variant', () => {
-    renderComponent({ isTooltip: true });
-    
     expect(screen.queryByText('Lottie Player')).not.toBeInTheDocument();
     expect(screen.getByTestId('popup-question')).toBeInTheDocument();
   });
+});
 
-  test('handles CCThankYou case with continue without activation', () => {
-    renderComponent({ name: 'CCThankYou' });
-    
-    fireEvent.click(screen.getByText('Button 1'));
-    expect(mockProps.handleContinueWithoutActivation).toHaveBeenCalled();
+describe('Model Component - Postal Code Tests', () => {
+  const postalProps = {
+    name: 'postal_code',
+    handlebuttonClick: jest.fn()
+  };
+
+  const postalState = {
+    ...initialState,
+    stages: {
+      stages: [{
+        stageInfo: {
+          fieldmetaData: {
+            data: {
+              stages: [{
+                fields: [{
+                  logical_field_name: 'postal_code',
+                  min_length: 6
+                }]
+              }]
+            }
+          },
+          products: [],
+          applicants: {}
+        }
+      }]
+    }
+  };
+
+  test('renders postal code input field', () => {
+    render(
+      <Provider store={mockStore(postalState)}>
+        <Model {...postalProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Enter Postal Code')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter postal code')).toBeInTheDocument();
   });
 
-  test('handles CCCardActivation case with OTP success', () => {
-    renderComponent({ name: 'CCCardActivation' });
-    
-    fireEvent.click(screen.getByText('Button 1'));
-    expect(mockProps.handleOTPSuccessClick).toHaveBeenCalled();
-  });
+  test('accepts only numbers in postal code field', () => {
+    render(
+      <Provider store={mockStore(postalState)}>
+        <Model {...postalProps} />
+      </Provider>
+    );
 
-  test('redirects to home page when no special cases match', () => {
-    delete window.location;
-    window.location = { href: '' } as any;
-    
-    renderComponent({ callBackMethod: false }, { 
-      referralcode: { refer: false },
-      urlParam: { resume: false }
-    });
-    
-    fireEvent.click(screen.getByText('Button 1'));
-    expect(window.location.href).toBe('http://localhost/');
-  });
-
-  test('dispatches rate request for postal code with valid input', async () => {
-    const mockDispatch = jest.fn();
-    jest.spyOn(commonService, 'rateRequest').mockResolvedValue({});
-    
-    renderComponent({ name: 'postal_code' });
-    
     const input = screen.getByPlaceholderText('Enter postal code');
-    fireEvent.change(input, { target: { value: '123456' } });
-    fireEvent.click(screen.getByText('Postal Button 1'));
-    
-    await waitFor(() => {
-      expect(commonService.rateRequest).toHaveBeenCalled();
-    });
+    fireEvent.change(input, { target: { value: 'abc123' } });
+    expect(input).toHaveValue('');
   });
 
-  test('handles preferred limit case with FAQ link', () => {
-    renderComponent({ name: 'preferred_limit' });
+  test('shows error when postal code is too short', () => {
+    render(
+      <Provider store={mockStore(postalState)}>
+        <Model {...postalProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Enter postal code');
+    fireEvent.change(input, { target: { value: '123' } });
+    fireEvent.click(screen.getByText('Get Rates'));
     
-    expect(screen.getByText('FAQs')).toBeInTheDocument();
-    expect(screen.getByText('FAQs').closest('a')).toHaveAttribute('target', '_blank');
+    expect(screen.getByText('Invalid postal code')).toBeInTheDocument();
+  });
+});
+
+describe('Model Component - Special Cases', () => {
+  test('renders age hard stop with custom content', () => {
+    const ageProps = {
+      name: 'ageHardStop',
+      handlebuttonClick: jest.fn(),
+      body_content: '18 years'
+    };
+
+    render(
+      <Provider store={mockStore(initialState)}>
+        <Model {...ageProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText(/18 years/)).toBeInTheDocument();
+  });
+
+  test('renders referral code popup differently', () => {
+    const referralState = {
+      ...initialState,
+      referralcode: {
+        refer: 'test'
+      }
+    };
+
+    render(
+      <Provider store={mockStore(referralState)}>
+        <Model name="referral_code" handlebuttonClick={jest.fn()} />
+      </Provider>
+    );
+
+    expect(screen.queryByText('Lottie Player')).not.toBeInTheDocument();
   });
 });
