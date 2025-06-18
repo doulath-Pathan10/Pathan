@@ -1,126 +1,76 @@
-import React from 'react';
-import { render, act } from '@testing-library/react';
-import SignaturePreview from './SignaturePreview';
-import SignatureCanvas from 'react-signature-canvas';
+// import { useState } from 'react';
+import './signature.scss';
+import { KeyWithAnyModel, StoreModel } from '../../../utils/model/common-model';
+import { useSelector, useDispatch } from 'react-redux';
+import { useState, useEffect } from 'react';
+import { fieldError, isFieldUpdate } from '../../../utils/common/change.utils';
+import errorMsg from '../../../assets/_json/error.json';
+import SignaturePreview from './signature-preview';
+import SignModel from './sign-model';
+import content from '../../../assets/_json/content.json';
 
-// Mock the react-signature-canvas module properly
-jest.mock('react-signature-canvas', () => {
-  const mockSignaturePad = {
-    clear: jest.fn(),
-    off: jest.fn(),
-    on: jest.fn(),
-    fromData: jest.fn(),
-    toData: jest.fn(() => []),
-    toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockJpegData'),
-    isEmpty: jest.fn(() => false),
+const Signature = (props: KeyWithAnyModel) => {
+  // const { data } = props;
+  const { fieldName, label_name, sign_title, sign_title_info } = props;
+  const viewSignature = useSelector((state: any) => state.stages.signatureDocument);
+  const fieldErrorSelector = useSelector((state: any) => state.stages.error);
+  const [error, setError] = useState('');
+  const [readMore, setReadMore] = useState(false);
+  const [show, setShow] = useState(false);
+  const currentStages = useSelector((state: StoreModel) => state.stages.currentStage);
+  const readMoreText = () => {
+    setReadMore(!readMore);
   };
+  const dispatch = useDispatch();
 
-  return jest.fn(() => mockSignaturePad);
-});
-
-// Mock the common-service functions
-jest.mock('../../../services/common-service', () => ({
-  getBase64IntArray: jest.fn(() => 'mockBase64Array'),
-  getIntArrayfromBase64: jest.fn(() => []),
-}));
-
-describe('SignaturePreview Component', () => {
-  const mockHandleSignatureEnd = jest.fn();
-  const defaultProps = {
-    viewSignature: null,
-    show: true,
-    handleSignatureEnd: mockHandleSignatureEnd,
-    clear: false,
+  const showSignModel = () => {
+    setShow(true);
   };
+ 
+  useEffect(() => {
+    if(currentStages === "preference" || currentStages === "bbSubmit") {
+      if (viewSignature) {
+        setError('');
+        dispatch(isFieldUpdate(props, viewSignature, fieldName));      
+      }
+    }   
+  }, [viewSignature]);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  useEffect(() => {
+    if (fieldError(fieldErrorSelector, props)) {
+      setError(`${label_name} ${errorMsg.emptyError}`);
+    } else {
+      setError('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldErrorSelector]);
 
-  it('renders the SignatureCanvas component', () => {
-    render(<SignaturePreview {...defaultProps} />);
-    expect(SignatureCanvas).toHaveBeenCalled();
-  });
+  const handlePopupBackButton = (data:any) => {
+    setShow(data);
+  }
 
-  it('calls clear when clear prop changes to true', () => {
-    const { rerender } = render(<SignaturePreview {...defaultProps} />);
-    
-    // Get the mock SignaturePad instance
-    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
-    
-    // Initial render shouldn't call clear
-    expect(mockSigPadInstance.clear).not.toHaveBeenCalled();
-    
-    // Rerender with clear=true
-    rerender(<SignaturePreview {...defaultProps} clear={true} />);
-    expect(mockSigPadInstance.clear).toHaveBeenCalled();
-  });
+  return (
+    <>
+    {!show ? <div className="signature">
+      <label htmlFor={fieldName}>{label_name}</label>
+    {fieldName === "signUser" &&  currentStages ==="preference"
+      &&
+      <span>{content.preference.signuser} </span>    
+    }
+      {!viewSignature ? <div className="signature__box" onClick={() => showSignModel()} >
+        <div className="signature__img"><span></span></div>
+        <div className="signature__label">
+          <label className="signature__bluelabel">{sign_title}</label>
+          <label className="signature__blacklabel">{sign_title_info}</label>
+        </div>
+      </div> : <div className="signature__box__view" onClick={showSignModel}>
+        <SignaturePreview show={show} viewSignature={viewSignature} />
+      </div>}       
 
-  it('turns off signature canvas when show becomes false', () => {
-    const { rerender } = render(<SignaturePreview {...defaultProps} />);
-    
-    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
-    
-    // Initial render with show=true
-    expect(mockSigPadInstance.off).not.toHaveBeenCalled();
-    
-    // Rerender with show=false
-    rerender(<SignaturePreview {...defaultProps} show={false} />);
-    expect(mockSigPadInstance.off).toHaveBeenCalled();
-  });
+      
+    </div> : <SignModel show={show} fieldName={fieldName} viewSignature={viewSignature} handlebuttonClick={handlePopupBackButton} />}</>
+  );
+};
 
-  it('loads and displays signature when viewSignature is provided and show is true', () => {
-    const viewSignature = 'mockBase64Signature';
-    render(<SignaturePreview {...defaultProps} viewSignature={viewSignature} />);
-    
-    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
-    const { getIntArrayfromBase64 } = require('../../../services/common-service');
-    
-    expect(getIntArrayfromBase64).toHaveBeenCalledWith(viewSignature);
-    expect(mockSigPadInstance.fromData).toHaveBeenCalledWith([]);
-    expect(mockSigPadInstance.on).toHaveBeenCalled();
-  });
-
-  it('loads signature without enabling when viewSignature is provided and show is false', () => {
-    const viewSignature = 'mockBase64Signature';
-    render(<SignaturePreview {...defaultProps} viewSignature={viewSignature} show={false} />);
-    
-    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
-    const { getIntArrayfromBase64 } = require('../../../services/common-service');
-    
-    expect(getIntArrayfromBase64).toHaveBeenCalledWith(viewSignature);
-    expect(mockSigPadInstance.fromData).toHaveBeenCalledWith([]);
-    expect(mockSigPadInstance.on).not.toHaveBeenCalled();
-  });
-
-  it('handles signature end event correctly', () => {
-    render(<SignaturePreview {...defaultProps} />);
-    
-    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
-    const { getBase64IntArray } = require('../../../services/common-service');
-    
-    // Simulate signature end by calling the onEnd prop
-    act(() => {
-      const onEnd = SignatureCanvas.mock.calls[0][0].onEnd;
-      onEnd();
-    });
-    
-    expect(mockSigPadInstance.toData).toHaveBeenCalled();
-    expect(getBase64IntArray).toHaveBeenCalledWith([]);
-    expect(mockSigPadInstance.toDataURL).toHaveBeenCalledWith('image/jpeg');
-    expect(mockHandleSignatureEnd).toHaveBeenCalledWith({
-      array: 'mockBase64Array',
-      jpeg: 'mockJpegData'
-    });
-  });
-
-  it('does not load signature data when viewSignature is null', () => {
-    render(<SignaturePreview {...defaultProps} viewSignature={null} />);
-    
-    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
-    const { getIntArrayfromBase64 } = require('../../../services/common-service');
-    
-    expect(getIntArrayfromBase64).not.toHaveBeenCalled();
-    expect(mockSigPadInstance.fromData).not.toHaveBeenCalled();
-  });
-});
+export default Signature;
+Please write test cases using jest with RTL
