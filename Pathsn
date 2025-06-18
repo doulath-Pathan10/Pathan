@@ -1,215 +1,223 @@
-import './signature.scss';
-import { useEffect, useState } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { stagesAction } from "../../../utils/store/stages-slice";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import ReactDOM from 'react-dom';
-import SignaturePreview from './signature-preview';
-import { getUrl } from "../../../utils/common/change.utils"
-import { postRequest, signatureSubmit } from '../../../services/common-service';
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import SignModel from './SignModel';
 import axios from 'axios';
-import { documentClientContext, getDocumentMetaData } from '../document-upload/document-upload.utils';
+import ReactDOM from 'react-dom';
 
-const SignModel = (props: KeyWithAnyModel) => {
-  const { handlebuttonClick, show, viewSignature, fieldName, setValue, data, popupTitle } = props;
-  const [signature, setSignature] = useState<any>(null);
-  const [pngSignature, setPngSignature] = useState<any>(null);
-  const dispatch = useDispatch();
+// Mock react-dom
+jest.mock('react-dom', () => ({
+  ...jest.requireActual('react-dom'),
+  createPortal: (node: any) => node,
+}));
 
-  const [error, setError] = useState('');
-  const [charCount, setCharCount] = useState('');
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  const userInputSelector = useSelector((state: StoreModel) => state.stages.userInput);
-  const channelReference = stageSelector[0].stageInfo.application.channel_reference;
+// Mock axios
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-  const docRequest = {
-    origin: "front-line-supporting-document",
-    // getUrl.getFlow() === 'first-director-authorized' ||
-    // getUrl.getFlow() === 'single-director-authorized' ||
-    // getUrl.getFlow() === 'single-director-partnership-company-authorized'
-    //   ? '1'
-    //   : '2',
-    // docBytes: signature,
-    // docCategory: 'R0006',
-    // docType: 'T0308',
-    documentCategoryCode:"R0006",
-    documentTypeCode:"T0308",
-    // applicantNo: 1,
-    applicantId:1,
-    imageOrder: 1,
-    period: 0,
-    isWatermarkRequired: "N",
-    documentOptionSequence: 1
-  };
+// Mock services
+jest.mock('../../../services/common-service', () => ({
+  postRequest: jest.fn(),
+  signatureSubmit: jest.fn(() => Promise.resolve({ success: true }))
+}));
 
-  useEffect(() => {
-    if (viewSignature) {
-      setSignature(viewSignature);
+// Mock signature-preview component
+jest.mock('./signature-preview', () => (props: any) => (
+  <div data-testid="signature-preview" {...props} />
+));
+
+// Mock store
+const createMockStore = (customState = {}) => {
+  return configureStore({
+    reducer: {
+      stages: () => ({
+        stages: [{
+          stageId: 'test-stage',
+          stageInfo: {
+            application: {
+              channel_reference: 'test123'
+            },
+            applicants: {
+              signUser: 'existingSignature',
+              purposeOther: 'existingPurpose'
+            }
+          }
+        }],
+        userInput: { applicants: {} },
+        ...customState.stages
+      }),
+      ...customState
     }
-  }, []);
-
-  const clearSignature = () => {
-    setSignature(null);
-    setPngSignature(null);
-  };
-
-  const onclickEvent = () => {
-    if (fieldName === 'signUser') {
-      saveSignature();
-    } else {
-      saveOthersTextarea(charCount);
-    }
-  };
-
-  const saveSignature = () => {
-    signatureRequest();
-  };
-
-  const handleSignatureEnd = (data: any) => {
-    setSignature(data.array);
-    setPngSignature(data.jpeg);
-  };
-
-  /*textarea*/
-  const handleChange = (e: any) => {
-    if (e.target.value.length > 160) {
-      setError('Characters limit exceeded');
-    } else if (fieldName === 'purposeOther' || fieldName === 'fundReasonOther') {
-      const regex = /^[a-zA-Z0-9\s]*$/;
-      const isValid = regex.test(e.target.value);
-      if (!isValid) {
-        setError('Special Characters not allowed');
-      } else {
-        setError('');
-      }
-      setCharCount(e.target.value);
-    } else {
-      setError('');
-      setCharCount(e.target.value);
-    }
-  };
-
-  const saveOthersTextarea = (char: any) => {
-    setValue(char);
-    handlebuttonClick(false);
-  };
-
-
-  const signatureRequest = () => {
-    dispatch(stagesAction.setSignatureDocument(signature));
-    dispatch(stagesAction.setActivateformData(true));
-    handlebuttonClick(false);
-    /** Single file upload -- child method */
-    let formData
-    const signatureUpload = async () => {
-      const dataURL = `data:image/jpeg;base64,${pngSignature}`;
-      const byteString = atob(dataURL.split(',')[1]);
-      const mimeString = dataURL.split(',')[0].split(':')[1].split(';')[0];
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-      }
-      const sendData: any = new Blob([ab], { type: mimeString });
-      formData = new FormData();
-      formData.append('file', sendData, "sign");
-      formData.append("documentJson", JSON.stringify(docRequest));
-      sendData&& formData && signatureSubmit(channelReference, formData, dispatch )
-    }
-    signatureUpload();
-  }
-
-  useEffect(() => {
-    if (
-      stageSelector[0].stageInfo.applicants[fieldName] ||
-      userInputSelector.applicants[fieldName]
-    ) {
-      const userData =
-        stageSelector[0].stageInfo.applicants[fieldName] || userInputSelector.applicants[fieldName];
-      setCharCount(userData);
-    }
-  }, []);
-  /*text area end*/
-
-  const portalElement: any = document.getElementById('model-root');
-  return ReactDOM.createPortal(
-    <div className="signModel">
-      <div className="sign__popup">
-        <div className="sign--header">
-          <div className="sign--header__left" onClick={() => handlebuttonClick()}></div>
-          <div className="sign--header__middle">
-            {' '}
-            {fieldName === 'countryTinOther' ||
-              fieldName === 'purposeOther' ||
-              fieldName === 'fundReasonOther'
-              ? popupTitle
-              : 'Signature'}
-          </div>
-          {fieldName === 'countryTinOther' ||
-            fieldName === 'purposeOther' ||
-            fieldName === 'fundReasonOther' ? (
-            ''
-          ) : (
-            <button
-              disabled={signature ? false : true}
-              className={signature ? 'sign--header__right--blue' : 'sign--header__right'}
-              onClick={() => clearSignature()}
-            >
-              Reset
-            </button>
-          )}
-        </div>
-        {fieldName === 'countryTinOther' ||
-          fieldName === 'purposeOther' ||
-          fieldName === 'fundReasonOther' ? (
-          <>
-            <div className="textarea__popup">
-              <div className="title__textarea">Please provide details</div>
-              <div className="char__textarea">
-                <textarea autoFocus={true} value={charCount} onChange={handleChange}></textarea>
-                <div className="char__count">{charCount.length + '/' + data.maxLength}</div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="sign--body">
-            <div className="sign--body__title">Sign in the box below</div>
-            <div className="sign--body__pad">
-              <SignaturePreview
-                clear={!signature}
-                viewSignature={viewSignature}
-                show={show}
-                handleSignatureEnd={handleSignatureEnd}
-              />
-            </div>
-          </div>
-        )}
-        {fieldName === 'signUser' && (
-          <div className="sign--rotate">
-            <div className="sign--rotate__img"></div>
-            <div className="sign--rotate__desc">
-              Rotate your phone for a larger space to sign in
-            </div>
-          </div>
-        )}
-        <div className="sign--footer">
-          {/* {fieldName === 'purposeOther' || fieldName === 'fundReasonOther'? <button   disabled={charCount ? false : true }  className={charCount ? 'continue' : 'continue  form-invalid'}  onClick={() => saveOthersTextarea((charCount))}>Confirm</button> :
-          <button disabled={signature ? false : true } className={signature ? 'continue' : 'continue  form-invalid'} onClick={() => saveSignature()}>Confirm signature</button>
-        } */}
-          <button
-            disabled={fieldName === 'signUser' ? !signature : !charCount}
-            className={signature || charCount ? 'continue' : 'continue form-invalid'}
-            onClick={() => onclickEvent()}
-          >
-            {fieldName === 'signUser' ? <>Confirm signature</> : <>Confirm</>}
-          </button>
-        </div>
-        {error && <span className="error-msg">{error}</span>}
-      </div>
-    </div>,
-    portalElement
-  );
+  });
 };
 
-export default SignModel;
-Please write test cases using jest with RTL
+describe('SignModel Component', () => {
+  const mockHandleButtonClick = jest.fn();
+  const mockSetValue = jest.fn();
+  
+  const defaultProps = {
+    handlebuttonClick: mockHandleButtonClick,
+    show: true,
+    viewSignature: 'testSignature',
+    fieldName: 'signUser',
+    setValue: mockSetValue,
+    data: { maxLength: 160 },
+    popupTitle: 'Test Title'
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const renderComponent = (props = defaultProps, customState = {}) => {
+    const store = createMockStore(customState);
+    return render(
+      <Provider store={store}>
+        <SignModel {...props} />
+      </Provider>
+    );
+  };
+
+  test('renders signature mode correctly', () => {
+    renderComponent();
+    expect(screen.getByText('Signature')).toBeInTheDocument();
+    expect(screen.getByTestId('signature-preview')).toBeInTheDocument();
+    expect(screen.getByText('Sign in the box below')).toBeInTheDocument();
+    expect(screen.getByText('Confirm signature')).toBeInTheDocument();
+  });
+
+  test('renders textarea mode correctly for non-signature fields', () => {
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther',
+      popupTitle: 'Purpose Other'
+    });
+    
+    expect(screen.getByText('Purpose Other')).toBeInTheDocument();
+    expect(screen.getByText('Please provide details')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByText('Confirm')).toBeInTheDocument();
+  });
+
+  test('handles signature confirmation', async () => {
+    renderComponent();
+    
+    // Simulate signature completion
+    const signaturePreview = screen.getByTestId('signature-preview');
+    fireEvent.click(signaturePreview);
+    
+    const confirmButton = screen.getByText('Confirm signature');
+    fireEvent.click(confirmButton);
+    
+    await waitFor(() => {
+      expect(mockHandleButtonClick).toHaveBeenCalledWith(false);
+    });
+  });
+
+  test('handles textarea confirmation', () => {
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther'
+    });
+    
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'Test purpose' } });
+    
+    const confirmButton = screen.getByText('Confirm');
+    fireEvent.click(confirmButton);
+    
+    expect(mockSetValue).toHaveBeenCalledWith('Test purpose');
+    expect(mockHandleButtonClick).toHaveBeenCalledWith(false);
+  });
+
+  test('shows error when textarea exceeds character limit', () => {
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther'
+    });
+    
+    const longText = 'a'.repeat(161);
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: longText } });
+    
+    expect(screen.getByText('Characters limit exceeded')).toBeInTheDocument();
+    expect(screen.getByText('161/160')).toBeInTheDocument();
+  });
+
+  test('shows error when textarea contains special characters', () => {
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther'
+    });
+    
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'Test@123' } });
+    
+    expect(screen.getByText('Special Characters not allowed')).toBeInTheDocument();
+  });
+
+  test('clears signature when reset button is clicked', () => {
+    renderComponent();
+    
+    const resetButton = screen.getByText('Reset');
+    fireEvent.click(resetButton);
+    
+    // Verify signature is cleared (button disabled state changes)
+    expect(screen.getByText('Confirm signature')).toBeDisabled();
+  });
+
+  test('disables confirm button when no signature/text is entered', () => {
+    renderComponent();
+    expect(screen.getByText('Confirm signature')).toBeDisabled();
+    
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther'
+    });
+    expect(screen.getByText('Confirm')).toBeDisabled();
+  });
+
+  test('pre-fills existing signature data', () => {
+    renderComponent();
+    // Verify signature preview receives existing signature
+    const signaturePreview = screen.getByTestId('signature-preview');
+    expect(signaturePreview).toHaveAttribute('viewSignature', 'testSignature');
+  });
+
+  test('pre-fills existing text data', () => {
+    const customState = {
+      stages: {
+        stages: [{
+          stageId: 'test-stage',
+          stageInfo: {
+            application: { channel_reference: 'test123' },
+            applicants: { purposeOther: 'existing purpose' }
+          }
+        }],
+        userInput: { applicants: {} }
+      }
+    };
+    
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther'
+    }, customState);
+    
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).toHaveValue('existing purpose');
+  });
+
+  test('shows rotate instructions for signUser field', () => {
+    renderComponent();
+    expect(screen.getByText('Rotate your phone for a larger space to sign in')).toBeInTheDocument();
+  });
+
+  test('does not show rotate instructions for other fields', () => {
+    renderComponent({
+      ...defaultProps,
+      fieldName: 'purposeOther'
+    });
+    expect(screen.queryByText('Rotate your phone')).not.toBeInTheDocument();
+  });
+});
