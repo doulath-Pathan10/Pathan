@@ -1,223 +1,52 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import SignModel from './SignModel';
-import axios from 'axios';
-import ReactDOM from 'react-dom';
+import SignatureCanvas from 'react-signature-canvas';
+import { useEffect, useRef} from 'react';
+import { getBase64IntArray, getIntArrayfromBase64 } from '../../../services/common-service';
 
-// Mock react-dom
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: any) => node,
-}));
+const SignaturePreview = (props:any) => {
+  const {viewSignature, show, handleSignatureEnd, clear } = props;
+  const sigRef = useRef<any>(); 
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
-
-// Mock services
-jest.mock('../../../services/common-service', () => ({
-  postRequest: jest.fn(),
-  signatureSubmit: jest.fn(() => Promise.resolve({ success: true }))
-}));
-
-// Mock signature-preview component
-jest.mock('./signature-preview', () => (props: any) => (
-  <div data-testid="signature-preview" {...props} />
-));
-
-// Mock store
-const createMockStore = (customState = {}) => {
-  return configureStore({
-    reducer: {
-      stages: () => ({
-        stages: [{
-          stageId: 'test-stage',
-          stageInfo: {
-            application: {
-              channel_reference: 'test123'
-            },
-            applicants: {
-              signUser: 'existingSignature',
-              purposeOther: 'existingPurpose'
-            }
-          }
-        }],
-        userInput: { applicants: {} },
-        ...customState.stages
-      }),
-      ...customState
+  useEffect(() => {
+    if(clear) {
+      sigRef.current.clear();
     }
-  });
-};
+  }, [clear]);
 
-describe('SignModel Component', () => {
-  const mockHandleButtonClick = jest.fn();
-  const mockSetValue = jest.fn();
+  useEffect(() => {
+    if(show !== true) {
+      sigRef.current.off();
+    }
+  }, [])
+
   
-  const defaultProps = {
-    handlebuttonClick: mockHandleButtonClick,
-    show: true,
-    viewSignature: 'testSignature',
-    fieldName: 'signUser',
-    setValue: mockSetValue,
-    data: { maxLength: 160 },
-    popupTitle: 'Test Title'
+  useEffect(() => {
+    if ((viewSignature && show) || show) {
+      const arrayPoint = getIntArrayfromBase64(viewSignature);
+      sigRef.current.fromData(arrayPoint);
+      sigRef.current.on();
+    } else if (viewSignature && !show) {
+      const arrayPoint = getIntArrayfromBase64(viewSignature);
+      sigRef.current.fromData(arrayPoint);
+    }
+  }, [viewSignature, show]);
+
+
+  const handleSignatureEndFun = async () => {
+    const base64String = getBase64IntArray(sigRef.current.toData());
+    handleSignatureEnd({array: base64String, jpeg: sigRef.current.toDataURL("image/jpeg").split(',')[1]});
   };
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  return (
+    <div className='sign-preview'>
+        <SignatureCanvas
+              penColor="black"
+              canvasProps={{ className: 'signature__canvans' }}
+              ref={sigRef}
+              onEnd={handleSignatureEndFun}
+            />
+    </div>
+  )
+}
 
-  const renderComponent = (props = defaultProps, customState = {}) => {
-    const store = createMockStore(customState);
-    return render(
-      <Provider store={store}>
-        <SignModel {...props} />
-      </Provider>
-    );
-  };
-
-  test('renders signature mode correctly', () => {
-    renderComponent();
-    expect(screen.getByText('Signature')).toBeInTheDocument();
-    expect(screen.getByTestId('signature-preview')).toBeInTheDocument();
-    expect(screen.getByText('Sign in the box below')).toBeInTheDocument();
-    expect(screen.getByText('Confirm signature')).toBeInTheDocument();
-  });
-
-  test('renders textarea mode correctly for non-signature fields', () => {
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther',
-      popupTitle: 'Purpose Other'
-    });
-    
-    expect(screen.getByText('Purpose Other')).toBeInTheDocument();
-    expect(screen.getByText('Please provide details')).toBeInTheDocument();
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-    expect(screen.getByText('Confirm')).toBeInTheDocument();
-  });
-
-  test('handles signature confirmation', async () => {
-    renderComponent();
-    
-    // Simulate signature completion
-    const signaturePreview = screen.getByTestId('signature-preview');
-    fireEvent.click(signaturePreview);
-    
-    const confirmButton = screen.getByText('Confirm signature');
-    fireEvent.click(confirmButton);
-    
-    await waitFor(() => {
-      expect(mockHandleButtonClick).toHaveBeenCalledWith(false);
-    });
-  });
-
-  test('handles textarea confirmation', () => {
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther'
-    });
-    
-    const textarea = screen.getByRole('textbox');
-    fireEvent.change(textarea, { target: { value: 'Test purpose' } });
-    
-    const confirmButton = screen.getByText('Confirm');
-    fireEvent.click(confirmButton);
-    
-    expect(mockSetValue).toHaveBeenCalledWith('Test purpose');
-    expect(mockHandleButtonClick).toHaveBeenCalledWith(false);
-  });
-
-  test('shows error when textarea exceeds character limit', () => {
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther'
-    });
-    
-    const longText = 'a'.repeat(161);
-    const textarea = screen.getByRole('textbox');
-    fireEvent.change(textarea, { target: { value: longText } });
-    
-    expect(screen.getByText('Characters limit exceeded')).toBeInTheDocument();
-    expect(screen.getByText('161/160')).toBeInTheDocument();
-  });
-
-  test('shows error when textarea contains special characters', () => {
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther'
-    });
-    
-    const textarea = screen.getByRole('textbox');
-    fireEvent.change(textarea, { target: { value: 'Test@123' } });
-    
-    expect(screen.getByText('Special Characters not allowed')).toBeInTheDocument();
-  });
-
-  test('clears signature when reset button is clicked', () => {
-    renderComponent();
-    
-    const resetButton = screen.getByText('Reset');
-    fireEvent.click(resetButton);
-    
-    // Verify signature is cleared (button disabled state changes)
-    expect(screen.getByText('Confirm signature')).toBeDisabled();
-  });
-
-  test('disables confirm button when no signature/text is entered', () => {
-    renderComponent();
-    expect(screen.getByText('Confirm signature')).toBeDisabled();
-    
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther'
-    });
-    expect(screen.getByText('Confirm')).toBeDisabled();
-  });
-
-  test('pre-fills existing signature data', () => {
-    renderComponent();
-    // Verify signature preview receives existing signature
-    const signaturePreview = screen.getByTestId('signature-preview');
-    expect(signaturePreview).toHaveAttribute('viewSignature', 'testSignature');
-  });
-
-  test('pre-fills existing text data', () => {
-    const customState = {
-      stages: {
-        stages: [{
-          stageId: 'test-stage',
-          stageInfo: {
-            application: { channel_reference: 'test123' },
-            applicants: { purposeOther: 'existing purpose' }
-          }
-        }],
-        userInput: { applicants: {} }
-      }
-    };
-    
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther'
-    }, customState);
-    
-    const textarea = screen.getByRole('textbox');
-    expect(textarea).toHaveValue('existing purpose');
-  });
-
-  test('shows rotate instructions for signUser field', () => {
-    renderComponent();
-    expect(screen.getByText('Rotate your phone for a larger space to sign in')).toBeInTheDocument();
-  });
-
-  test('does not show rotate instructions for other fields', () => {
-    renderComponent({
-      ...defaultProps,
-      fieldName: 'purposeOther'
-    });
-    expect(screen.queryByText('Rotate your phone')).not.toBeInTheDocument();
-  });
-});
+export default SignaturePreview
+Please write test cases using jest with RTL
