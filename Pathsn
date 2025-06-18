@@ -1,477 +1,463 @@
-import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import validateService from "../../../services/validation-service";
-import { KeyWithAnyModel, LovInputModel, StoreModel } from "../../../utils/model/common-model";
-import { authenticateType, fieldError, fieldIdAppend, getUrl, isFieldUpdate, isFieldValueUpdate } from "../../../utils/common/change.utils";
-import "./phone.scss";
-import errorMsg from "../../../assets/_json/error.json";
-import { lastAction } from "../../../utils/store/last-accessed-slice";
-import { stagesAction } from "../../../utils/store/stages-slice";
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import Phone from './Phone';
+import { lastAction } from '../../../utils/store/last-accessed-slice';
+import { stagesAction } from '../../../utils/store/stages-slice';
 
-export const Phone = (props: KeyWithAnyModel) => {
-  const [lovData, setLovData] = useState<any>([]);
-  const [error, setError] = useState('');
-  const lovSelector = useSelector((state: StoreModel) => state.lov);
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  const fieldErrorSelector = useSelector(
-    (state: StoreModel) => state.fielderror.error
-  );
-  
-  const userInputSelector = useSelector(
-    (state: StoreModel) => state.stages.userInput
-  );
-  const dispatch = useDispatch();
-  const [defaultValue, setDefaultValue] = useState("");
-  const [hide,show] = useState(true);
-  const applicantNo = sessionStorage.getItem("currentStage")? sessionStorage.getItem("currentStage"):1;
-  const validateMinLength = () => {
-    let minLength = props.data.min_length;
-    /*istanbul ignore else*/
-    if(props.data.logical_field_name === "mobile_number"|| props.data.logical_field_name ==="home_phone_number"){
-      minLength = "8";
-    }
-    return minLength
-  }
-
-  const validateMaxLength = () => {
-    let maxLength = props.data.max_length;
-    if((props.data.logical_field_name === "mobile_number" && !userInputSelector.applicants?.mobile_number_rwb_a_1)|| props.data.logical_field_name ==="home_phone_number"){
-      maxLength = "8";
-    }else{
-      maxLength = "17";
-    }
-    return maxLength
-  }
-
-  useEffect(() => {
-    /*istanbul ignore else*/
-    if (
-      stageSelector &&
-      stageSelector[0] &&
-      stageSelector[0].stageInfo &&
-      stageSelector[0].stageInfo.applicants
-    ) {
-      /*istanbul ignore else*/
-      if (
-        (stageSelector[0].stageInfo.applicants[
-          props.data.logical_field_name + "_a_" + applicantNo
-        ]||stageSelector[0].stageInfo.applicants[
-          props.data.logical_field_name + "_rwb_a_" + applicantNo
-        ])
-      ) {
-        const userInputResponse =
-          userInputSelector.applicants[fieldIdAppend(props)];
-        const stageIndex = getUrl
-          .getUpdatedStage()
-          .updatedStageInputs.findIndex(
-            (ref: any) => ref && ref.stageId === stageSelector[0].stageId
-          );
-        let updatedVal = null;
-        /*istanbul ignore else*/
-        if (stageIndex > -1) {
-          updatedVal =
-            getUrl.getUpdatedStage().updatedStageInputs[stageIndex].applicants[
-              fieldIdAppend(props)
-            ];
-        }
-
-        let fieldValue = "";
-        if (updatedVal) {
-          fieldValue = updatedVal;
-        } else if (userInputResponse) {
-          fieldValue = userInputResponse;
-        } else if (
-          stageSelector[0].stageInfo.applicants[fieldIdAppend(props)] &&
-          updatedVal !== ""
-        ) {
-          fieldValue =
-            stageSelector[0].stageInfo.applicants[fieldIdAppend(props)];
-        }
-        const userMobileNum = fieldValue;
-        /*istanbul ignore else*/
-        if(authenticateType() === 'myinfo' && stageSelector[0].stageId === 'ssf-1'){
-        const mobileNum:any =
-          userMobileNum.indexOf("-") >= 0
-            ? userMobileNum.split("-")[1]
-            : userMobileNum;
-        setDefaultValue(mobileNum);
-        dispatch(stagesAction.removeAddToggleField({
-          removeFields:[],
-          newFields:['mobile_number'],
-          value: userMobileNum.split("-")[1]
-        }))
-        phoneValidation(props.data.logical_field_name, mobileNum, "");
-        if(props.data.logical_field_name === 'mobile_number'){
-          props.handleCallback(props.data, mobileNum);
-        }
-        }
-          else if(stageSelector[0].stageId === 'bd-2'){
-          const mobileNum:any =
-            userMobileNum.indexOf("-") >= 0
-              ? userMobileNum.split("-")[1]
-              : userMobileNum;
-          setDefaultValue(mobileNum);
-          dispatch(stagesAction.removeAddToggleField({
-            removeFields:[],
-            newFields:['home_phone_number'],
-            value: userMobileNum.split("-")[1]
-          }))
-          phoneValidation(props.data.logical_field_name, mobileNum, "");
-          if(props.data.logical_field_name === 'home_phone_number'){
-            props.handleCallback(props.data, mobileNum);
+// Mock Redux store
+const mockStore = configureStore({
+  reducer: {
+    lov: () => ({ lov: [] }),
+    stages: () => ({
+      stages: [
+        {
+          stageId: 'bd-1',
+          stageInfo: {
+            applicants: {
+              mobile_number_a_1: '91234567',
+              mobile_number_rwb_a_1: '65',
+              home_phone_number_a_1: '61234567',
+              home_phone_number_rwb_a_1: '65'
+            }
           }
         }
-        else{
-          setDefaultValue(userMobileNum);
-          phoneValidation(props.data.logical_field_name, userMobileNum, "");
+      ],
+      userInput: {
+        applicants: {
+          mobile_number_a_1: '91234567',
+          mobile_number_rwb_a_1: '65',
+          home_phone_number_a_1: '61234567',
+          home_phone_number_rwb_a_1: '65',
+          select_alt_contacts_a_1: 'MO1,MO2'
         }
       }
-      /*istanbul ignore else*/
-      if(
-        stageSelector[0].stageId === "bd-3" &&
-        (props.data.logical_field_name === "mobile_1_add" || props.data.logical_field_name === "mobile_2_add" || props.data.logical_field_name === "overseas_mobile1" ||
-        props.data.logical_field_name === "overseas_mobile2" || props.data.logical_field_name === "ofc1" || props.data.logical_field_name === "ofc2" ||
-        props.data.logical_field_name === "office_phone1" || props.data.logical_field_name === "office_phone2" || props.data.logical_field_name === "ohph1" ||
-        props.data.logical_field_name === "ohph2" || props.data.logical_field_name === "home_phone2")
-      ) {
-        setDefaultValue(userInputSelector.applicants[props.data.logical_field_name + "_a_1"]? userInputSelector.applicants[props.data.logical_field_name + "_a_1"]:stageSelector[0].stageInfo.applicants[props.data.logical_field_name + "_a_1"])
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    /*istanbul ignore else*/
-    if (lovSelector.lov.length > 0) {
-      lovSelector.lov.forEach((ref: LovInputModel) => {
-        /*istanbul ignore else*/
-        if (props.data.logical_field_name.includes(ref.label)) {
-          setLovData(ref.value);
-        }
-      });
-    }
-  }, [lovSelector.lov, props.data.logical_field_name]);
-  useEffect(() => {
-    /*istanbul ignore else*/
-    if(fieldError(fieldErrorSelector, props) && props.data.rwb_label_name !=="Office number (Optional)"){
-      if(props.data.logical_field_name === 'mobile_number'){
-        setError(`${errorMsg.patterns} mobile number`)
-      }else{
-        setError(`${errorMsg.patterns} ${props.data.rwb_label_name}`)
-      }
-    } 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldErrorSelector]);
-  useEffect(()=>{
-    const mobileNumber = userInputSelector.applicants?.mobile_number_a_1;
-    const countryCode = userInputSelector.applicants?.mobile_number_rwb_a_1;
-
-    if (mobileNumber && countryCode === '') {
-      setError('Country code Required');
-    } else if (mobileNumber && countryCode === '65') {
-      if (mobileNumber.length > 8) {
-        setError('Please Enter 8 digits');
-      }else if (mobileNumber.length === 8 && !(mobileNumber[0] === '8' || mobileNumber[0] === '9')) {
-          setError(`${errorMsg.sgMobile}`);
-      } else {
-        setError('');
-      }
-    } else {
-      setError('');
-    }
-  }, [userInputSelector.applicants.mobile_number_rwb_a_1, userInputSelector.applicants.mobile_number_a_1])
-  useEffect(()=>{
-    if(userInputSelector.applicants.home_phone_number_a_1 &&
-      userInputSelector.applicants.home_phone_number_rwb_a_1 === ''){
-      setError('Country code Required')
-    }else{
-      setError('')
-    }
-  },[userInputSelector.applicants.home_phone_number_rwb_a_1,userInputSelector.applicants.home_phone_number_a_1])
-  useEffect(()=>{
-    if((userInputSelector.applicants.select_alt_contacts_a_1 === undefined || userInputSelector.applicants.select_alt_contacts_a_1 === "") &&
-    (props.data.logical_field_name === "mobile_1_add" || props.data.logical_field_name === "mobile_2_add" || props.data.logical_field_name === "overseas_mobile1" ||
-    props.data.logical_field_name === "overseas_mobile2" || props.data.logical_field_name === "ofc1" || props.data.logical_field_name === "ofc2" ||
-    props.data.logical_field_name === "office_phone1" || props.data.logical_field_name === "office_phone2" || props.data.logical_field_name === "ohph1" ||
-    props.data.logical_field_name === "ohph2" || props.data.logical_field_name === "home_phone2")){
-      show(false)
-    }else if(userInputSelector.applicants.select_alt_contacts_a_1){
-      let displayFields = userInputSelector.applicants.select_alt_contacts_a_1.split(",");
-      if(displayFields.includes("MO1") && props.data.logical_field_name === "mobile_1_add"){
-        show(true)
-      }else if(displayFields.includes("MO2") && props.data.logical_field_name === "mobile_2_add"){
-        show(true)
-      }else if(displayFields.includes("MF1") && props.data.logical_field_name === "overseas_mobile1"){
-        show(true)
-      }else if(displayFields.includes("MF2") && props.data.logical_field_name === "overseas_mobile2"){
-        show(true)
-      }else if(displayFields.includes("OF1") && props.data.logical_field_name === "ofc1"){
-        show(true)
-      }else if(displayFields.includes("OF2") && props.data.logical_field_name === "ofc2"){
-        show(true)
-      }else if(displayFields.includes("RT2") && props.data.logical_field_name === "home_phone2"){
-        show(true)
-      }else if(displayFields.includes("OT1") && props.data.logical_field_name === "office_phone1"){
-        show(true)
-      }else if(displayFields.includes("OT2") && props.data.logical_field_name === "office_phone2"){
-        show(true)
-      }else if(displayFields.includes("RF1") && props.data.logical_field_name === "ohph1"){
-        show(true)
-      }else if(displayFields.includes("RF2") && props.data.logical_field_name === "ohph2"){
-        show(true)
-      }else{
-        show(false)
-      }
-    }else{
-      show(true)
-    }
-  },[userInputSelector.applicants.select_alt_contacts_a_1])
-  const changeHandler = (fieldName: string, event: React.ChangeEvent<HTMLInputElement>) => {
-    setDefaultValue(event.target.value);
-    props.handleCallback(props.data, event.target.value);
-    setError('');
-    phoneValidation(fieldName,event.target.value,event.target.validity)
-  };
-  const phoneValidation = (fieldName: string, value: string, validity: any) => {
-    /*istanbul ignore else*/
-    if ((props.data.mandatory === "Yes" || props.data.mandatory === "Conditional") && value.length < 1) {
-      if(props.data.logical_field_name ==="mobile_number"){
-        setError(`${errorMsg.emity} Mobile number`);
-      }
-      else if(props.data.logical_field_name ==="home_phone_number"){
-        setError(`${errorMsg.emity} Home phone number`);
-      }else if(props.data.logical_field_name === "mobile_2_add"){
-        setError(`${errorMsg.emity} Mobile No. 2`);
-      }else if(props.data.logical_field_name === "mobile_1_add"){
-        setError(`${errorMsg.emity} Mobile No. 1`);
-      }else if(props.data.logical_field_name === "overseas_mobile1"){
-        setError(`${errorMsg.emity} Overseas Mobile No. 1`);
-      }else if(props.data.logical_field_name === "overseas_mobile2"){
-        setError(`${errorMsg.emity} Overseas Mobile No. 2`);
-      }else if(props.data.logical_field_name === "ofc1"){
-        setError(`${errorMsg.emity} Overseas Office Tel No. 1`);
-      }else if(props.data.logical_field_name === "ofc2"){
-        setError(`${errorMsg.emity} Overseas Office Tel No. 2`);
-      }else if(props.data.logical_field_name === "office_phone1"){
-        setError(`${errorMsg.emity} Office Telephone No. 1`);
-      }else if(props.data.logical_field_name === "office_phone2"){
-        setError(`${errorMsg.emity} Office Telephone No. 2`);
-      }else if(props.data.logical_field_name === "ohph1"){
-        setError(`${errorMsg.emity} Overseas Residential Tel No.1`);
-      }else if(props.data.logical_field_name === "ohph2"){
-        setError(`${errorMsg.emity} Overseas Residential Tel No.2`);
-      }else if(props.data.logical_field_name === "home_phone2"){
-        setError(`${errorMsg.emity} Residential Telephone No.2`);
-      }
-      else{
-        setError(`${errorMsg.emity} ${props.data.rwb_label_name}`);
-      }
-    } else if (props.data.mandatory !== "Yes" && value.length === 0) {
-      setError('');
-    } 
-    else if (fieldName === "mobile_number" && (userInputSelector.applicants.mobile_number_rwb_a_1 === '65' || !userInputSelector.applicants.mobile_number_rwb_a_1)
-    && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.sgMobile}`);
-    } 
-    else if (fieldName === "mobile_2_add" && userInputSelector.applicants.mobile_2_a_1 === '65'  && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.numbererr1} ${props.data.rwb_label_name} ${errorMsg.numbererr2}`);
-    } else if (fieldName === "mobile_2_add" && userInputSelector.applicants.mobile_2_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }else if (fieldName === "mobile_1_add" && userInputSelector.applicants.mobile_1_a_1 === '65'  && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.numbererr1} ${props.data.rwb_label_name} ${errorMsg.numbererr2}`);
-    } else if (fieldName === "mobile_1_add" && userInputSelector.applicants.mobile_1_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }else if (fieldName === "overseas_mobile1" && userInputSelector.applicants.overseas_mobile1_contact_no_a_1 === '65'  && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.numbererr1} ${props.data.rwb_label_name} ${errorMsg.numbererr2}`);
-    } else if (fieldName === "overseas_mobile1" && userInputSelector.applicants.overseas_mobile1_contact_no_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }else if (fieldName === "overseas_mobile2" && userInputSelector.applicants.overseas_mobile2_contact_no_a_1 === '65'  && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.numbererr1} ${props.data.rwb_label_name} ${errorMsg.numbererr2}`);
-    } else if (fieldName === "overseas_mobile2" && userInputSelector.applicants.overseas_mobile2_contact_no_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }else if (fieldName === "ofc1" && userInputSelector.applicants.ofc1_number_a_1 === '65'  && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.numbererr1} ${props.data.rwb_label_name} ${errorMsg.numbererr2}`);
-    } else if (fieldName === "ofc1" && userInputSelector.applicants.ofc1_number_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }else if (fieldName === "ofc2" && userInputSelector.applicants.ofc2_number_a_1 === '65'  && !(value[0] === '8' || value[0] === '9')) {
-      setError(`${errorMsg.numbererr1} ${props.data.rwb_label_name} ${errorMsg.numbererr2}`);
-    } else if (fieldName === "ofc2" && userInputSelector.applicants.ofc2_number_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }
-    else if (props.data.rwb_label_name ==="Office number (Optional)" && !(value[0] === '3' || value[0] === '6')) {
-      setError(`${errorMsg.offNumber}`);
-    } 
-    else if (fieldName === "home_phone_number" && userInputSelector.applicants.home_phone_number_rwb_a_1 === '65'  && !(value[0] === '3' || value[0] === '6')) {
-      setError(`${errorMsg.homePhoneNumber}`);
-    } else if (fieldName === "home_phone_number" && userInputSelector.applicants.home_phone_number_rwb_a_1 === '65' &&  `${value}`.length < 8) {
-      setError(`${errorMsg.Normalerror} 8 digits`);
-    }
-    else if (props.data.rwb_label_name ==="Office number (Optional)" && !(value[0] === '3' || value[0] === '6')) {
-      setError(`${errorMsg.offNumber}`);
-    } 
-    else if (props.data.min_length && userInputSelector.applicants.mobile_number_rwb_a_1 === '65' 
-      &&`${value}`.length < 8) {
-      setError(`Please enter 8 digits`);
-    } else if (props.data.regex && userInputSelector.applicants.mobile_number_rwb_a_1 === '65'
-      && !(`${value}`.match(props.data.regex))) {
-        if(props.data.rwb_label_name ==="mobile_number"){
-          setError(`${errorMsg.patterns} mobile number`);
-        } else{
-          setError(`${errorMsg.patterns} ${props.data.rwb_label_name}`);
-        }
-    } else if (validity) {
-      if(props.data.logical_field_name ==="mobile_number"){
-        if((userInputSelector.applicants.mobile_number_rwb_a_1 === '65' || !userInputSelector.applicants.mobile_number_rwb_a_1) && value.length < 8){
-        setError(!validity.valid ? `Please enter 8 digits` : '');
-        }else{
-          setError(!validity.valid ? `${errorMsg.patterns} mobile number` : '');
-        }
-      }else if(props.data.logical_field_name === "mobile_2_add"){
-        setError(!validity.valid ? `${errorMsg.patterns} Mobile No. 2` : '');
-      }else if(props.data.logical_field_name === "mobile_1_add"){
-        setError(!validity.valid ? `${errorMsg.patterns} Mobile No. 1` : '');
-      }else if(props.data.logical_field_name === "overseas_mobile1"){
-        setError(!validity.valid ? `${errorMsg.patterns} Overseas Mobile No. 1` : '');
-      }else if(props.data.logical_field_name === "overseas_mobile2"){
-        setError(!validity.valid ? `${errorMsg.patterns} Overseas Mobile No. 2` : '');
-      }else if(props.data.logical_field_name === "ofc1"){
-        setError(!validity.valid ? `${errorMsg.patterns} Overseas Office No. 1` : '');
-      }else if(props.data.logical_field_name === "ofc2"){
-        setError(!validity.valid ? `${errorMsg.patterns} Overseas Office No. 2` : '');
-      }else if(props.data.logical_field_name === "office_phone1"){
-        setError(!validity.valid ? `${errorMsg.patterns} Office Telephone No. 1` : '');
-      }else if(props.data.logical_field_name === "office_phone2"){
-        setError(!validity.valid ? `${errorMsg.patterns} Office Telephone No. 2` : '');
-      }else if(props.data.logical_field_name === "ohph1"){
-        setError(!validity.valid ? `${errorMsg.patterns} Overseas Residential Tel No.1` : '');
-      }else if(props.data.logical_field_name === "ohph2"){
-        setError(!validity.valid ? `${errorMsg.patterns} Overseas Residential Tel No.2` : '');
-      }else if(props.data.logical_field_name === "home_phone2"){
-        setError(!validity.valid ? `${errorMsg.patterns} Residential Telephone No.2` : '');
-      }else if(props.data.logical_field_name === "home_phone_number"){
-        setError(!validity.valid ? `${errorMsg.patterns} Home Phone Number` : '');
-      }
-      else{
-        setError(!validity.valid ? `${errorMsg.patterns} ${props.data.rwb_label_name}` : '');
-      }
-    } 
-  };
-  const allowOnlyCharacter = (event: any, fieldName: string) => {
-    validateService.allowOnlyCharacter(event, fieldName);
-  };
-
-  const placeHolderText = (fieldName: string) => {
-    if(fieldName === "mobile_number"){
-      return "Mobile Number";
-    }else if(fieldName === "home_phone_number"){
-      return "Home Phone Number";
-    }
-    else if(fieldName === "mobile_2_add"){
-      return "Mobile No. 2"
-    }else if(fieldName === "mobile_1_add"){
-      return "Mobile No. 1"
-    }else if(fieldName === "overseas_mobile1"){
-      return "Overseas Mobile No. 1"
-    }else if(fieldName === "overseas_mobile2"){
-      return "Overseas Mobile No. 2"
-    }else if(fieldName === "ofc1"){
-      return "Overseas Office Tel No. 1"
-    }else if(fieldName === "ofc2"){
-      return "Overseas Office Tel No. 2"
-    }else if(fieldName === "office_phone1"){
-      return "Office Telephone No. 1"
-    }else if(fieldName === "office_phone2"){
-      return "Office Telephone No. 2"
-    }else if(fieldName === "ohph1"){
-      return "Overseas Residential Tel No.1"
-    }else if(fieldName === "ohph2"){
-      return "Overseas Residential Tel No.2"
-    }else if(fieldName === "home_phone2"){
-      return "Residential Telephone No.2"
-    }else {
-      return props.data.rwb_label_name;
-    }
-  };
-
-  const bindHandler = (fieldName: string, event: any) => {
-    /*istanbul ignore else*/
-    if (event.target.validity.valid) {
-      const fieldValue =
-        fieldName === ("mobile_number_rwb"|| "mobile_1_add" || "mobile_2_add" || "overseas_mobile1" ||
-        "overseas_mobile2" || "ofc1" || "ofc2" ||
-        "office_phone1" || "office_phone2" || "ohph1" ||
-        "ohph2" ||"home_phone2"||"home_phone_number_rwb") ? event.target.value : ("mobile_number_rwb"|| "mobile_1_add" || "mobile_2_add" || "overseas_mobile1" ||
-        "overseas_mobile2" || "ofc1" || "ofc2" ||
-        "office_phone1" || "office_phone2" || "ohph1" ||
-        "ohph2" ||"home_phone2" ||"home_phone_number_rwb") ? event.target.value: "";
-      dispatch(isFieldUpdate(props, fieldValue, fieldName));
-      dispatch(isFieldValueUpdate(props, stageSelector, fieldValue));
-    }
-  };
-  const focusHandler = (fieldName: string, event: React.FocusEvent<HTMLInputElement>) => {
-    dispatch(lastAction.getField(fieldName))
+    }),
+    fielderror: () => ({ error: [] }),
+    lastaccessed: () => ({})
   }
+});
 
-  const countryCode = (data:string) => {
-    const code = data.indexOf('(+');
-    /*istanbul ignore else*/
-    if(code > 0) {
-      return data.slice(code)
-    } 
-    return data;
-  }
-  
-  return (
-    <>
-      {hide && <div className="phone" id={(stageSelector[0].stageId ==="bd-1"  || stageSelector[0].stageId ==="bd-2" || stageSelector[0].stageId ==="bd-3") && props.data.logical_field_name}>
-        {stageSelector[0].stageId ==="bd-1" && props.data.logical_field_name === 'mobile_number'?
-        (<label htmlFor={props.data.logical_field_name}>
-        {props.data.rwb_label_name ? props.data.rwb_label_name: 'Mobile Number'}
-        </label>):
-        (<label htmlFor={props.data.logical_field_name}>
-          {props.data.rwb_label_name}
-        </label>)
-        }
-        <div className={`phone__container ${props.data.editable || ((stageSelector[0].stageId !== "bd-3" && stageSelector[0].stageId !== "bd-2" && stageSelector[0].stageId !== "ssf-1") && authenticateType()==='myinfo')
-            || (stageSelector[0].stageId ==="bd-1" && authenticateType()==='manual') ? 'disabled' : ''}`}>
-          {/* {lovData &&
-            lovData.map((res: any, index: any) => {
-              return (
-                <div key={index}>
-                  <span className="phone__flag"></span> {countryCode(res.CODE_DESC)}
-                  <span className="vertical-line"></span> 
-                </div>
-              );
-            })} */}
-          <input
-            // type={props.data.type}
-            type="text"
-            name={props.data.logical_field_name}
-            id={fieldIdAppend(props)}
-            placeholder={placeHolderText(props.data.logical_field_name)}
-            value={defaultValue}
-            minLength={validateMinLength()}
-            maxLength={validateMaxLength()}
-            pattern={props.data.regex}
-            onChange={changeHandler.bind(this, props.data.logical_field_name)}
-            onKeyPress={(event) =>
-             (userInputSelector.applicants.mobile_number_rwb_a_1 === '65' || userInputSelector.applicants.home_phone_number_rwb_a_1==='65')?  allowOnlyCharacter(event, props.data.logical_field_name):''
+// Mock sessionStorage
+const mockSessionStorage = (() => {
+  let store: Record<string, string> = {};
+
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString();
+    },
+    clear: () => {
+      store = {};
+    }
+  };
+})();
+
+Object.defineProperty(window, 'sessionStorage', {
+  value: mockSessionStorage
+});
+
+describe('Phone Component', () => {
+  const mockProps = {
+    data: {
+      logical_field_name: 'mobile_number',
+      rwb_label_name: 'Mobile Number',
+      min_length: '8',
+      max_length: '8',
+      regex: '^[0-9]*$',
+      mandatory: 'Yes',
+      editable: false
+    },
+    handleCallback: jest.fn()
+  };
+
+  beforeEach(() => {
+    window.sessionStorage.setItem('currentStage', '1');
+    jest.clearAllMocks();
+  });
+
+  test('renders without crashing', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    expect(screen.getByLabelText('Mobile Number')).toBeInTheDocument();
+  });
+
+  test('displays correct placeholder for mobile number', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    expect(screen.getByPlaceholderText('Mobile Number')).toBeInTheDocument();
+  });
+
+  test('displays correct placeholder for home phone number', () => {
+    const homePhoneProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'home_phone_number',
+        rwb_label_name: 'Home Phone Number'
+      }
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <Phone {...homePhoneProps} />
+      </Provider>
+    );
+
+    expect(screen.getByPlaceholderText('Home Phone Number')).toBeInTheDocument();
+  });
+
+  test('loads default value from store', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number') as HTMLInputElement;
+    expect(input.value).toBe('91234567');
+  });
+
+  test('handles value change correctly', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    fireEvent.change(input, { target: { value: '98765432' } });
+
+    expect(mockProps.handleCallback).toHaveBeenCalledWith(
+      mockProps.data,
+      '98765432'
+    );
+  });
+
+  test('validates Singapore mobile number format', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    
+    // Test invalid Singapore number (doesn't start with 8 or 9)
+    fireEvent.change(input, { target: { value: '71234567' } });
+    expect(screen.getByText(/Singapore mobile number should start with 8 or 9/)).toBeInTheDocument();
+    
+    // Test valid Singapore number
+    fireEvent.change(input, { target: { value: '81234567' } });
+    expect(screen.queryByText(/Singapore mobile number should start with 8 or 9/)).not.toBeInTheDocument();
+  });
+
+  test('validates minimum length', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    fireEvent.change(input, { target: { value: '1234567' } }); // 7 digits
+    
+    expect(screen.getByText(/Please enter 8 digits/)).toBeInTheDocument();
+  });
+
+  test('validates empty mandatory field', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    fireEvent.change(input, { target: { value: '' } });
+    
+    expect(screen.getByText(/Mobile number is required/)).toBeInTheDocument();
+  });
+
+  test('validates pattern for non-Singapore numbers', () => {
+    const nonSgStore = configureStore({
+      reducer: {
+        lov: () => ({ lov: [] }),
+        stages: () => ({
+          stages: [
+            {
+              stageId: 'bd-1',
+              stageInfo: {
+                applicants: {
+                  mobile_number_a_1: '12345678',
+                  mobile_number_rwb_a_1: '1' // Non-SG country code
+                }
+              }
             }
-            onBlur={bindHandler.bind(this, props.data.logical_field_name)}
-            disabled={props.data.editable || ((stageSelector[0].stageId !== "bd-3" && stageSelector[0].stageId !== "bd-2" && stageSelector[0].stageId !== "ssf-1") && authenticateType()==='myinfo')
-            || (stageSelector[0].stageId ==="bd-1" && authenticateType()==='manual') || (stageSelector[0].stageId === "bd-2"&& (userInputSelector.applicants.home_phone_number_rwb_a_1==="" || userInputSelector.applicants.home_phone_number_rwb_a_1=== undefined)) ? true:false}
-            onFocus={focusHandler.bind(this, props.data.logical_field_name)}
-          />
-        </div>
-        {error && (
-        <span className="error-msg">
-           {error}
-        </span>
-      )}
-      </div>}
-    </>
-  );
-};
+          ],
+          userInput: {
+            applicants: {
+              mobile_number_a_1: '12345678',
+              mobile_number_rwb_a_1: '1'
+            }
+          }
+        }),
+        fielderror: () => ({ error: [] }),
+        lastaccessed: () => ({})
+      }
+    });
 
-export default Phone;
-Please write test cases using jest with RTL
+    render(
+      <Provider store={nonSgStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    fireEvent.change(input, { target: { value: 'abcd' } }); // Invalid pattern
+    
+    expect(screen.getByText(/Invalid pattern for mobile number/)).toBeInTheDocument();
+  });
+
+  test('displays error when country code is missing', () => {
+    const missingCountryCodeStore = configureStore({
+      reducer: {
+        lov: () => ({ lov: [] }),
+        stages: () => ({
+          stages: [
+            {
+              stageId: 'bd-1',
+              stageInfo: {
+                applicants: {
+                  mobile_number_a_1: '91234567',
+                  mobile_number_rwb_a_1: ''
+                }
+              }
+            }
+          ],
+          userInput: {
+            applicants: {
+              mobile_number_a_1: '91234567',
+              mobile_number_rwb_a_1: ''
+            }
+          }
+        }),
+        fielderror: () => ({ error: [] }),
+        lastaccessed: () => ({})
+      }
+    });
+
+    render(
+      <Provider store={missingCountryCodeStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Country code Required')).toBeInTheDocument();
+  });
+
+  test('handles home phone number validation', () => {
+    const homePhoneProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'home_phone_number',
+        rwb_label_name: 'Home Phone Number'
+      }
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <Phone {...homePhoneProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Home Phone Number');
+    
+    // Test invalid home phone number (doesn't start with 3 or 6)
+    fireEvent.change(input, { target: { value: '81234567' } });
+    expect(screen.getByText(/Singapore home phone number should start with 3 or 6/)).toBeInTheDocument();
+    
+    // Test valid home phone number
+    fireEvent.change(input, { target: { value: '61234567' } });
+    expect(screen.queryByText(/Singapore home phone number should start with 3 or 6/)).not.toBeInTheDocument();
+  });
+
+  test('disables input when editable is true', () => {
+    const disabledProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        editable: true
+      }
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <Phone {...disabledProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    expect(input).toBeDisabled();
+  });
+
+  test('handles myInfo authentication case', () => {
+    // Mock authenticateType to return 'myinfo'
+    jest.mock('../../../utils/common/change.utils', () => ({
+      ...jest.requireActual('../../../utils/common/change.utils'),
+      authenticateType: () => 'myinfo'
+    }));
+
+    const myInfoStore = configureStore({
+      reducer: {
+        lov: () => ({ lov: [] }),
+        stages: () => ({
+          stages: [
+            {
+              stageId: 'ssf-1',
+              stageInfo: {
+                applicants: {
+                  mobile_number_a_1: '65-91234567'
+                }
+              }
+            }
+          ],
+          userInput: {
+            applicants: {
+              mobile_number_a_1: '91234567'
+            }
+          }
+        }),
+        fielderror: () => ({ error: [] }),
+        lastaccessed: () => ({})
+      }
+    });
+
+    render(
+      <Provider store={myInfoStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number') as HTMLInputElement;
+    expect(input.value).toBe('91234567');
+  });
+
+  test('handles alternative contact fields visibility', () => {
+    const altContactProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'mobile_1_add',
+        rwb_label_name: 'Mobile No. 1'
+      }
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <Phone {...altContactProps} />
+      </Provider>
+    );
+
+    // Should be visible because select_alt_contacts_a_1 includes MO1
+    expect(screen.getByPlaceholderText('Mobile No. 1')).toBeInTheDocument();
+  });
+
+  test('hides alternative contact fields when not selected', () => {
+    const hiddenStore = configureStore({
+      reducer: {
+        lov: () => ({ lov: [] }),
+        stages: () => ({
+          stages: [
+            {
+              stageId: 'bd-3',
+              stageInfo: {
+                applicants: {
+                  mobile_1_add_a_1: '91234567'
+                }
+              }
+            }
+          ],
+          userInput: {
+            applicants: {
+              mobile_1_add_a_1: '91234567',
+              select_alt_contacts_a_1: 'MO2' // Doesn't include MO1
+            }
+          }
+        }),
+        fielderror: () => ({ error: [] }),
+        lastaccessed: () => ({})
+      }
+    });
+
+    const altContactProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'mobile_1_add',
+        rwb_label_name: 'Mobile No. 1'
+      }
+    };
+
+    render(
+      <Provider store={hiddenStore}>
+        <Phone {...altContactProps} />
+      </Provider>
+    );
+
+    // Should not be visible because select_alt_contacts_a_1 doesn't include MO1
+    expect(screen.queryByPlaceholderText('Mobile No. 1')).not.toBeInTheDocument();
+  });
+
+  test('handles office phone number validation', () => {
+    const officePhoneProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'office_phone1',
+        rwb_label_name: 'Office number (Optional)'
+      }
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <Phone {...officePhoneProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Office Telephone No. 1');
+    
+    // Test invalid office phone number (doesn't start with 3 or 6)
+    fireEvent.change(input, { target: { value: '81234567' } });
+    expect(screen.getByText(/Singapore office number should start with 3 or 6/)).toBeInTheDocument();
+    
+    // Test valid office phone number
+    fireEvent.change(input, { target: { value: '61234567' } });
+    expect(screen.queryByText(/Singapore office number should start with 3 or 6/)).not.toBeInTheDocument();
+  });
+
+  test('triggers lastAction on focus', () => {
+    render(
+      <Provider store={mockStore}>
+        <Phone {...mockProps} />
+      </Provider>
+    );
+
+    const input = screen.getByPlaceholderText('Mobile Number');
+    fireEvent.focus(input);
+    
+    // Verify that the lastAction was dispatched with the correct field name
+    // This would typically be verified by checking the Redux store or mocking the dispatch
+    // For simplicity, we'll assume the action is correctly dispatched
+    expect(lastAction.getField).toHaveBeenCalledWith(mockProps.data.logical_field_name);
+  });
+});
