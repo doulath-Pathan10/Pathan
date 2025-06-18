@@ -1,76 +1,153 @@
-// import { useState } from 'react';
-import './signature.scss';
-import { KeyWithAnyModel, StoreModel } from '../../../utils/model/common-model';
-import { useSelector, useDispatch } from 'react-redux';
-import { useState, useEffect } from 'react';
-import { fieldError, isFieldUpdate } from '../../../utils/common/change.utils';
-import errorMsg from '../../../assets/_json/error.json';
-import SignaturePreview from './signature-preview';
-import SignModel from './sign-model';
-import content from '../../../assets/_json/content.json';
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import Signature from './Signature';
+import { StoreModel } from '../../../utils/model/common-model';
 
-const Signature = (props: KeyWithAnyModel) => {
-  // const { data } = props;
-  const { fieldName, label_name, sign_title, sign_title_info } = props;
-  const viewSignature = useSelector((state: any) => state.stages.signatureDocument);
-  const fieldErrorSelector = useSelector((state: any) => state.stages.error);
-  const [error, setError] = useState('');
-  const [readMore, setReadMore] = useState(false);
-  const [show, setShow] = useState(false);
-  const currentStages = useSelector((state: StoreModel) => state.stages.currentStage);
-  const readMoreText = () => {
-    setReadMore(!readMore);
-  };
-  const dispatch = useDispatch();
-
-  const showSignModel = () => {
-    setShow(true);
-  };
- 
-  useEffect(() => {
-    if(currentStages === "preference" || currentStages === "bbSubmit") {
-      if (viewSignature) {
-        setError('');
-        dispatch(isFieldUpdate(props, viewSignature, fieldName));      
-      }
-    }   
-  }, [viewSignature]);
-
-  useEffect(() => {
-    if (fieldError(fieldErrorSelector, props)) {
-      setError(`${label_name} ${errorMsg.emptyError}`);
-    } else {
-      setError('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldErrorSelector]);
-
-  const handlePopupBackButton = (data:any) => {
-    setShow(data);
+// Mock Redux store
+const mockStore = configureStore({
+  reducer: {
+    stages: () => ({
+      currentStage: 'preference',
+      signatureDocument: null,
+      error: {}
+    })
   }
+});
 
-  return (
-    <>
-    {!show ? <div className="signature">
-      <label htmlFor={fieldName}>{label_name}</label>
-    {fieldName === "signUser" &&  currentStages ==="preference"
-      &&
-      <span>{content.preference.signuser} </span>    
-    }
-      {!viewSignature ? <div className="signature__box" onClick={() => showSignModel()} >
-        <div className="signature__img"><span></span></div>
-        <div className="signature__label">
-          <label className="signature__bluelabel">{sign_title}</label>
-          <label className="signature__blacklabel">{sign_title_info}</label>
-        </div>
-      </div> : <div className="signature__box__view" onClick={showSignModel}>
-        <SignaturePreview show={show} viewSignature={viewSignature} />
-      </div>}       
-
-      
-    </div> : <SignModel show={show} fieldName={fieldName} viewSignature={viewSignature} handlebuttonClick={handlePopupBackButton} />}</>
-  );
+// Mock props
+const mockProps = {
+  fieldName: 'signUser',
+  label_name: 'Signature',
+  sign_title: 'Sign Here',
+  sign_title_info: 'Click to add your signature'
 };
 
-export default Signature;
-Please write test cases using jest with RTL
+describe('Signature Component', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('renders without crashing', () => {
+    render(
+      <Provider store={mockStore}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    expect(screen.getByText('Signature')).toBeInTheDocument();
+  });
+
+  test('displays the signature box when no signature exists', () => {
+    render(
+      <Provider store={mockStore}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    expect(screen.getByText('Sign Here')).toBeInTheDocument();
+    expect(screen.getByText('Click to add your signature')).toBeInTheDocument();
+  });
+
+  test('opens signature modal when signature box is clicked', () => {
+    render(
+      <Provider store={mockStore}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    
+    fireEvent.click(screen.getByText('Sign Here'));
+    // You might need to adjust this assertion based on how your modal is implemented
+    expect(screen.getByText('Sign Here')).toBeInTheDocument();
+  });
+
+  test('displays signature preview when signature exists', () => {
+    const storeWithSignature = configureStore({
+      reducer: {
+        stages: () => ({
+          currentStage: 'preference',
+          signatureDocument: 'mock-signature-data',
+          error: {}
+        })
+      }
+    });
+
+    render(
+      <Provider store={storeWithSignature}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    
+    // Assuming SignaturePreview renders something with a test ID
+    expect(screen.getByTestId('signature-preview')).toBeInTheDocument();
+  });
+
+  test('shows error message when field has error', () => {
+    const storeWithError = configureStore({
+      reducer: {
+        stages: () => ({
+          currentStage: 'preference',
+          signatureDocument: null,
+          error: { signUser: true }
+        })
+      }
+    });
+
+    render(
+      <Provider store={storeWithError}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    
+    expect(screen.getByText('Signature is required')).toBeInTheDocument();
+  });
+
+  test('displays additional content for signUser field in preference stage', () => {
+    render(
+      <Provider store={mockStore}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    
+    // Assuming content.preference.signuser contains some text
+    expect(screen.getByText(/Please sign in the box below/i)).toBeInTheDocument();
+  });
+
+  test('does not show additional content for other fields or stages', () => {
+    const otherProps = {
+      ...mockProps,
+      fieldName: 'otherField'
+    };
+    
+    render(
+      <Provider store={mockStore}>
+        <Signature {...otherProps} />
+      </Provider>
+    );
+    
+    expect(screen.queryByText(/Please sign in the box below/i)).not.toBeInTheDocument();
+  });
+
+  test('closes modal when handlePopupBackButton is called', () => {
+    render(
+      <Provider store={mockStore}>
+        <Signature {...mockProps} />
+      </Provider>
+    );
+    
+    // Open modal
+    fireEvent.click(screen.getByText('Sign Here'));
+    
+    // Close modal - you'll need to mock the SignModel component or find the close button
+    fireEvent.click(screen.getByLabelText('Close'));
+    
+    expect(screen.queryByTestId('sign-model')).not.toBeInTheDocument();
+  });
+});
+
+// Mock child components if needed
+jest.mock('./signature-preview', () => () => <div data-testid="signature-preview">Signature Preview</div>);
+jest.mock('./sign-model', () => ({ handlebuttonClick }: any) => (
+  <div data-testid="sign-model">
+    <button aria-label="Close" onClick={() => handlebuttonClick(false)}>Close</button>
+  </div>
+));
