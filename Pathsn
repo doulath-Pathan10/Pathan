@@ -1,26 +1,27 @@
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import SignaturePreview from './SignaturePreview';
 import SignatureCanvas from 'react-signature-canvas';
 
-// Mock the react-signature-canvas module
+// Mock the react-signature-canvas module properly
 jest.mock('react-signature-canvas', () => {
-  return jest.fn().mockImplementation(() => {
-    return {
-      clear: jest.fn(),
-      off: jest.fn(),
-      on: jest.fn(),
-      fromData: jest.fn(),
-      toData: jest.fn().mockReturnValue([]),
-      toDataURL: jest.fn().mockReturnValue('data:image/jpeg;base64,mockBase64String'),
-    };
-  });
+  const mockSignaturePad = {
+    clear: jest.fn(),
+    off: jest.fn(),
+    on: jest.fn(),
+    fromData: jest.fn(),
+    toData: jest.fn(() => []),
+    toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockJpegData'),
+    isEmpty: jest.fn(() => false),
+  };
+
+  return jest.fn(() => mockSignaturePad);
 });
 
 // Mock the common-service functions
 jest.mock('../../../services/common-service', () => ({
-  getBase64IntArray: jest.fn().mockReturnValue('mockBase64Array'),
-  getIntArrayfromBase64: jest.fn().mockReturnValue([]),
+  getBase64IntArray: jest.fn(() => 'mockBase64Array'),
+  getIntArrayfromBase64: jest.fn(() => []),
 }));
 
 describe('SignaturePreview Component', () => {
@@ -36,70 +37,90 @@ describe('SignaturePreview Component', () => {
     jest.clearAllMocks();
   });
 
-  it('should render the component', () => {
+  it('renders the SignatureCanvas component', () => {
     render(<SignaturePreview {...defaultProps} />);
     expect(SignatureCanvas).toHaveBeenCalled();
   });
 
-  it('should call clear when clear prop changes to true', () => {
+  it('calls clear when clear prop changes to true', () => {
     const { rerender } = render(<SignaturePreview {...defaultProps} />);
     
+    // Get the mock SignaturePad instance
+    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
+    
     // Initial render shouldn't call clear
-    expect(SignatureCanvas.mock.results[0].value.clear).not.toHaveBeenCalled();
+    expect(mockSigPadInstance.clear).not.toHaveBeenCalled();
     
     // Rerender with clear=true
     rerender(<SignaturePreview {...defaultProps} clear={true} />);
-    expect(SignatureCanvas.mock.results[0].value.clear).toHaveBeenCalled();
+    expect(mockSigPadInstance.clear).toHaveBeenCalled();
   });
 
-  it('should turn off signature canvas when show becomes false', () => {
+  it('turns off signature canvas when show becomes false', () => {
     const { rerender } = render(<SignaturePreview {...defaultProps} />);
     
+    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
+    
     // Initial render with show=true
-    expect(SignatureCanvas.mock.results[0].value.off).not.toHaveBeenCalled();
+    expect(mockSigPadInstance.off).not.toHaveBeenCalled();
     
     // Rerender with show=false
     rerender(<SignaturePreview {...defaultProps} show={false} />);
-    expect(SignatureCanvas.mock.results[0].value.off).toHaveBeenCalled();
+    expect(mockSigPadInstance.off).toHaveBeenCalled();
   });
 
-  it('should load signature data when viewSignature is provided and show is true', () => {
+  it('loads and displays signature when viewSignature is provided and show is true', () => {
     const viewSignature = 'mockBase64Signature';
     render(<SignaturePreview {...defaultProps} viewSignature={viewSignature} />);
     
-    expect(require('../../../services/common-service').getIntArrayfromBase64).toHaveBeenCalledWith(viewSignature);
-    expect(SignatureCanvas.mock.results[0].value.fromData).toHaveBeenCalledWith([]);
-    expect(SignatureCanvas.mock.results[0].value.on).toHaveBeenCalled();
+    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
+    const { getIntArrayfromBase64 } = require('../../../services/common-service');
+    
+    expect(getIntArrayfromBase64).toHaveBeenCalledWith(viewSignature);
+    expect(mockSigPadInstance.fromData).toHaveBeenCalledWith([]);
+    expect(mockSigPadInstance.on).toHaveBeenCalled();
   });
 
-  it('should load signature data when viewSignature is provided and show is false', () => {
+  it('loads signature without enabling when viewSignature is provided and show is false', () => {
     const viewSignature = 'mockBase64Signature';
     render(<SignaturePreview {...defaultProps} viewSignature={viewSignature} show={false} />);
     
-    expect(require('../../../services/common-service').getIntArrayfromBase64).toHaveBeenCalledWith(viewSignature);
-    expect(SignatureCanvas.mock.results[0].value.fromData).toHaveBeenCalledWith([]);
-    expect(SignatureCanvas.mock.results[0].value.on).not.toHaveBeenCalled();
+    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
+    const { getIntArrayfromBase64 } = require('../../../services/common-service');
+    
+    expect(getIntArrayfromBase64).toHaveBeenCalledWith(viewSignature);
+    expect(mockSigPadInstance.fromData).toHaveBeenCalledWith([]);
+    expect(mockSigPadInstance.on).not.toHaveBeenCalled();
   });
 
-  it('should handle signature end event correctly', () => {
+  it('handles signature end event correctly', () => {
     render(<SignaturePreview {...defaultProps} />);
     
-    // Simulate signature end event
+    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
+    const { getBase64IntArray } = require('../../../services/common-service');
+    
+    // Simulate signature end by calling the onEnd prop
     act(() => {
       const onEnd = SignatureCanvas.mock.calls[0][0].onEnd;
       onEnd();
     });
     
-    expect(require('../../../services/common-service').getBase64IntArray).toHaveBeenCalledWith([]);
-    expect(SignatureCanvas.mock.results[0].value.toDataURL).toHaveBeenCalledWith('image/jpeg');
+    expect(mockSigPadInstance.toData).toHaveBeenCalled();
+    expect(getBase64IntArray).toHaveBeenCalledWith([]);
+    expect(mockSigPadInstance.toDataURL).toHaveBeenCalledWith('image/jpeg');
     expect(mockHandleSignatureEnd).toHaveBeenCalledWith({
       array: 'mockBase64Array',
-      jpeg: 'mockBase64String'
+      jpeg: 'mockJpegData'
     });
   });
 
-  it('should not call fromData when viewSignature is null', () => {
+  it('does not load signature data when viewSignature is null', () => {
     render(<SignaturePreview {...defaultProps} viewSignature={null} />);
-    expect(SignatureCanvas.mock.results[0].value.fromData).not.toHaveBeenCalled();
+    
+    const mockSigPadInstance = SignatureCanvas.mock.results[0].value;
+    const { getIntArrayfromBase64 } = require('../../../services/common-service');
+    
+    expect(getIntArrayfromBase64).not.toHaveBeenCalled();
+    expect(mockSigPadInstance.fromData).not.toHaveBeenCalled();
   });
 });
