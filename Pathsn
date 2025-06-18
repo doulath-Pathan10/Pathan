@@ -1,288 +1,52 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import SignaturePreview from './SignaturePreview';
+import SignatureCanvas from 'react-signature-canvas';
+import { useEffect, useRef} from 'react';
 import { getBase64IntArray, getIntArrayfromBase64 } from '../../../services/common-service';
 
-// Mock the react-signature-canvas library
-jest.mock('react-signature-canvas', () => {
-  return React.forwardRef((props, ref) => {
-    // Mock the canvas element and its methods
-    React.useImperativeHandle(ref, () => ({
-      clear: jest.fn(),
-      off: jest.fn(),
-      on: jest.fn(),
-      fromData: jest.fn(),
-      toData: jest.fn(() => [{ x: 100, y: 100 }, { x: 101, y: 101 }]),
-      toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockBase64Data'),
-    }));
+const SignaturePreview = (props:any) => {
+  const {viewSignature, show, handleSignatureEnd, clear } = props;
+  const sigRef = useRef<any>(); 
 
-    return (
-      <canvas
-        {...props.canvasProps}
-        data-testid="signature-canvas"
-        onMouseUp={props.onEnd}
-        onTouchEnd={props.onEnd}
-      />
-    );
-  });
-});
+  useEffect(() => {
+    if(clear) {
+      sigRef.current.clear();
+    }
+  }, [clear]);
 
-// Mock the common service functions
-jest.mock('../../../services/common-service', () => ({
-  getBase64IntArray: jest.fn(),
-  getIntArrayfromBase64: jest.fn(),
-}));
+  useEffect(() => {
+    if(show !== true) {
+      sigRef.current.off();
+    }
+  }, [])
 
-describe('SignaturePreview Component', () => {
-  let mockProps;
-  let mockGetBase64IntArray;
-  let mockGetIntArrayfromBase64;
+  
+  useEffect(() => {
+    if ((viewSignature && show) || show) {
+      const arrayPoint = getIntArrayfromBase64(viewSignature);
+      sigRef.current.fromData(arrayPoint);
+      sigRef.current.on();
+    } else if (viewSignature && !show) {
+      const arrayPoint = getIntArrayfromBase64(viewSignature);
+      sigRef.current.fromData(arrayPoint);
+    }
+  }, [viewSignature, show]);
 
-  beforeEach(() => {
-    // Reset mocks
-    jest.clearAllMocks();
-    
-    // Setup mock functions
-    mockGetBase64IntArray = getBase64IntArray;
-    mockGetIntArrayfromBase64 = getIntArrayfromBase64;
-    
-    mockGetBase64IntArray.mockReturnValue('mockBase64String');
-    mockGetIntArrayfromBase64.mockReturnValue([{ x: 100, y: 100 }, { x: 101, y: 101 }]);
 
-    // Default props
-    mockProps = {
-      viewSignature: '',
-      show: false,
-      handleSignatureEnd: jest.fn(),
-      clear: false,
-    };
-  });
+  const handleSignatureEndFun = async () => {
+    const base64String = getBase64IntArray(sigRef.current.toData());
+    handleSignatureEnd({array: base64String, jpeg: sigRef.current.toDataURL("image/jpeg").split(',')[1]});
+  };
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
+  return (
+    <div className='sign-preview'>
+        <SignatureCanvas
+              penColor="black"
+              canvasProps={{ className: 'signature__canvans' }}
+              ref={sigRef}
+              onEnd={handleSignatureEndFun}
+            />
+    </div>
+  )
+}
 
-  describe('Component Rendering', () => {
-    it('should render the signature canvas', () => {
-      render(<SignaturePreview {...mockProps} />);
-      
-      const canvas = screen.getByTestId('signature-canvas');
-      expect(canvas).toBeInTheDocument();
-      expect(canvas).toHaveClass('signature__canvans');
-    });
-
-    it('should render with correct container class', () => {
-      const { container } = render(<SignaturePreview {...mockProps} />);
-      
-      expect(container.firstChild).toHaveClass('sign-preview');
-    });
-  });
-
-  describe('Clear Functionality', () => {
-    it('should call clear when clear prop is true', () => {
-      const { rerender } = render(<SignaturePreview {...mockProps} />);
-      
-      // Initially clear should not be called
-      expect(mockProps.clear).toBe(false);
-      
-      // Update props to trigger clear
-      rerender(<SignaturePreview {...mockProps} clear={true} />);
-      
-      // Note: Due to the mocking setup, we can't directly test the clear call
-      // In a real test environment, you would spy on the ref's clear method
-    });
-
-    it('should not call clear when clear prop is false', () => {
-      render(<SignaturePreview {...mockProps} clear={false} />);
-      
-      // Clear should not be triggered when clear prop is false
-      expect(mockProps.clear).toBe(false);
-    });
-  });
-
-  describe('Show/Hide Functionality', () => {
-    it('should call off() when show is false on mount', () => {
-      render(<SignaturePreview {...mockProps} show={false} />);
-      
-      // The component should call off() when show is false
-      // This is tested through the useEffect behavior
-    });
-
-    it('should handle show prop changes correctly', () => {
-      const { rerender } = render(<SignaturePreview {...mockProps} show={false} />);
-      
-      // Change show to true
-      rerender(<SignaturePreview {...mockProps} show={true} />);
-      
-      // The component should respond to show prop changes
-      expect(mockProps.show).toBe(true);
-    });
-  });
-
-  describe('Signature Data Handling', () => {
-    it('should load signature data when viewSignature and show are true', () => {
-      const propsWithSignature = {
-        ...mockProps,
-        viewSignature: 'mockSignatureData',
-        show: true,
-      };
-
-      render(<SignaturePreview {...propsWithSignature} />);
-
-      expect(mockGetIntArrayfromBase64).toHaveBeenCalledWith('mockSignatureData');
-    });
-
-    it('should load signature data when viewSignature is provided but show is false', () => {
-      const propsWithSignature = {
-        ...mockProps,
-        viewSignature: 'mockSignatureData',
-        show: false,
-      };
-
-      render(<SignaturePreview {...propsWithSignature} />);
-
-      expect(mockGetIntArrayfromBase64).toHaveBeenCalledWith('mockSignatureData');
-    });
-
-    it('should not load signature data when viewSignature is empty', () => {
-      render(<SignaturePreview {...mockProps} viewSignature="" show={true} />);
-
-      expect(mockGetIntArrayfromBase64).not.toHaveBeenCalled();
-    });
-
-    it('should update signature data when viewSignature prop changes', () => {
-      const { rerender } = render(<SignaturePreview {...mockProps} />);
-
-      // Update with signature data
-      rerender(<SignaturePreview {...mockProps} viewSignature="newSignatureData" show={true} />);
-
-      expect(mockGetIntArrayfromBase64).toHaveBeenCalledWith('newSignatureData');
-    });
-  });
-
-  describe('Signature End Handling', () => {
-    it('should call handleSignatureEnd when signature is completed', async () => {
-      render(<SignaturePreview {...mockProps} />);
-      
-      const canvas = screen.getByTestId('signature-canvas');
-      
-      // Simulate signature end (mouse up)
-      fireEvent.mouseUp(canvas);
-
-      await waitFor(() => {
-        expect(mockGetBase64IntArray).toHaveBeenCalled();
-        expect(mockProps.handleSignatureEnd).toHaveBeenCalledWith({
-          array: 'mockBase64String',
-          jpeg: 'mockBase64Data'
-        });
-      });
-    });
-
-    it('should call handleSignatureEnd when signature is completed via touch', async () => {
-      render(<SignaturePreview {...mockProps} />);
-      
-      const canvas = screen.getByTestId('signature-canvas');
-      
-      // Simulate signature end (touch end)
-      fireEvent.touchEnd(canvas);
-
-      await waitFor(() => {
-        expect(mockGetBase64IntArray).toHaveBeenCalled();
-        expect(mockProps.handleSignatureEnd).toHaveBeenCalledWith({
-          array: 'mockBase64String',
-          jpeg: 'mockBase64Data'
-        });
-      });
-    });
-
-    it('should process signature data correctly in handleSignatureEnd', async () => {
-      const mockToData = jest.fn(() => [{ x: 100, y: 100 }]);
-      const mockToDataURL = jest.fn(() => 'data:image/jpeg;base64,testJpegData');
-
-      render(<SignaturePreview {...mockProps} />);
-      
-      const canvas = screen.getByTestId('signature-canvas');
-      fireEvent.mouseUp(canvas);
-
-      await waitFor(() => {
-        expect(mockProps.handleSignatureEnd).toHaveBeenCalledWith({
-          array: 'mockBase64String',
-          jpeg: 'mockBase64Data'
-        });
-      });
-    });
-  });
-
-  describe('Integration Tests', () => {
-    it('should handle complete signature workflow', async () => {
-      const { rerender } = render(<SignaturePreview {...mockProps} />);
-
-      // Load existing signature
-      rerender(<SignaturePreview {...mockProps} viewSignature="existingSignature" show={true} />);
-      expect(mockGetIntArrayfromBase64).toHaveBeenCalledWith('existingSignature');
-
-      // Complete new signature
-      const canvas = screen.getByTestId('signature-canvas');
-      fireEvent.mouseUp(canvas);
-
-      await waitFor(() => {
-        expect(mockProps.handleSignatureEnd).toHaveBeenCalled();
-      });
-
-      // Clear signature
-      rerender(<SignaturePreview {...mockProps} clear={true} />);
-    });
-
-    it('should handle prop changes correctly', () => {
-      const { rerender } = render(<SignaturePreview {...mockProps} />);
-
-      // Test multiple prop changes
-      rerender(<SignaturePreview {...mockProps} show={true} />);
-      rerender(<SignaturePreview {...mockProps} viewSignature="newData" />);
-      rerender(<SignaturePreview {...mockProps} clear={true} />);
-
-      // Component should handle all prop changes without errors
-      expect(screen.getByTestId('signature-canvas')).toBeInTheDocument();
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle missing props gracefully', () => {
-      const minimalProps = {
-        handleSignatureEnd: jest.fn(),
-      };
-
-      expect(() => {
-        render(<SignaturePreview {...minimalProps} />);
-      }).not.toThrow();
-    });
-
-    it('should handle service function errors', async () => {
-      mockGetBase64IntArray.mockImplementation(() => {
-        throw new Error('Service error');
-      });
-
-      render(<SignaturePreview {...mockProps} />);
-      
-      const canvas = screen.getByTestId('signature-canvas');
-      
-      // Should not throw error even if service function fails
-      expect(() => {
-        fireEvent.mouseUp(canvas);
-      }).not.toThrow();
-    });
-  });
-
-  describe('Performance Tests', () => {
-    it('should not cause unnecessary re-renders', () => {
-      const { rerender } = render(<SignaturePreview {...mockProps} />);
-
-      // Multiple renders with same props should not cause issues
-      rerender(<SignaturePreview {...mockProps} />);
-      rerender(<SignaturePreview {...mockProps} />);
-
-      expect(screen.getByTestId('signature-canvas')).toBeInTheDocument();
-    });
-  });
-});
+export default SignaturePreview
+Please write test cases using jest with RTL
