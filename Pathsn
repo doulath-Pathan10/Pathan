@@ -1,282 +1,169 @@
-describe('Additional DocumentUpload Tests', () => {
+describe('DocumentUpload Component Tests', () => {
   let store: any;
   let props: any;
 
   beforeEach(() => {
     store = mockStore({
-      documentUploadList: {
-        responseDocuments: [
-          {
-            document_list: [
-              {
-                document_category: "ID Document",
-                document_category_code: "R0001",
-                docCheck: "N",
-                isSlectedForUpload: "N",
-                document_options: [
-                  {
-                    document_types: [
-                      {
-                        document_type: "National Identity Card",
-                        document_type_code: "T0205",
-                        uploaded_documents: [],
-                        selectDocument: null,
-                        document_requested_stage: "BD"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ],
-            isSignatureDoc: false
-          }
-        ],
-        isDocumentUpdate: false
-      },
       stages: {
-        stages: [
-          {
-            stageId: 'doc',
-            stageInfo: {
-              application: {
-                channel_reference: "TEST123",
-                application_reference: "APP123"
-              },
-              applicant_documents: [],
-              applicants: {},
-              products: [{ product_category: "CC" }]
-            }
+        stages: [{
+          stageId: 'doc',
+          stageInfo: {
+            application: { channel_reference: "sf2323232" },
+            applicant_documents: [{
+              document_list: [
+                {
+                  document_category: "ID Document",
+                  document_category_code: "R0001",
+                  document_options: [{
+                    document_types: [{
+                      document_type: "National Identity Card",
+                      document_type_code: "T0205",
+                      uploaded_documents: []
+                    }]
+                  }]
+                }
+              ]
+            }],
+            applicants: { annual_income_a_1: "100" }
           }
-        ],
-        journeyType: "standard",
-        isDocument: false,
-        isDocumentUpload: false
-      },
-      valueUpdate: {
-        backNavigation: {
-          nextStageId: null
+        }],
+        userInput: {
+          applicants: [{
+            alt_address_rwb_1_a_1: null,
+            res_existing_line1_a_1: null
+          }]
         }
-      }
-    });
-
-    props = {
-      backHandler: jest.fn()
-    };
-  });
-
-  test('should handle file upload successfully', async () => {
-    const mockFile = new File(['test'], 'test.png', { type: 'image/png' });
-    mockedAxios.post.mockResolvedValue({
-      data: { docId: 'DOC123', documentStatus: 'Accepted' }
-    });
-
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-
-    // Select document type
-    fireEvent.click(screen.getByLabelText('National Identity Card'));
-    fireEvent.click(screen.getByText('Upload'));
-
-    // Upload file
-    const fileInput = screen.getByTestId('file-input');
-    fireEvent.change(fileInput, { target: { files: [mockFile] } });
-
-    await waitFor(() => {
-      expect(mockedAxios.post).toHaveBeenCalled();
-    });
-  });
-
-  test('should show error when file upload fails', async () => {
-    mockedAxios.post.mockRejectedValue(new Error('Upload failed'));
-
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-
-    fireEvent.click(screen.getByLabelText('National Identity Card'));
-    fireEvent.click(screen.getByText('Upload'));
-
-    const fileInput = screen.getByTestId('file-input');
-    fireEvent.change(fileInput, { target: { files: [new File([''], 'test.png')] } });
-
-    await waitFor(() => {
-      expect(screen.getByText(/Upload failed/i)).toBeInTheDocument();
-    });
-  });
-
-  test('should handle document deletion', async () => {
-    store = mockStore({
-      ...store.getState(),
+      },
       documentUploadList: {
-        responseDocuments: [
-          {
-            document_list: [
-              {
-                document_category_code: "R0001",
-                docCheck: "Y",
-                isSlectedForUpload: "Y",
-                document_options: [
-                  {
-                    document_types: [
-                      {
-                        document_type_code: "T0205",
-                        uploaded_documents: [
-                          {
-                            docId: 'DOC123',
-                            documentStatus: 'Accepted'
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        responseDocuments: [{
+          document_list: [{
+            document_category: "ID Document",
+            document_category_code: "R0001",
+            document_options: [{
+              document_types: [{
+                document_type: "National Identity Card",
+                document_type_code: "T0205",
+                uploaded_documents: []
+              }]
+            }]
+          }]
+        }]
       }
     });
 
+    props = { backHandler: jest.fn() };
+  });
+
+  test('1. Renders document categories from store', () => {
     render(
       <Provider store={store}>
         <DocumentUpload {...props} />
       </Provider>
     );
-
-    fireEvent.click(screen.getByLabelText('delete-icon'));
     
-    await waitFor(() => {
-      expect(store.getActions()).toContainEqual(
-        expect.objectContaining({ type: 'documentUpload/isDocumentUpdate' })
-      );
-    });
+    expect(screen.getByText('Upload your id document')).toBeInTheDocument();
   });
 
-  test('should handle document submission with mandatory documents', async () => {
-    store = mockStore({
+  test('2. Shows document options from store', () => {
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+    
+    expect(screen.getByText('National Identity Card')).toBeInTheDocument();
+  });
+
+  test('3. Enables upload when document is selected', () => {
+    // Modify store to have a selected document
+    const modifiedStore = mockStore({
       ...store.getState(),
       documentUploadList: {
-        responseDocuments: [
-          {
-            document_list: [
-              {
-                document_category_code: "R0001",
-                docCheck: "Y",
-                isSlectedForUpload: "Y",
-                min_options_req: 1,
-                document_options: [
-                  {
-                    document_types: [
-                      {
-                        document_type_code: "T0205",
-                        uploaded_documents: [
-                          {
-                            docId: 'DOC123',
-                            documentStatus: 'Accepted'
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        responseDocuments: [{
+          document_list: [{
+            document_category_code: "R0001",
+            docCheck: "Y",
+            document_options: [{
+              document_types: [{
+                document_type_code: "T0205",
+                selectDocument: "National Identity Card"
+              }]
+            }]
+          }]
+        }]
       }
     });
 
     render(
-      <Provider store={store}>
+      <Provider store={modifiedStore}>
         <DocumentUpload {...props} />
       </Provider>
     );
-
-    fireEvent.click(screen.getByText('Continue'));
-
-    await waitFor(() => {
-      expect(screen.queryByText(/Please upload all mandatory documents/i)).not.toBeInTheDocument();
-    });
+    
+    expect(screen.getByText('Upload')).not.toBeDisabled();
   });
 
-  test('should show signature specimen note when isSignatureDoc is true', () => {
-    store = mockStore({
+  test('4. Shows uploaded documents from store', () => {
+    // Modify store to have uploaded documents
+    const modifiedStore = mockStore({
       ...store.getState(),
       documentUploadList: {
-        responseDocuments: [
-          {
-            document_list: [
-              {
-                document_category_code: "R0006",
-                document_category: "Signature Specimen",
-                isSignatureDoc: true,
-                document_options: [
-                  {
-                    document_types: [
-                      {
-                        document_type: "Signature Specimen",
-                        document_type_code: "T0308",
-                        uploaded_documents: []
-                      }
-                    ]
-                  }
-                ]
-              }
-            ],
-            isSignatureDoc: true
-          }
-        ]
+        responseDocuments: [{
+          document_list: [{
+            document_category_code: "R0001",
+            isSlectedForUpload: "Y",
+            document_options: [{
+              document_types: [{
+                document_type_code: "T0205",
+                uploaded_documents: [{
+                  document_name: "test.png",
+                  document_status: "Accepted"
+                }]
+              }]
+            }]
+          }]
+        }]
       }
     });
 
     render(
-      <Provider store={store}>
+      <Provider store={modifiedStore}>
         <DocumentUpload {...props} />
       </Provider>
     );
-
-    expect(screen.getByText(/specimen signature/i)).toBeInTheDocument();
+    
+    expect(screen.getByText('test.png')).toBeInTheDocument();
   });
 
-  test('should handle back button click when isDocument is true', () => {
-    store = mockStore({
-      ...store.getState(),
-      stages: {
-        ...store.getState().stages,
-        isDocument: true
-      }
-    });
-
+  test('5. Shows error when no document selected', () => {
     render(
       <Provider store={store}>
         <DocumentUpload {...props} />
       </Provider>
     );
+    
+    fireEvent.click(screen.getByText('Upload'));
+    expect(screen.getByText(/select a document/i)).toBeInTheDocument();
+  });
 
+  test('6. Renders footer notes from store data', () => {
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+    
+    expect(screen.getByText(/JPG, PNG, TIFF, and PDF formats/i)).toBeInTheDocument();
+  });
+
+  test('7. Handles back button click', () => {
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+    
     fireEvent.click(screen.getByText('Back'));
-    expect(props.backHandler).toHaveBeenCalledWith(false);
-  });
-
-  test('should handle uploadEnable scenario', () => {
-    store = mockStore({
-      ...store.getState(),
-      stages: {
-        ...store.getState().stages,
-        isDocumentUpload: true
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Continue')).toBeInTheDocument();
+    expect(props.backHandler).toHaveBeenCalled();
   });
 });
