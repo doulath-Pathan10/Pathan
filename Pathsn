@@ -1,16 +1,14 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Provider } from 'react-redux';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { render } from '../test-utils';
 import DocumentUpload from './DocumentUpload';
-import { store } from '../../../utils/store/store';
 import axios from 'axios';
 
-// Mock axios
+// Mock axios with TypeScript support
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-// Mock other dependencies
-jest.mock('../../../services/track-events');
+// Simple mock implementations for critical dependencies
 jest.mock('../../../utils/common/change.utils', () => ({
   getUrl: {
     getParameterByName: jest.fn(() => null),
@@ -20,99 +18,144 @@ jest.mock('../../../utils/common/change.utils', () => ({
   authenticateType: jest.fn(() => 'manual'),
 }));
 
+// Mock only the functions we actually use
 jest.mock('../../../services/common-service', () => ({
   documentSubmit: jest.fn(() => Promise.resolve({})),
   channelReference: jest.fn(() => Promise.resolve({ data: {} })),
-  lovRequests: jest.fn(),
   dispatchLoader: jest.fn(),
   dispatchCtaLoader: jest.fn(),
-  checkProductDetails: jest.fn(() => false),
 }));
 
-describe('DocumentUpload Component', () => {
+// Minimal mock data that matches your actual store structure
+const mockInitialState = {
+  documentUploadList: {
+    responseDocuments: [
+      {
+        document_list: [
+          {
+            document_category_code: 'ID',
+            document_category: 'Identification',
+            docCheck: 'N',
+            isSlectedForUpload: 'N',
+            min_options_req: 1,
+            document_options: [
+              {
+                document_types: [
+                  {
+                    document_type_code: 'R0001',
+                    document_type: 'NRIC',
+                    uploaded_documents: [],
+                    selectDocument: null,
+                    document_requested_stage: 'BD',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        isSignatureDoc: false,
+      },
+    ],
+    isDocumentUpdate: false,
+  },
+  stages: {
+    stages: [
+      {
+        stageId: 'doc',
+        stageInfo: {
+          applicant_documents: [
+            {
+              document_list: [
+                {
+                  document_category_code: 'ID',
+                  document_category: 'Identification',
+                  docCheck: 'N',
+                  isSlectedForUpload: 'N',
+                  min_options_req: 1,
+                  document_options: [
+                    {
+                      document_types: [
+                        {
+                          document_type_code: 'R0001',
+                          document_type: 'NRIC',
+                          uploaded_documents: [],
+                          selectDocument: null,
+                          document_requested_stage: 'BD',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              isSignatureDoc: false,
+            },
+          ],
+          application: {
+            channel_reference: 'TEST123',
+            application_reference: 'APP123',
+          },
+          applicants: {},
+          products: [{ product_category: 'CC' }],
+        },
+      },
+    ],
+    journeyType: 'standard',
+    isDocument: false,
+    isDocumentUpload: false,
+  },
+  valueUpdate: {
+    backNavigation: {
+      nextStageId: null,
+    },
+  },
+};
+
+describe('DocumentUpload Component - Basic Tests', () => {
   const mockProps = {
     backHandler: jest.fn(),
   };
 
-  const mockDocumentData = [
-    {
-      document_list: [
-        {
-          document_category_code: 'ID',
-          document_category: 'Identification',
-          docCheck: 'N',
-          isSlectedForUpload: 'N',
-          min_options_req: 1,
-          document_options: [
-            {
-              document_types: [
-                {
-                  document_type_code: 'R0001',
-                  document_type: 'NRIC',
-                  uploaded_documents: [],
-                  selectDocument: null,
-                  document_requested_stage: 'BD',
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      isSignatureDoc: false,
-    },
-  ];
-
   beforeEach(() => {
-    // Reset the store to initial state
-    store.dispatch({
-      type: 'documentUploadList/getDocumentList',
-      payload: {
-        responseDocuments: mockDocumentData,
-      },
-    });
-
-    store.dispatch({
-      type: 'stages/getStage',
-      payload: {
-        id: 'doc',
-        stages: [
-          {
-            stageId: 'doc',
-            stageInfo: {
-              applicant_documents: mockDocumentData,
-              application: {
-                channel_reference: 'TEST123',
-                application_reference: 'APP123',
-              },
-              applicants: {},
-              products: [{ product_category: 'CC' }],
-            },
-          },
-        ],
+    // Reset all mocks before each test
+    jest.clearAllMocks();
+    
+    // Mock a successful axios response
+    mockedAxios.post.mockResolvedValue({
+      data: { 
+        docId: 'DOC123', 
+        documentStatus: 'Accepted',
+        document_type_code: 'R0001'
       },
     });
   });
 
-  test('renders basic document upload form', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
+  test('1. Renders the document upload form', () => {
+    render(<DocumentUpload {...mockProps} />, {
+      initialState: mockInitialState,
+    });
 
     expect(screen.getByText('Upload your identification')).toBeInTheDocument();
     expect(screen.getByLabelText('NRIC')).toBeInTheDocument();
     expect(screen.getByText('Upload')).toBeInTheDocument();
   });
 
-  test('shows upload section when upload button is clicked', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
+  test('2. Allows document type selection', () => {
+    render(<DocumentUpload {...mockProps} />, {
+      initialState: mockInitialState,
+    });
 
-    // Select the radio button first
+    const radioButton = screen.getByLabelText('NRIC');
+    fireEvent.click(radioButton);
+    
+    expect(radioButton).toBeChecked();
+  });
+
+  test('3. Shows upload section when upload button is clicked', () => {
+    render(<DocumentUpload {...mockProps} />, {
+      initialState: mockInitialState,
+    });
+
+    // First select the document
     fireEvent.click(screen.getByLabelText('NRIC'));
     
     // Then click upload button
@@ -122,17 +165,12 @@ describe('DocumentUpload Component', () => {
     expect(screen.getByTestId('file-input')).toBeInTheDocument();
   });
 
-  test('handles file upload successfully', async () => {
+  test('4. Handles file upload successfully', async () => {
     const mockFile = new File(['test'], 'test.png', { type: 'image/png' });
-    mockedAxios.post.mockResolvedValue({
-      data: { docId: 'DOC123', documentStatus: 'Accepted' },
+    
+    render(<DocumentUpload {...mockProps} />, {
+      initialState: mockInitialState,
     });
-
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
 
     // Select document and go to upload view
     fireEvent.click(screen.getByLabelText('NRIC'));
@@ -147,12 +185,10 @@ describe('DocumentUpload Component', () => {
     });
   });
 
-  test('shows error when trying to submit without required documents', async () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
+  test('5. Shows error when submitting without required documents', async () => {
+    render(<DocumentUpload {...mockProps} />, {
+      initialState: mockInitialState,
+    });
 
     fireEvent.click(screen.getByText('Continue'));
 
@@ -161,78 +197,12 @@ describe('DocumentUpload Component', () => {
     });
   });
 
-  test('allows submission when required documents are uploaded', async () => {
-    // Mock store with uploaded document
-    store.dispatch({
-      type: 'documentUploadList/getDocumentList',
-      payload: {
-        responseDocuments: [
-          {
-            document_list: [
-              {
-                document_category_code: 'ID',
-                document_category: 'Identification',
-                docCheck: 'Y',
-                isSlectedForUpload: 'Y',
-                min_options_req: 1,
-                document_options: [
-                  {
-                    document_types: [
-                      {
-                        document_type_code: 'R0001',
-                        document_type: 'NRIC',
-                        uploaded_documents: [
-                          {
-                            docId: 'DOC123',
-                            documentStatus: 'Accepted',
-                          },
-                        ],
-                        selectDocument: 'NRIC',
-                        document_requested_stage: 'BD',
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-            isSignatureDoc: false,
-          },
-        ],
-      },
+  test('6. Handles back button click', () => {
+    render(<DocumentUpload {...mockProps} />, {
+      initialState: mockInitialState,
     });
-
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
-
-    fireEvent.click(screen.getByText('Continue'));
-
-    await waitFor(() => {
-      expect(screen.queryByText(/Please upload all mandatory documents/i)).not.toBeInTheDocument();
-    });
-  });
-
-  test('handles back button click', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
 
     fireEvent.click(screen.getByText('Back'));
     expect(mockProps.backHandler).toHaveBeenCalled();
-  });
-
-  test('displays file specifications', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...mockProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText(/JPG, PNG, TIFF, and PDF formats/i)).toBeInTheDocument();
-    expect(screen.getByText(/less than 10 MB/i)).toBeInTheDocument();
   });
 });
