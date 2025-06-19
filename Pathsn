@@ -1,372 +1,282 @@
-import { screen, render, fireEvent, getByText, cleanup } from "@testing-library/react";
-import { Provider } from "react-redux";
-import configureStore from "redux-mock-store";
-import { useDispatch,useSelector , } from "react-redux";
-import {DocumentUpload} from "./document-upload";
-import thunk from "redux-thunk";
+describe('Additional DocumentUpload Tests', () => {
+  let store: any;
+  let props: any;
 
-jest.mock("axios", () => ({
-    __esModule: true,
-}));
-jest.mock("@lottiefiles/react-lottie-player", () => ({
-    __esModule: true,
-    Player: jest.fn().mockReturnValue(null), 
-}));
-afterEach(() => {
-    cleanup;
-    jest.resetAllMocks();
-  });
-  afterAll(() => {
-    jest.clearAllMocks();
-  });
-
-jest.mock("react-redux", () => ({
-  ...jest.requireActual("react-redux"),
-  useDispatch: jest.fn(),
-}));
-
-  jest.mock('react-router-dom',()=>({
-    ...jest.requireActual("react-router-dom"),
-    useNavigate:jest.fn(),
-    useLocation:jest.fn(),
-  }));
-
-  const middlewares = [thunk];
-  const mockStore = configureStore(middlewares); 
-  
-describe('upload document',()=>{
-    let store:any;
-    let props={
-        backHandler: jest.fn(),
-    }
-
-beforeEach(()=>{
-    store= mockStore(
-        {
-            stages: {
-                stages: [
-                    {    
-                    stageId:'doc',
-                    stageInfo:{
-                    application:{channel_reference:"sf2323232"},
-                    applicant_documents: [
-                        {
-                            "applicant_sequence_number": 1,
-                            "document_list": [
-                                {
-                                    "document_category": "ID Document",
-                                    "document_category_code": "R0001",
-                                    "document_requested_stage": null,
-                                    "min_options_req": "1",
-                                    "document_category_visible": "true",
-                                    "document_category_seq": null,
-                                    "document_options": [
-                                        {
-                                            "document_option_sequence": "1",
-                                            "document_option_selected": "Y",
-                                            "document_types": [
-                                                {
-                                                    "document_requested_stage": "BD",
-                                                    "document_type": "National Identity Card (Front and back)",
-                                                    "document_type_code": "T0205",
-                                                    "document_sub_type": null,
-                                                    "no_of_periods": null,
-                                                    "id_expiry": null,
-                                                    "id_number": null,
-                                                    "uploaded_documents": [
-                                                        {
-                                                            "period": null,
-                                                            "previewImage": null,
-                                                            "thumbnailImage": null,
-                                                            "fileSize": 0,
-                                                            "document_sequence_number": 1,
-                                                            "document_id": "ac6c85b2c45ba66863e4cf631c70f2553e905d937f1e23a94532c67a38c79d58",
-                                                            "document_name": "after spinner already have application alert.PNG",
-                                                            "document_status": "Accepted",
-                                                            "uploaded_to_filenet": "Y"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "document_category": "Additional Document",
-                                    "document_category_code": "R0006",
-                                    "document_requested_stage": null,
-                                    "min_options_req": "1",
-                                    "document_category_visible": "true",
-                                    "document_category_seq": "1",
-                                    "document_options": [
-                                        {
-                                            "document_option_sequence": "1",
-                                            "document_option_selected": "Y",
-                                            "document_types": [
-                                                {
-                                                    "document_requested_stage": "BD",
-                                                    "document_type": "Account Opening Form (Front and back)",
-                                                    "document_type_code": "T0003",
-                                                    "document_sub_type": null,
-                                                    "no_of_periods": null,
-                                                    "id_expiry": null,
-                                                    "id_number": null,
-                                                    "uploaded_documents": [
-                                                        {
-                                                            "period": null,
-                                                            "previewImage": null,
-                                                            "thumbnailImage": null,
-                                                            "fileSize": 0,
-                                                            "document_sequence_number": 1,
-                                                            "document_id": "b93ce738f520d9103aa97f6d9472dfeae325406e49d0b86eb06c0908e4b33dfd",
-                                                            "document_name": "after spinner basic info page.PNG",
-                                                            "document_status": "Accepted",
-                                                            "uploaded_to_filenet": "Y"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "document_category": "Additional Document",
-                                    "document_category_code": "R0006",
-                                    "document_requested_stage": null,
-                                    "min_options_req": "1",
-                                    "document_category_visible": "true",
-                                    "document_category_seq": "2",
-                                    "document_options": [
-                                        {
-                                            "document_option_sequence": "1",
-                                            "document_option_selected": "Y",
-                                            "document_types": [
-                                                {
-                                                    "document_requested_stage": "BD",
-                                                    "document_type": "Signature Specimen (Please upload a copy of your signature)",
-                                                    "document_type_code": "T0308",
-                                                    "document_sub_type": null,
-                                                    "no_of_periods": null,
-                                                    "id_expiry": null,
-                                                    "id_number": null,
-                                                    "uploaded_documents": [
-                                                        {
-                                                            "period": null,
-                                                            "previewImage": null,
-                                                            "thumbnailImage": null,
-                                                            "fileSize": 0,
-                                                            "document_sequence_number": 1,
-                                                            "document_id": "7fedb89f968c3c5f75916ad24009dc0fbef8113d17526d513b349be89ec08922",
-                                                            "document_name": "before Spinner Component.PNG",
-                                                            "document_status": "Accepted",
-                                                            "uploaded_to_filenet": "Y"
-                                                        }
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "document_category": "Tax Document",
-                                    "document_category_code": "R0002",
-                                    "document_requested_stage": "AD",
-                                    "min_options_req": "1",
-                                    "document_category_visible": "true",
-                                    "document_category_seq": null,
-                                    "document_options": [
-                                        {
-                                            "document_option_sequence": "1",
-                                            "document_option_selected": null,
-                                            "document_types": [
-                                                {
-                                                    "document_requested_stage": "AD",
-                                                    "document_type": "CRS Document (Front and back)",
-                                                    "document_type_code": "T0072",
-                                                    "document_sub_type": null,
-                                                    "no_of_periods": null,
-                                                    "id_expiry": null,
-                                                    "id_number": null,
-                                                    "uploaded_documents": null
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ],
-                            "last_updated_credit_limit_date_flag": null,
-                            "journey_type": "NTB"
-                        }
-                    ],
-                        applicants:{
-                            annual_income_a_1:"100"
-                        },
-                        
-                    },
-                    }
-                ],
-                userInput: {
-                    applicants: [{
-                        "alt_address_rwb_1_a_1": null,
-                        "res_existing_line1_a_1": null,
-                        "middle_name_a_1": null,
-                    }]
-                  },
-                
-            },
-            documentUploadList:{
-                documentUpdate:false,
-                finalDocumentList:[],
-                optionList:{
-                    "docOption": [],
-                    "optionsSelected": {
-                        "applicantId": 1,
-                        "options": []
-                    }
-                },
-                responseDocuments:[
-                                {document_list:
-            
-                                [
-                                    {
-                                        "document_category": "ID Document",
-                                        "document_category_code": "R0001",
-                                        "document_requested_stage": null,
-                                        "min_options_req": "1",
-                                        "document_category_visible": "true",
-                                        "document_category_seq": null,
-                                        "document_options": [
-                                            {
-                                                "document_option_sequence": "1",
-                                                "document_option_selected": null,
-                                                "document_types": [
-                                                    {
-                                                        "document_requested_stage": "BD",
-                                                        "document_type": "National Identity Card (Front and back)",
-                                                        "document_type_code": "T0205",
-                                                        "document_sub_type": null,
-                                                        "no_of_periods": null,
-                                                        "id_expiry": null,
-                                                        "id_number": null,
-                                                        "uploaded_documents": null
-                                                    }
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                ]
-                                }
+  beforeEach(() => {
+    store = mockStore({
+      documentUploadList: {
+        responseDocuments: [
+          {
+            document_list: [
+              {
+                document_category: "ID Document",
+                document_category_code: "R0001",
+                docCheck: "N",
+                isSlectedForUpload: "N",
+                document_options: [
+                  {
+                    document_types: [
+                      {
+                        document_type: "National Identity Card",
+                        document_type_code: "T0205",
+                        uploaded_documents: [],
+                        selectDocument: null,
+                        document_requested_stage: "BD"
+                      }
                     ]
-                }
-            
+                  }
+                ]
+              }
+            ],
+            isSignatureDoc: false
+          }
+        ],
+        isDocumentUpdate: false
+      },
+      stages: {
+        stages: [
+          {
+            stageId: 'doc',
+            stageInfo: {
+              application: {
+                channel_reference: "TEST123",
+                application_reference: "APP123"
+              },
+              applicant_documents: [],
+              applicants: {},
+              products: [{ product_category: "CC" }]
+            }
+          }
+        ],
+        journeyType: "standard",
+        isDocument: false,
+        isDocumentUpload: false
+      },
+      valueUpdate: {
+        backNavigation: {
+          nextStageId: null
         }
+      }
+    });
+
+    props = {
+      backHandler: jest.fn()
+    };
+  });
+
+  test('should handle file upload successfully', async () => {
+    const mockFile = new File(['test'], 'test.png', { type: 'image/png' });
+    mockedAxios.post.mockResolvedValue({
+      data: { docId: 'DOC123', documentStatus: 'Accepted' }
+    });
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
     );
-    (useDispatch as jest.Mock).mockReturnValue(()=> jest.fn());
-   
-});
-  
-test("upload",()=>{
-        render(
-                <Provider store={store}>
-                    <DocumentUpload {...props}/>
-                 </Provider>
-            )
-        expect(screen.getByText("Continue")).toBeTruthy;
+
+    // Select document type
+    fireEvent.click(screen.getByLabelText('National Identity Card'));
+    fireEvent.click(screen.getByText('Upload'));
+
+    // Upload file
+    const fileInput = screen.getByTestId('file-input');
+    fireEvent.change(fileInput, { target: { files: [mockFile] } });
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalled();
     });
-    describe('DocumentUpload Component', () => {
-        let store: any;
-        let props: any;
-    
-        beforeEach(() => {
-            store = mockStore({
-                documentUploadList: {
-                    responseDocuments: [
-                        {
-                            document_list: [
-                                {
-                                    document_category_code: "R0001",
-                                    document_options: [
-                                        {
-                                            document_types: [
-                                                {
-                                                    document_type_code: "T0205",
-                                                    uploaded_documents: []
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                },
-                stages: {
-                    journeyType: 'testJourney',
-                    stages: [
-                        {
-                            stageId: 'doc',
-                            stageInfo: {
-                                application: { channel_reference: "sf2323232", application_reference: "appRef" },
-                                applicant_documents: []
-                            }
-                        }
-                    ]
-                },
-                valueUpdate: {},
-            });
-    
-            props = {
-                backHandler: jest.fn(),
-            };
-        });
-    
-        it('renders without crashing', () => {
-            render(
-                <Provider store={store}>
-                    <DocumentUpload {...props} />
-                </Provider>
-            );
-            expect(screen.getByText(/upload your/i)).toBeInTheDocument();
-        });
-    
-        it('should enable upload when conditions are met', () => {
-            render(
-                <Provider store={store}>
-                    <DocumentUpload {...props} />
-                </Provider>
-            );
-    
-            expect(screen.getByText(/upload your/i)).toBeInTheDocument();
-            // Add more assertions based on the conditions that enable upload
-        });
-    
-        it('should handle document selection', () => {
-            render(
-                <Provider store={store}>
-                    <DocumentUpload {...props} />
-                </Provider>
-            );
-    
-            const documentOption = screen.getByText(/National Identity Card/i);
-            fireEvent.click(documentOption);
-    
-            // Check if the document is selected
-            expect(store.getActions()).toContainEqual(expect.objectContaining({
-                type: 'DOCUMENT_UPLOAD_ACTION_TYPE', // Replace with actual action type
-            }));
-        });
-    
-        it('should show error when no document is selected for upload', () => {
-            render(
-                <Provider store={store}>
-                    <DocumentUpload {...props} />
-                </Provider>
-            );
-    
-            const uploadButton = screen.getByRole('button', { name: /upload/i });
-            fireEvent.click(uploadButton);
-    
-            expect(screen.getByText(/select a document/i)).toBeInTheDocument(); // Replace with actual error message
-        });
+  });
+
+  test('should show error when file upload fails', async () => {
+    mockedAxios.post.mockRejectedValue(new Error('Upload failed'));
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByLabelText('National Identity Card'));
+    fireEvent.click(screen.getByText('Upload'));
+
+    const fileInput = screen.getByTestId('file-input');
+    fireEvent.change(fileInput, { target: { files: [new File([''], 'test.png')] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Upload failed/i)).toBeInTheDocument();
     });
+  });
+
+  test('should handle document deletion', async () => {
+    store = mockStore({
+      ...store.getState(),
+      documentUploadList: {
+        responseDocuments: [
+          {
+            document_list: [
+              {
+                document_category_code: "R0001",
+                docCheck: "Y",
+                isSlectedForUpload: "Y",
+                document_options: [
+                  {
+                    document_types: [
+                      {
+                        document_type_code: "T0205",
+                        uploaded_documents: [
+                          {
+                            docId: 'DOC123',
+                            documentStatus: 'Accepted'
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    });
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByLabelText('delete-icon'));
+    
+    await waitFor(() => {
+      expect(store.getActions()).toContainEqual(
+        expect.objectContaining({ type: 'documentUpload/isDocumentUpdate' })
+      );
+    });
+  });
+
+  test('should handle document submission with mandatory documents', async () => {
+    store = mockStore({
+      ...store.getState(),
+      documentUploadList: {
+        responseDocuments: [
+          {
+            document_list: [
+              {
+                document_category_code: "R0001",
+                docCheck: "Y",
+                isSlectedForUpload: "Y",
+                min_options_req: 1,
+                document_options: [
+                  {
+                    document_types: [
+                      {
+                        document_type_code: "T0205",
+                        uploaded_documents: [
+                          {
+                            docId: 'DOC123',
+                            documentStatus: 'Accepted'
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    });
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByText('Continue'));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Please upload all mandatory documents/i)).not.toBeInTheDocument();
+    });
+  });
+
+  test('should show signature specimen note when isSignatureDoc is true', () => {
+    store = mockStore({
+      ...store.getState(),
+      documentUploadList: {
+        responseDocuments: [
+          {
+            document_list: [
+              {
+                document_category_code: "R0006",
+                document_category: "Signature Specimen",
+                isSignatureDoc: true,
+                document_options: [
+                  {
+                    document_types: [
+                      {
+                        document_type: "Signature Specimen",
+                        document_type_code: "T0308",
+                        uploaded_documents: []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            isSignatureDoc: true
+          }
+        ]
+      }
+    });
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+
+    expect(screen.getByText(/specimen signature/i)).toBeInTheDocument();
+  });
+
+  test('should handle back button click when isDocument is true', () => {
+    store = mockStore({
+      ...store.getState(),
+      stages: {
+        ...store.getState().stages,
+        isDocument: true
+      }
+    });
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByText('Back'));
+    expect(props.backHandler).toHaveBeenCalledWith(false);
+  });
+
+  test('should handle uploadEnable scenario', () => {
+    store = mockStore({
+      ...store.getState(),
+      stages: {
+        ...store.getState().stages,
+        isDocumentUpload: true
+      }
+    });
+
+    render(
+      <Provider store={store}>
+        <DocumentUpload {...props} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Continue')).toBeInTheDocument();
+  });
 });
