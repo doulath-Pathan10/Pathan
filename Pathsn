@@ -1,169 +1,239 @@
-describe('DocumentUpload Component Tests', () => {
-  let store: any;
-  let props: any;
+import { json } from 'stream/consumers';
+import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import { store } from '../../utils/store/store';
+import rulesUtils from './rules.utils';
 
-  beforeEach(() => {
-    store = mockStore({
-      stages: {
-        stages: [{
-          stageId: 'doc',
-          stageInfo: {
-            application: { channel_reference: "sf2323232" },
-            applicant_documents: [{
-              document_list: [
-                {
-                  document_category: "ID Document",
-                  document_category_code: "R0001",
-                  document_options: [{
-                    document_types: [{
-                      document_type: "National Identity Card",
-                      document_type_code: "T0205",
-                      uploaded_documents: []
-                    }]
-                  }]
-                }
-              ]
-            }],
-            applicants: { annual_income_a_1: "100" }
-          }
-        }],
-        userInput: {
-          applicants: [{
-            alt_address_rwb_1_a_1: null,
-            res_existing_line1_a_1: null
-          }]
+const Rules_ad_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: []
+  };
+  const filteredFields:any = [];
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const FieldSetMap:any = {};
+ 
+    let defaultVisiblity:any= []
+    let hidhenFields:Array<string> = [];
+    let modifyVisibilityFields:Array<string> = [];
+    const repeatCount = stageInfo?.applicants.no_of_accounts_rwb_a_1? stageInfo?.applicants.no_of_accounts_rwb_a_1:1 ;
+    const additionalDetails =props[0].filter((fields:any)=> fields.field_set_name === "Additional Details");
+    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Additional Details"));
+    const name = products[0].product_category_name + " - " + products[0].name;
+    const TDProducts = stageInfo?.products.filter((product: any) => product?.product_category === 'TD');
+    
+    /*istanbul ignore else*/
+    if(products.length>1){
+      /*istanbul ignore else*/
+      if(filteredFields[0]?.[0]?.field_set_name === 'Additional Details'){
+      filteredFields[0].shift() 
+      filteredFields[0].unshift({
+        field_set_name: `${name} Additional Details`,
+        fields: props[0][3].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}`,
+          rwb_index: 1,
+          mandatory: "true",
+        })),
+      })
+    }
+    }
+
+    const filteredBankingServicesDetails = props[0].filter((fields:any)=> fields.field_set_name === "Banking Services");
+    /*istanbul ignore else*/
+    if(filteredFields[0].length > 0){
+      /*istanbul ignore else*/
+      if(products.length>1){
+      const name = products[0].product_category_name + " - " + products[0].name;
+    if((stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="318"))||(stageInfo.products.some((p:any)=>p.product_type ==="339") && stageInfo.products.some((p:any)=>p.product_type ==="318") || TDProducts)){
+      filteredFields[0].push(
+      {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
+        ![
+          'debit_card_request_rwb','issuance_type',
+          'embossed_dc_name_rwb','existing_account_no_dc',
+          "cheque_book_request_rwb"
+        ].includes(f.logical_field_name)).map((f:any)=>({
+        ...f,
+        logical_field_name:`${f.logical_field_name}`,
+        rwb_index: 2,
+        }))});}
+        else if((stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="516"))||(stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="507"))){
+          filteredFields[0].push(
+            {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
+              ![
+                'debit_card_request_rwb','issuance_type',
+                'embossed_dc_name_rwb',
+                "cheque_book_request_rwb"
+              ].includes(f.logical_field_name)).map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}`,
+              rwb_index: 2,
+              }))});
+
         }
-      },
-      documentUploadList: {
-        responseDocuments: [{
-          document_list: [{
-            document_category: "ID Document",
-            document_category_code: "R0001",
-            document_options: [{
-              document_types: [{
-                document_type: "National Identity Card",
-                document_type_code: "T0205",
-                uploaded_documents: []
-              }]
-            }]
-          }]
-        }]
+        else{
+          filteredFields[0].push({field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
+            ...f,
+            logical_field_name:`${f.logical_field_name}`,
+            rwb_index: 2,
+          })),})
+
+        }
+    ;}
+     else{
+        filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields});
       }
-    });
+     }
+     /*istanbul ignore else*/
+     if(repeatCount){
+      /*istanbul ignore else*/
+     if(stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307")||stageInfo.products.some((p:any)=>p.product_type ==="324")){
+    for(let i =0;i<repeatCount - 1 ;i++){
+      filteredFields[0].push({field_set_name: "Additional Details", fields: additionalDetails[0].fields.map((f:any)=>({
+        ...f,
+        logical_field_name:`${f.logical_field_name}_${i+2}`,
+        rwb_index: i+2,
+      }))});
+      /*istanbul ignore else*/
+      if(filteredFields[0].length > 0){
+         filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_${i+2}`,
+          rwb_index: i+2,
+         }))});
+       }
+      
+    }
+/*istanbul ignore else*/
+    if((stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307"))){
+      hidhenFields.push("cheque_book_request_rwb","cheque_book_request_rwb_2","cheque_book_request_rwb_3","cheque_book_request_rwb_4","cheque_book_request_rwb_5","cheque_book_request_rwb_6","cheque_book_request_rwb_7","cheque_book_request_rwb_8","reason_for_account_rwb","Initial_deposit_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
+      ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
+      ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
+       }
+   
+       if(stageInfo.products.some((p:any)=>p.product_type ==="307")){
+        hidhenFields.push("reason_for_account_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
+        ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
+        ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
+         }
+}
+}
 
-    props = { backHandler: jest.fn() };
-  });
+if(products.length>1){
+      for(let i =0;i<products.length-1 ;i++){
+        const name = products[i].product_category_name + " - " + products[i].name;
+        if((stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="310"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="339"))
+        ||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="504"))||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="507")) || TDProducts){
+        filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_2`,
+          rwb_index: 2,
+          mandatory: "true",
+        }))},
+        {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
+          ![
+            'debit_card_request_rwb','issuance_type',
+            'embossed_dc_name_rwb','existing_account_no_dc',
+            "cheque_book_request_rwb","cheque_book_request_rwb_2"
+          ].includes(f.logical_field_name)).map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_2`,
+          rwb_index: 2,
+          }))});}
+          else if((stageInfo.products.some((p:any)=>p.product_type ==="504")&& stageInfo.products.some((p:any)=>p.product_type ==="507"))||stageInfo.products.some((p:any)=>p.product_type ==="516") && stageInfo.products.some((p:any)=>p.product_type ==="507") || TDProducts){
+            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              mandatory: "true",
+            }))},
+            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
+              ![
+                'debit_card_request_rwb','issuance_type', 
+                'embossed_dc_name_rwb',
+                "cheque_book_request_rwb","cheque_book_request_rwb_2"
+              ].includes(f.logical_field_name)).map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              }))});
 
-  test('1. Renders document categories from store', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
+          }
+          else{
+            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              mandatory: "true",
+            }))},
+            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+            }))});
+
+          }
+        }}
+        /*istanbul ignore else*/
+     if(stageInfo.products[0].product_category === "TD" && filteredFields[0].length > 0){
+       const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
+       
+      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
+      
+      filteredFields[0].forEach((item:any, index: number) => {
+        item.fields = item.fields.map((field:any) => {
+          /*istanbul ignore else*/
+          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
+            return {
+              ...field,
+              component_type: "SelectionBox" // text to selection box converted
+            };
+          }
+          return field;
+        });
+      });
+
+
+
+      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
+      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb","td_fund_account_etc_currency","td_fund_account_new_currency")
+    }
+    if(stageInfo.products.length>1 && TDProducts){
+      const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
+       
+      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
+     
+      filteredFields[0].forEach((item:any, index: number) => {
+        item.fields = item.fields.map((field:any) => {
+          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
+            return {
+              ...field,
+              component_type: "SelectionBox" // text to selection box converted
+            };
+          }
+          return field;
+        });
+      });
+
+
+      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
+      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb","td_fund_account_etc_currency","td_fund_account_new_currency")
+     
+      if(stageInfo?.products.filter((product: any) => product?.product_type.includes('337')) ){
+        hidhenFields.push("embossed_dc_name_rwb");
+      };
+    }
+    /*istanbul ignore else*/
+    if(stageInfo.products[0].product_category === 'CA' && (stageInfo.products.some((p:any)=>p.product_type ==="317") || stageInfo.products.some((p:any)=>p.product_type ==="314"))){
+      hidhenFields.push("reason_for_account_rwb")
+    }
+    hidhenFields.push("Initial_deposit_rwb");
+    validationObj.hidden!.push(hidhenFields);
+    validationObj.modifyVisibility!.push(modifyVisibilityFields);
+    validationObj.modifyVisibility!.push(defaultVisiblity)
     
-    expect(screen.getByText('Upload your id document')).toBeInTheDocument();
-  });
+      return rulesUtils(filteredFields, validationObj);
+}
 
-  test('2. Shows document options from store', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('National Identity Card')).toBeInTheDocument();
-  });
-
-  test('3. Enables upload when document is selected', () => {
-    // Modify store to have a selected document
-    const modifiedStore = mockStore({
-      ...store.getState(),
-      documentUploadList: {
-        responseDocuments: [{
-          document_list: [{
-            document_category_code: "R0001",
-            docCheck: "Y",
-            document_options: [{
-              document_types: [{
-                document_type_code: "T0205",
-                selectDocument: "National Identity Card"
-              }]
-            }]
-          }]
-        }]
-      }
-    });
-
-    render(
-      <Provider store={modifiedStore}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('Upload')).not.toBeDisabled();
-  });
-
-  test('4. Shows uploaded documents from store', () => {
-    // Modify store to have uploaded documents
-    const modifiedStore = mockStore({
-      ...store.getState(),
-      documentUploadList: {
-        responseDocuments: [{
-          document_list: [{
-            document_category_code: "R0001",
-            isSlectedForUpload: "Y",
-            document_options: [{
-              document_types: [{
-                document_type_code: "T0205",
-                uploaded_documents: [{
-                  document_name: "test.png",
-                  document_status: "Accepted"
-                }]
-              }]
-            }]
-          }]
-        }]
-      }
-    });
-
-    render(
-      <Provider store={modifiedStore}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('test.png')).toBeInTheDocument();
-  });
-
-  test('5. Shows error when no document selected', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-    
-    fireEvent.click(screen.getByText('Upload'));
-    expect(screen.getByText(/select a document/i)).toBeInTheDocument();
-  });
-
-  test('6. Renders footer notes from store data', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-    
-    expect(screen.getByText(/JPG, PNG, TIFF, and PDF formats/i)).toBeInTheDocument();
-  });
-
-  test('7. Handles back button click', () => {
-    render(
-      <Provider store={store}>
-        <DocumentUpload {...props} />
-      </Provider>
-    );
-    
-    fireEvent.click(screen.getByText('Back'));
-    expect(props.backHandler).toHaveBeenCalled();
-  });
-});
+export default Rules_ad_1;
+Please write test cases using jest with RTL
