@@ -1,157 +1,147 @@
-import Rules_ld_1 from './Rules_ld_1';
-import rulesUtils from './rules.utils';
-import { checkProductDetails } from '../../services/common-service';
-import { authenticateType } from '../../utils/common/change.utils';
-
-// Mock dependencies
-jest.mock('./rules.utils');
-jest.mock('../../services/common-service');
-jest.mock('../../utils/common/change.utils');
-
-describe('Rules_ld_1 Utility Function', () => {
-  const mockProps = {};
-  const mockStageInfo = {
-    products: 'mock-product',
-    applicants: {
-      residency_status_a_1: 'CT'
-    }
+import { authenticateType, filterDisableFields, getUrl } from "../../utils/common/change.utils";
+import {
+  KeyWithAnyModel,
+  ValidationObjModel,
+} from "../../utils/model/common-model";
+import rulesUtils from "./rules.utils";
+ 
+const RulesSSF = (
+  props: KeyWithAnyModel,
+  stageInfo: KeyWithAnyModel,
+  missing_fields?: Array<string>
+): KeyWithAnyModel => {
+  const auth = getUrl.getParameterByName("auth");
+  const fieldSet = props.flat();
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const TDProducts = stageInfo?.products.filter((product: any) => product?.product_category === 'TD');
+  const filteredFields = props[0].filter((fields: any) => fields.field_set_name === "   ");
+  const FieldSetMap:any = {};
+  filteredFields[0]?.fields.map((product: any) => {
+    products.forEach((prod: any) => {
+      if (product.sub_product_code.includes(prod.product_type)) {
+        const name = prod.product_category_name + " - " + prod.name;
+        if(FieldSetMap[name]){
+          FieldSetMap[name].fields.push(product);
+        }else{
+          FieldSetMap[name] = {
+            field_set_name: name,
+            fields: [product]
+          }
+        }
+      }
+    });
+  });
+  const groupedFieldSet:any = Object.values(FieldSetMap);
+  filteredFields.push(...groupedFieldSet);
+  props[0].push(...filteredFields);
+  const isMyInfoVirtual = getUrl.getParameterByName("isMyInfoVirtual");
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: []
   };
+ 
+  if (
+    stageInfo.application.source_system_name === "2" &&
+    (authenticateType() === "myinfo" || isMyInfoVirtual === "true")
+  ) {
+    let nonEditableFields: Array<string> = [];
+    let default_editable : any[] = [];
+    /*istanbul ignore else */
+    if(stageInfo.products[0].product_category !== 'CA' && stageInfo.products[0].product_category !== 'SA'){
+     default_editable = ['email', 'mobile_number','account_currency_9']
+    }
+    if(stageInfo.products?.length>1){
+    if(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="337")){
+      const hiddenFields = ["no_of_accounts_rwb","mode_of_operation","pass_exp_dt"];
+      validationObj.hidden!.push(hiddenFields);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (rulesUtils as jest.Mock).mockImplementation(() => ({}));
-  });
+    }
+    if(stageInfo.products.length>1 && TDProducts){
+      const hiddenFields = ["no_of_accounts_rwb","mode_of_operation","pass_exp_dt"];
+      validationObj.hidden!.push(hiddenFields);
 
-  describe('Authentication Type: manual', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-    });
-
-    it('should return correct validation object for manual auth', () => {
-      (checkProductDetails as jest.Mock).mockReturnValue(true);
-
-      const result = Rules_ld_1(mockProps, mockStageInfo);
-
-      expect(result).toBeDefined();
-      expect(rulesUtils).toHaveBeenCalledWith(mockProps, {
-        nonEditable: [],
-        hidden: [
-          expect.arrayContaining([
-            "email", "full_name", "date_of_birth", "mobile_number", 
-            "residency_status", "NRIC", "work_type", "year_of_assessment_fff_1",
-            "year_of_assessment_fff_2", "annual_income_fff_1", "annual_income_fff_2",
-            "dsa_code", "credit_limit_consent"
-          ])
-        ],
-        modifyVisibility: [
-          expect.arrayContaining([
-            "residential_address_consent", "block", "street_name"
-          ])
-        ]
+    }
+ 
+  }
+    let myinfoMissingFields: Array<string> = ['ownership_status'];
+   /*istanbul ignore else */
+    if (!(stageInfo.applicants['mobile_number_a_1'])) {
+      myinfoMissingFields.push('mobile_number');
+    }
+    /*istanbul ignore else */
+    if (!stageInfo.applicants['email_a_1']) {
+      myinfoMissingFields.push('email');
+    }
+ 
+    const myInfoMissingValues = myinfoMissingFields;
+    nonEditableFields = filterDisableFields(
+      fieldSet[0].fields,
+      myInfoMissingValues,
+      default_editable
+    );
+    validationObj.nonEditable.push(nonEditableFields);
+    const hiddenFields = (parseInt(localStorage.getItem("applicantNo") || '0') > 1 ? ["contact_preference_casa_etc", "dsa_code","pass_exp_dt"] : ["contact_preference_casa_etc", "dsa_code","mode_of_operation","pass_exp_dt"]);
+    validationObj.hidden!.push(hiddenFields);
+  }
+  else if (stageInfo.applicants['auth_mode_a_1'] === 'IX') {
+    const ibankingFields = ["full_name", "email", "mobile_number", "account_currency_9", "account_currency", "contact_preference_casa_etc"];
+    let ibankingDisableFields = ["full_name"]
+    /*istanbul ignore else */
+    if (stageInfo.applicants['mobile_number_a_1']) {
+      ibankingDisableFields.push('mobile_number');
+    }
+    /*istanbul ignore else */
+    if (stageInfo.applicants['email_a_1']) {
+      ibankingDisableFields.push('email');
+    }
+    /*istanbul ignore else */
+    if (stageInfo.applicants['account_currency_9_a_1']) {
+      ibankingDisableFields.push('account_currency_9');
+    }
+    /*istanbul ignore else */
+    if (stageInfo.applicants['account_currency_a_1']) {
+      ibankingDisableFields.push('account_currency');
+    }
+    validationObj.nonEditable.push(ibankingDisableFields);
+    let hiddenFields: any[] = [];
+    fieldSet.forEach((field: KeyWithAnyModel) => {
+      field.fields.forEach((fieldName: KeyWithAnyModel) => {
+        /*istanbul ignore else */
+        if (ibankingFields.indexOf(fieldName["logical_field_name"]) === -1) {
+          hiddenFields.push(fieldName["logical_field_name"])
+        }
       });
     });
-
-    it('should hide nationality_add for non-CASA products', () => {
-      (checkProductDetails as jest.Mock).mockReturnValue(false);
-
-      const result = Rules_ld_1(mockProps, mockStageInfo);
-
-      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
-        hidden: [
-          expect.arrayContaining(['nationality_add'])
-        ]
-      }));
-    });
-
-    it('should hide postal_code_other for residency_status CT', () => {
-      const result = Rules_ld_1(mockProps, {
-        ...mockStageInfo,
-        applicants: { residency_status_a_1: 'CT' }
-      });
-
-      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
-        hidden: [
-          expect.arrayContaining(['postal_code_other'])
-        ]
-      }));
-    });
-  });
-
-  describe('Authentication Type: myinfo', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('myinfo');
-    });
-
-    it('should return correct validation object for myinfo auth', () => {
-      (checkProductDetails as jest.Mock).mockReturnValue(true);
-
-      const result = Rules_ld_1(mockProps, mockStageInfo);
-
-      expect(result).toBeDefined();
-      expect(rulesUtils).toHaveBeenCalledWith(mockProps, {
-        nonEditable: [expect.arrayContaining(["marital_status", "residential_address"])],
-        hidden: [
-          expect.arrayContaining([
-            "email", "full_name", "date_of_birth", "mobile_number", 
-            "residency_status", "NRIC", "work_type", "year_of_assessment_fff_1",
-            "year_of_assessment_fff_2", "annual_income_fff_1", "annual_income_fff_2",
-            "dsa_code", "credit_limit_consent", "postal_code", "postal", "block",
-            "building_name", "street_name", "unit_no", "account_currency_9",
-            "myinfo_data_cli", "banca_ins_request_1", "banca_ins_request_2",
-            "banca_ins_request_amount", "banca_ins_Consent_rp2", "banca_ins_Consent_rp3",
-            "banca_ins_Consent_rp5", "banca_ins_Consent_rp6", "myinfo_data_cli_1",
-            "contact_preference", "multi_currency_selection", "credit_limit_consent_1",
-            "contact_preference_casa"
-          ])
-        ],
-        modifyVisibility: [
-          expect.arrayContaining([
-            "residential_address", "residential_address_consent", "block", "street_name"
-          ])
-        ]
-      });
-    });
-
-    it('should show overseas contact fields for FR residency status', () => {
-      const result = Rules_ld_1(mockProps, {
-        ...mockStageInfo,
-        applicants: { residency_status_a_1: 'FR' }
-      });
-
-      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
-        modifyVisibility: [
-          expect.arrayContaining([
-            "overseas_contact_country_code", "overseas_contact_area_code", "overseas_contact_no"
-          ])
-        ]
-      }));
-    });
-
-    it('should hide postal_code for FR residency status', () => {
-      const result = Rules_ld_1(mockProps, {
-        ...mockStageInfo,
-        applicants: { residency_status_a_1: 'FR' }
-      });
-
-      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
-        hidden: [
-          expect.arrayContaining(['postal_code'])
-        ]
-      }));
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle empty stageInfo', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      const result = Rules_ld_1(mockProps, {} as any);
-      expect(result).toBeDefined();
-    });
-
-    it('should handle undefined applicants in stageInfo', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      const result = Rules_ld_1(mockProps, { products: 'mock' } as any);
-      expect(result).toBeDefined();
-    });
-  });
-});
+    validationObj.hidden!.push(hiddenFields);
+  } else if (authenticateType() === "manual") {
+    let defaultVisiblity = ["date_of_birth", "residency_status"];
+    validationObj.modifyVisibility!.push(defaultVisiblity)
+    const hiddenFields = [
+      "ownership_status",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      "contact_preference_casa_etc",
+      "residential_address_consent_a_1",
+      "dsa_code",
+      "mode_of_operation",
+      "pass_exp_dt",
+      "detailed_full_name"
+    ];
+    validationObj.hidden!.push(hiddenFields);
+  } else {
+    const hiddenFields = [
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      "contact_preference_casa_etc",
+      "dsa_code"
+    ];
+    validationObj.hidden!.push(hiddenFields);
+  }
+  const updatedAccountCurrencyFields = props[0].filter((fields: any) => fields.field_set_name !== "   ");
+  return rulesUtils([updatedAccountCurrencyFields], validationObj);
+};
+ 
+export default RulesSSF;
+Please write test cases using jest with RTL
