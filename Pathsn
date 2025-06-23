@@ -1,289 +1,148 @@
-import Rules_ad_1 from './Rules_ad_1';
-import rulesUtils from './rules.utils';
+import { authenticateType, getUrl } from "../../utils/common/change.utils";
+import {
+  KeyWithAnyModel,
+  ValidationObjModel,
+} from "../../utils/model/common-model";
+import rulesUtils from "./rules.utils";
 
-// Mock the rulesUtils function
-jest.mock('./rules.utils', () => jest.fn());
-
-describe('Rules_ad_1 Utility Function - Alternative Tests', () => {
-  beforeEach(() => {
-    // Clear localStorage and mocks before each test
-    localStorage.clear();
-    jest.clearAllMocks();
-    
-    // Setup mock localStorage products
-    localStorage.setItem('products', JSON.stringify([
-      { 
-        product_category_name: 'Current Account', 
-        name: 'Premium Account',
-        product_category: 'CA'
+const Rules_bd_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+  const auth = authenticateType();
+  const isMyInfoVirtual = getUrl.getParameterByName("isMyInfoVirtual");
+  const stageSelector = getUrl.getStageInfo()[0];
+  const applicantsSelector = stageSelector.stageInfo.applicants;
+  const fieldSet = props[0].filter((fields:any)=> fields.field_set_name === 'Basic Information');
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const filteredFields = props[0].filter((fields: any) => fields.field_set_name === "   ");
+  filteredFields[0]?.fields.map((product: any) => {
+    products.forEach((prod: any) => {
+      if (product.sub_product_code.includes(prod.product_type)) {
+        filteredFields.push({
+          field_set_name: prod.product_category_name + " - " + prod.name,
+          fields: [product]
+        });
       }
-    ]));
+    });
   });
-
-  const baseProps = [
-    [
-      {
-        field_set_name: "Additional Details",
-        fields: [
-          { 
-            logical_field_name: "reason_for_account_rwb", 
-            component_type: "Text",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "Initial_deposit_rwb", 
-            component_type: "Number",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "source_of_fund_rwb", 
-            component_type: "Text",
-            mandatory: "false"
-          }
-        ]
-      },
-      {
-        field_set_name: "Banking Services",
-        fields: [
-          { 
-            logical_field_name: "debit_card_request_rwb", 
-            component_type: "Checkbox",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "issuance_type", 
-            component_type: "Radio",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "embossed_dc_name_rwb", 
-            component_type: "Text",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "existing_account_no_dc", 
-            component_type: "Text",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "cheque_book_request_rwb", 
-            component_type: "Checkbox",
-            mandatory: "false"
-          }
-        ]
-      },
-      {
-        field_set_name: "Time Deposit Details",
-        fields: [
-          { 
-            logical_field_name: "td_product_currency_value", 
-            component_type: "Text",
-            mandatory: "false"
-          },
-          { 
-            logical_field_name: "td_depoist_amount", 
-            component_type: "Number",
-            mandatory: "false"
-          }
-        ]
-      }
-    ]
-  ];
-
-  const baseStageInfo = {
-    applicants: {
-      no_of_accounts_rwb_a_1: 1
-    },
-    products: [
-      { 
-        product_category: 'CA', 
-        product_type: '307',
-        product_category_name: 'Current Account',
-        name: 'Premium Account'
-      }
-    ]
+  fieldSet.push(...filteredFields);
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: [],
   };
+  let defaultVisiblity:any= []
+  //ibanking back nav issue fix
+  if (stageSelector.stageInfo.applicants['auth_mode_a_1'] === 'IX') {
+    const ibankingFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "account_currency_9",
+      "account_currency",
+      "contact_preference_casa"
+    ];
 
-  describe('Field Transformations', () => {
-    it('should make Additional Details fields mandatory when multiple products exist', () => {
-      // Set multiple products in localStorage
-      localStorage.setItem('products', JSON.stringify([
-        { product_category_name: 'Current Account', name: 'Account 1' },
-        { product_category_name: 'Savings Account', name: 'Account 2' }
-      ]));
+    validationObj.nonEditable.push(ibankingFields);
 
-      Rules_ad_1(baseProps, baseStageInfo);
+    let hiddenFields: any[] = [];
 
-      const filteredFields = rulesUtils.mock.calls[0][0][0];
-      const additionalDetailsFields = filteredFields[0].fields;
-      
-      expect(additionalDetailsFields.every((f: any) => f.mandatory === "true")).toBe(true);
+    fieldSet.forEach((field: KeyWithAnyModel) => {
+      field.fields.forEach((fieldName: KeyWithAnyModel) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        ibankingFields.indexOf(fieldName["logical_field_name"]) === -1
+          ? hiddenFields.push(fieldName["logical_field_name"])
+          : "";
+      });
     });
 
-    it('should modify field_set_name when multiple products exist', () => {
-      // Set multiple products in localStorage
-      localStorage.setItem('products', JSON.stringify([
-        { product_category_name: 'Current Account', name: 'Account 1' },
-        { product_category_name: 'Savings Account', name: 'Account 2' }
-      ]));
+    validationObj.hidden!.push(hiddenFields);
+  }
 
-      Rules_ad_1(baseProps, baseStageInfo);
+  //Adding resume here, incase of manual flow this condition has to be modified.
+  else if (
+    stageInfo.application.source_system_name === "2" &&
+    (auth === "myinfo" || isMyInfoVirtual === "true" || auth === "resume")
+  ) {
 
-      const filteredFields = rulesUtils.mock.calls[0][0][0];
-      expect(filteredFields[0].field_set_name).toMatch(/Current Account - Account 1 Additional Details/);
-    });
+    let hiddenFields = [
+      "dsa_code",
+      "nationality",
+      "country_of_birth",
+      "contact_preference",
+      "gender",
+      "marital_status",
+      "nationality_add",
+      "other_name_or_alias",
+      "education_level",
+      "pass_exp_dt",
+      "mode_of_operation"
+    ];
+    /*istanbul ignore else */
+    if (stageSelector.stageId === 'bd-1' && (stageSelector.stageInfo.applicants['account_currency_9_a_1'] === '' || stageSelector.stageInfo.applicants['account_currency_a_1'] === '')) {
+      hiddenFields.push('account_currency_9', 'account_currency');
+    }
+    validationObj.hidden!.push(hiddenFields);
+    const nonEditableFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      "ownership_status",
+      "account_currency_9",
+      "account_currency",
+      "residency_status",
+      "NRIC",
+      "passport_no"
+    ];
+    if (stageSelector.stageId === 'bd-1' && Object.keys(applicantsSelector).filter(key =>key.startsWith('account_currency_rwb_'))) {
+      const accountCurrency:any = Object.keys(applicantsSelector).filter(key =>key.startsWith('account_currency_rwb_'));
+      accountCurrency.forEach((acctcurrency:any) => nonEditableFields.push(acctcurrency.split('_p_1')[0]))
+    }
+    validationObj.nonEditable.push(nonEditableFields);
+  } else if (auth === "manual") {
+    const hiddenFields = [
+      "ownership_status",
+      "education_level",
+      "nationality",
+      "nationality_add",
+      "country_of_birth",
+      "contact_preference",
+      "other_name_or_alias",
+      "education_level",
+      "gender",
+      "marital_status",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      'mode_of_operation',
+      "pass_exp_dt",
+      "detailed_full_name"
+    ];
+    const nonEditableFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "residential_status",
+      "account_currency_9",
+      "account_currency",
+      "residency_status",
+      "NRIC",
+      "passport_no"
+    ];
+    validationObj.nonEditable.push(nonEditableFields);
+    validationObj.hidden!.push(hiddenFields);
+  } else {
+    const hiddenFields = [
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+    ];
+    validationObj.hidden!.push(hiddenFields);
+  }
+  validationObj.modifyVisibility!.push(defaultVisiblity)
+  const updatedAccountCurrencyFields = fieldSet.filter((fields: any) => fields.field_set_name !== "   ");
+  return rulesUtils([updatedAccountCurrencyFields], validationObj);
+};
 
-    it('should transform td_product_currency_value from Text to SelectionBox for TD products', () => {
-      // Set TD product
-      localStorage.setItem('products', JSON.stringify([
-        { product_category_name: 'Time Deposit', name: 'Fixed Deposit', product_category: 'TD' }
-      ]));
-
-      const tdStageInfo = {
-        ...baseStageInfo,
-        products: [
-          { product_category: 'TD', product_type: '500' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, tdStageInfo);
-
-      const filteredFields = rulesUtils.mock.calls[0][0][0];
-      const tdFields = filteredFields.find((fs: any) => fs.field_set_name === 'Time Deposit Details').fields;
-      const currencyField = tdFields.find((f: any) => f.logical_field_name === 'td_product_currency_value');
-      
-      expect(currencyField.component_type).toBe('SelectionBox');
-    });
-  });
-
-  describe('Field Filtering', () => {
-    it('should filter out specific banking services fields for product type 307', () => {
-      const stageInfo = {
-        ...baseStageInfo,
-        products: [
-          { product_category: 'CA', product_type: '307' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, stageInfo);
-
-      const filteredFields = rulesUtils.mock.calls[0][0][0];
-      const bankingServicesFields = filteredFields.find((fs: any) => 
-        fs.field_set_name.includes('Banking Services')
-      ).fields;
-      
-      expect(bankingServicesFields.some((f: any) => f.logical_field_name === 'cheque_book_request_rwb')).toBe(false);
-      expect(bankingServicesFields.some((f: any) => f.logical_field_name === 'existing_account_no_dc')).toBe(false);
-    });
-
-    it('should include all banking services fields for product type 310', () => {
-      const stageInfo = {
-        ...baseStageInfo,
-        products: [
-          { product_category: 'CA', product_type: '310' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, stageInfo);
-
-      const filteredFields = rulesUtils.mock.calls[0][0][0];
-      const bankingServicesFields = filteredFields.find((fs: any) => 
-        fs.field_set_name === 'Banking Services'
-      ).fields;
-      
-      expect(bankingServicesFields.some((f: any) => f.logical_field_name === 'cheque_book_request_rwb')).toBe(true);
-      expect(bankingServicesFields.some((f: any) => f.logical_field_name === 'existing_account_no_dc')).toBe(true);
-    });
-  });
-
-  describe('Validation Object', () => {
-    it('should hide Initial_deposit_rwb for all scenarios', () => {
-      Rules_ad_1(baseProps, baseStageInfo);
-
-      const validationObj = rulesUtils.mock.calls[0][1];
-      expect(validationObj.hidden[0]).toContain('Initial_deposit_rwb');
-    });
-
-    it('should hide specific fields for product type 307', () => {
-      const stageInfo = {
-        ...baseStageInfo,
-        products: [
-          { product_category: 'CA', product_type: '307' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, stageInfo);
-
-      const validationObj = rulesUtils.mock.calls[0][1];
-      expect(validationObj.hidden[0]).toContain('reason_for_account_rwb');
-      expect(validationObj.hidden[0]).toContain('source_of_fund_rwb');
-    });
-
-    it('should modify visibility for TD product fields', () => {
-      // Set TD product
-      localStorage.setItem('products', JSON.stringify([
-        { product_category_name: 'Time Deposit', name: 'Fixed Deposit', product_category: 'TD' }
-      ]));
-
-      const tdStageInfo = {
-        ...baseStageInfo,
-        products: [
-          { product_category: 'TD', product_type: '500' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, tdStageInfo);
-
-      const validationObj = rulesUtils.mock.calls[0][1];
-      expect(validationObj.modifyVisibility[0]).toContain('td_product_currency_value');
-      expect(validationObj.modifyVisibility[0]).toContain('td_depoist_amount');
-    });
-  });
-
-  describe('Repeat Account Handling', () => {
-    it('should create additional field sets with incremented rwb_index', () => {
-      const stageInfo = {
-        ...baseStageInfo,
-        applicants: {
-          no_of_accounts_rwb_a_1: 3
-        },
-        products: [
-          { product_category: 'CA', product_type: '310' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, stageInfo);
-
-      const filteredFields = rulesUtils.mock.calls[0][0][0];
-      
-      // Find the additional details for the second account
-      const additionalDetails2 = filteredFields.find((fs: any) => 
-        fs.field_set_name === 'Additional Details' && 
-        fs.fields[0].logical_field_name.endsWith('_2')
-      );
-      
-      expect(additionalDetails2).toBeDefined();
-      expect(additionalDetails2.fields[0].rwb_index).toBe(2);
-    });
-
-    it('should hide fields for repeated accounts with product type 310', () => {
-      const stageInfo = {
-        ...baseStageInfo,
-        applicants: {
-          no_of_accounts_rwb_a_1: 3
-        },
-        products: [
-          { product_category: 'CA', product_type: '310' }
-        ]
-      };
-
-      Rules_ad_1(baseProps, stageInfo);
-
-      const validationObj = rulesUtils.mock.calls[0][1];
-      expect(validationObj.hidden[0]).toContain('cheque_book_request_rwb_2');
-      expect(validationObj.hidden[0]).toContain('reason_for_account_rwb_2');
-      expect(validationObj.hidden[0]).toContain('Initial_deposit_rwb_2');
-      expect(validationObj.hidden[0]).toContain('source_of_fund_rwb_2');
-    });
-  });
-});
+export default Rules_bd_1;
+Please write test cases using jest with RTL
