@@ -1,251 +1,239 @@
-import { checkProductDetails } from '../../services/common-service';
+import Rules_bd_2 from './Rules_bd_2';
 import { authenticateType, getUrl } from '../../utils/common/change.utils';
-import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import { checkProductDetails } from '../../services/common-service';
 import rulesUtils from './rules.utils';
 
-const Rules_bd_2 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
-   const validationObj: ValidationObjModel = {
-        nonEditable: [],
-        hidden: [],
-        modifyVisibility:[]
-    };
-    const auth = authenticateType()
-    const isCASAProduct = checkProductDetails(stageInfo.products);
-    let defaultVisiblity:any= []
-    /*istanbul ignore else */
-    if(auth === "manual"||"myinfo"){
-        let hiddenFields = ["email","full_name","date_of_birth","mobile_number","residency_status","NRIC","work_type","year_of_assessment_fff_1","year_of_assessment_fff_2","annual_income_fff_1","annual_income_fff_2","dsa_code",
-        "credit_limit_consent"]
-        
-        if(auth === "myinfo"||auth ==="manual") {
-            if(getUrl.getJourneyType()  !== 'ETC'){
-            hiddenFields.push(
-            "postal_code",
-            "postal",
-            "block",
-            "building_name",
-            "street_name",
-            "unit_no",
-            "account_currency_9",
-            "myinfo_data_cli",
-            "embossed_name",
-            "embossed_name_1",
-             "work_type",
-             "mobile_number_rwb",
-             "no_of_accounts_rwb",
-             "preferred_contact_mobile",
-             "preferred_contact_ofc_tel_no",
-             "staff_id",
-             "staff_name",
-             "date",
-             "preferred_contact_per_email",
-             "declare_preferred_contacts",
-             "ofc_country",
-             "ofc_postal_code",
-             "ofc_postal_other_code",
-             "ofc_block",
-             "ofc_street_name",
-             "ofc_unit_no",
-             "ofc_addline1",
-             "ofc_addline2",
-             "ofc_addline3",
-             "ofc_city",
-             "ofc_state",
-             "select_alt_contacts",
-             "declare_preferred_contacts",
-             "preferred_contact_res_tel_no",
-             "preferred_contact_per_email",
-             "application_branch",
-             "application_sourcing",
-             "signature_crop_from_existing_ac",
-             "existing_account_no",
-             "existing_account_ccy",
-             "arm_code_rwb",
-             "segment_code",
-             "sub_segment",
-             "service_indicator",
-             "sourcing_id_2",
-             "sales_id_2",
-             "referral_id_2",
-             "closing_id_2",
-             "account_currency_rwb_1",
-             "account_currency_rwb_2",
-             "account_currency_rwb_4",
-             "account_currency_rwb_9",
-             "account_currency_rwb_3",
-             "ofc_building_name",
-             "ofc_addline1",
-             "ofc_addline2",
-             "ofc_addline3", 
-             "pass_exp_dt",
-             "mode_of_operation",
-             "addline1_rwb", 
-             "addline2_rwb", 
-             "addline3_rwb",
-             "alt_addline1_1", 
-             "alt_addline2_1", 
-             "alt_addline3_1",
-             "alt_addline1_2", 
-             "alt_addline2_2", 
-             "alt_addline3_2",
-             "alt_addline1_3", 
-             "alt_addline2_3", 
-             "alt_addline3_3",
-             "alt_addline1_4", 
-             "alt_addline2_4", 
-             "alt_addline3_4",
-             "alt_addline1_5", 
-             "alt_addline2_5", 
-             "alt_addline3_5",
-             "per_addline1_rwb", 
-             "per_addline2_rwb", 
-             "per_addline3_rwb",
-             "postal_code_other_rwb",
-             "account_currency_rwb_5",
-             "account_currency_rwb_7"
-            );
-            }
-            else if(getUrl.getJourneyType()==="ETC"){
-                hiddenFields.push(
-            "postal_code_rwb",
-            "block_rwb",
-            "country_rwb",
-            "building_name_rwb",
-            "building_name_rwb",
-            "unit_no_rwb",
-            "street_name_rwb",
-            "postal_code",
-            "postal",
-            "block",
-            "building_name",
-            "street_name",
-            "unit_no",
-            "account_currency_9",
-            "myinfo_data_cli",
-            "embossed_name",
-            "embossed_name_1",
-             "work_type",
-             "mobile_number_rwb",
-             "preferred_contact_mobile",
-             "preferred_contact_ofc_tel_no",
-             "no_of_accounts_rwb",
-             "staff_id",
-             "staff_name",
-             "date",
-             "preferred_contact_per_email",
-             "declare_preferred_contacts",
-             "ofc_country",
-             "ofc_postal_code",
-             "ofc_postal_other_code",
-             "ofc_block",
-             "ofc_street_name",
-             "ofc_unit_no",
-             "ofc_addline1",
-             "ofc_addline2",
-             "ofc_addline3",
-             "ofc_city",
-             "ofc_state",
-             "select_alt_contacts",
-             "declare_preferred_contacts",
-             "preferred_contact_res_tel_no",
-             "preferred_contact_per_email",
-             "application_branch",
-             "application_sourcing",
-             "signature_crop_from_existing_ac",
-             "existing_account_no",
-             "existing_account_ccy",
-             "arm_code_rwb",
-             "segment_code",
-             "sub_segment",
-             "service_indicator",
-             "sourcing_id_2",
-             "sales_id_2",
-             "referral_id_2",
-             "closing_id_2",
-             "account_currency_rwb_1",
-             "account_currency_rwb_2",
-             "account_currency_rwb_4",
-             "account_currency_rwb_9",
-             "account_currency_rwb_3",
-             "account_currency_rwb_5",
-             "account_currency_rwb_7",
-            //  "mailing_address_rwb",
-             "ofc_building_name", 
-             "pass_exp_dt",
-             "mode_of_operation",
-             "addline1_rwb", 
-             "addline2_rwb", 
-             "addline3_rwb",
-             "alt_addline1_1", 
-             "alt_addline2_1", 
-             "alt_addline3_1",
-             "alt_addline1_2", 
-             "alt_addline2_2", 
-             "alt_addline3_2",
-             "alt_addline1_3", 
-             "alt_addline2_3", 
-             "alt_addline3_3",
-             "alt_addline1_4", 
-             "alt_addline2_4", 
-             "alt_addline3_4",
-             "alt_addline1_5", 
-             "alt_addline2_5", 
-             "alt_addline3_5",
-             "per_addline1_rwb", 
-             "per_addline2_rwb", 
-             "per_addline3_rwb",
-             "postal_code_other_rwb",
-             "state_rwb",
-             "city_rwb",
-             "no_of_accounts_rwb"
-                )
+// Mock dependencies
+jest.mock('../../utils/common/change.utils', () => ({
+  authenticateType: jest.fn(),
+  getUrl: {
+    getJourneyType: jest.fn(),
+  },
+}));
 
-            }
-            if(getUrl.getJourneyType()!=="ETC" && getUrl.getJourneyType()!=="NTC"){
-            defaultVisiblity.push("residential_address", "nationality_add","per_country","per_postal_code","per_block","per_building_name","per_street_name","per_unit_no","alt_country_1","alt_street_name_1","alt_postal_code_1","alt_block_1","alt_building_name_1","alt_unit_no_1","alt_country_2","alt_street_name_2","alt_postal_code_2","alt_block_2","alt_building_name_2","alt_unit_no_2","alt_country_3","alt_street_name_3","alt_postal_code_3","alt_block_3","alt_building_name_3","alt_unit_no_3","alt_country_4","alt_street_name_4","alt_postal_code_4","alt_block_4","alt_building_name_4","alt_unit_no_4","alt_country_5","alt_street_name_5","alt_postal_code_5","alt_block_5","alt_building_name_5","alt_unit_no_5",) 
-            }
-            else if(getUrl.getJourneyType()==="ETC" || getUrl.getJourneyType()==='NTC'){
-                if(stageInfo.applicants['permanent_address_rwb_1_a_1']){
-                    defaultVisiblity.push('permanent_address_rwb_1');
-                }
-                if(stageInfo.applicants['residential_address_rwb_1_a_1']){
-                    defaultVisiblity.push('residential_address_rwb_1');
-                    hiddenFields.push('residential_address','country_rwb','postal_code_rwb','block_rwb','building_name_rwb','street_name_rwb','unit_no_rwb')
-                }
-                defaultVisiblity.push('residential_address',"nationality_add","per_country","per_postal_code","per_block","per_building_name","per_street_name","per_unit_no","alt_country_1","alt_street_name_1","alt_postal_code_1","alt_block_1","alt_building_name_1","alt_unit_no_1","alt_country_2","alt_street_name_2","alt_postal_code_2","alt_block_2","alt_building_name_2","alt_unit_no_2","alt_country_3","alt_street_name_3","alt_postal_code_3","alt_block_3","alt_building_name_3","alt_unit_no_3","alt_country_4","alt_street_name_4","alt_postal_code_4","alt_block_4","alt_building_name_4","alt_unit_no_4","alt_country_5","alt_street_name_5","alt_postal_code_5","alt_block_5","alt_building_name_5","alt_unit_no_5") 
-            }
-            if(auth==="manual"){
-                hiddenFields.push("nationality_add","state_rwb","city_rwb","account_currency_rwb_5","account_currency_rwb_7");
-            }
-            if(auth ==="myinfo"){
-            hiddenFields.push("state_rwb","city_rwb");
-            const nonEditableFields = ["marital_status","residential_address"];
-            validationObj.nonEditable.push(nonEditableFields)
-            }
-        }
-          
-/*istanbul ignore else */
-        if(stageInfo.applicants['residency_status_a_1'] === "CT"){
-            hiddenFields.push("postal_code_other")
+jest.mock('../../services/common-service', () => ({
+  checkProductDetails: jest.fn(),
+}));
 
-        }
-        /*istanbul ignore else */
-        if(stageInfo.applicants['residency_status_a_1'] === "FR"){
-            hiddenFields.push("postal_code")
+jest.mock('./rules.utils', () => jest.fn());
 
-        }
-/*istanbul ignore else */
-        if(stageInfo.applicants['residency_status_a_1'] === "FR"){
-            defaultVisiblity = ["overseas_contact_country_code","overseas_contact_area_code","overseas_contact_no"];
-        }
-        defaultVisiblity.push( "residential_address_consent","block","street_name") 
-        hiddenFields.push("detailed_full_name");
-        validationObj.hidden!.push(hiddenFields);
-        validationObj.modifyVisibility!.push(defaultVisiblity)
-      }
+describe('Rules_bd_2 Utility Function', () => {
+  const mockProps = [
+    {
+      fields: [
+        { logical_field_name: 'full_name' },
+        { logical_field_name: 'email' },
+        { logical_field_name: 'mobile_number' },
+        { logical_field_name: 'residential_address' },
+        { logical_field_name: 'postal_code' },
+        { logical_field_name: 'dsa_code' },
+        // Add more fields as needed for testing
+      ],
+    },
+  ];
 
-    return rulesUtils(props, validationObj);
-}
+  const mockStageInfo = {
+    products: ['CASA'],
+    applicants: {
+      residency_status_a_1: '',
+      permanent_address_rwb_1_a_1: '',
+      residential_address_rwb_1_a_1: '',
+    },
+  };
 
-export default Rules_bd_2;
-Please write test cases using jest with RTL
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Default mock implementations
+    (authenticateType as jest.Mock).mockReturnValue('manual');
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('default');
+    (checkProductDetails as jest.Mock).mockReturnValue(true);
+    (rulesUtils as jest.Mock).mockImplementation((props, validation) => ({
+      props,
+      validation,
+    }));
+  });
+
+  it('should initialize with empty validation object', () => {
+    const result = Rules_bd_2(mockProps, mockStageInfo);
+    
+    expect(result.validation).toEqual({
+      nonEditable: [],
+      hidden: expect.any(Array),
+      modifyVisibility: expect.any(Array),
+    });
+  });
+
+  describe('for manual/myinfo authentication', () => {
+    it('should set common hidden fields for manual auth', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden[0]).toEqual(
+        expect.arrayContaining([
+          'email',
+          'full_name',
+          'date_of_birth',
+          'mobile_number',
+          'dsa_code',
+          'credit_limit_consent'
+        ])
+      );
+    });
+
+    it('should set additional hidden fields for non-ETC journey', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      (getUrl.getJourneyType as jest.Mock).mockReturnValue('default');
+      
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden[0]).toEqual(
+        expect.arrayContaining([
+          'postal_code',
+          'block',
+          'building_name',
+          'street_name',
+          'unit_no',
+          'account_currency_9'
+        ])
+      );
+    });
+
+    it('should set additional hidden fields for ETC journey', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ETC');
+      
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden[0]).toEqual(
+        expect.arrayContaining([
+          'postal_code_rwb',
+          'block_rwb',
+          'country_rwb',
+          'building_name_rwb',
+          'unit_no_rwb',
+          'street_name_rwb'
+        ])
+      );
+    });
+
+    it('should set modifyVisibility for non-ETC/NTC journey', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      (getUrl.getJourneyType as jest.Mock).mockReturnValue('default');
+      
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.modifyVisibility[0]).toEqual(
+        expect.arrayContaining([
+          'residential_address',
+          'nationality_add',
+          'per_country',
+          'per_postal_code'
+        ])
+      );
+    });
+
+    it('should set modifyVisibility for ETC/NTC journey with residential address', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ETC');
+      mockStageInfo.applicants.residential_address_rwb_1_a_1 = 'some value';
+      
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.modifyVisibility[0]).toEqual(
+        expect.arrayContaining([
+          'residential_address_rwb_1',
+          'nationality_add',
+          'per_country'
+        ])
+      );
+      expect(result.validation.hidden[0]).toEqual(
+        expect.arrayContaining([
+          'residential_address',
+          'country_rwb',
+          'postal_code_rwb'
+        ])
+      );
+    });
+  });
+
+  describe('for myinfo authentication', () => {
+    beforeEach(() => {
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+    });
+
+    it('should set non-editable fields for myinfo', () => {
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.nonEditable[0]).toEqual(
+        expect.arrayContaining([
+          'marital_status',
+          'residential_address'
+        ])
+      );
+    });
+
+    it('should hide specific fields for myinfo', () => {
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden[0]).toEqual(
+        expect.arrayContaining([
+          'state_rwb',
+          'city_rwb'
+        ])
+      );
+    });
+  });
+
+  describe('residency status handling', () => {
+    it('should hide postal_code_other for CT residency status', () => {
+      mockStageInfo.applicants.residency_status_a_1 = 'CT';
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden[0]).toContain('postal_code_other');
+    });
+
+    it('should hide postal_code for FR residency status', () => {
+      mockStageInfo.applicants.residency_status_a_1 = 'FR';
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden[0]).toContain('postal_code');
+    });
+
+    it('should set modifyVisibility for FR residency status', () => {
+      mockStageInfo.applicants.residency_status_a_1 = 'FR';
+      const result = Rules_bd_2(mockProps, mockStageInfo);
+      
+      expect(result.validation.modifyVisibility[0]).toEqual(
+        expect.arrayContaining([
+          'overseas_contact_country_code',
+          'overseas_contact_area_code',
+          'overseas_contact_no'
+        ])
+      );
+    });
+  });
+
+  it('should always hide detailed_full_name', () => {
+    const result = Rules_bd_2(mockProps, mockStageInfo);
+    expect(result.validation.hidden[0]).toContain('detailed_full_name');
+  });
+
+  it('should always include residential_address_consent in modifyVisibility', () => {
+    const result = Rules_bd_2(mockProps, mockStageInfo);
+    expect(result.validation.modifyVisibility[0]).toContain('residential_address_consent');
+  });
+
+  it('should call rulesUtils with props and validation object', () => {
+    Rules_bd_2(mockProps, mockStageInfo);
+    
+    expect(rulesUtils).toHaveBeenCalledWith(
+      mockProps,
+      expect.objectContaining({
+        nonEditable: expect.any(Array),
+        hidden: expect.any(Array),
+        modifyVisibility: expect.any(Array),
+      })
+    );
+  });
+});
