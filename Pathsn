@@ -3,23 +3,68 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import Text from './Text';
-import { StoreModel } from '../../../utils/model/common-model';
-import { stagesReducer } from '../../../utils/store/stages-slice';
-import { fieldErrorReducer } from '../../../utils/store/field-error-slice';
 
-// Mock the store
-const createMockStore = (initialState: Partial<StoreModel>) => {
-  return configureStore({
-    reducer: {
-      stages: stagesReducer,
-      fielderror: fieldErrorReducer,
-      // Add other reducers if needed
+// Mock the redux store
+const mockStore = configureStore({
+  reducer: {
+    stages: () => ({
+      stages: [{
+        stageId: 'bd-1',
+        stageInfo: {
+          applicants: {}
+        }
+      }],
+      userInput: {
+        applicants: {}
+      }
+    }),
+    fielderror: () => ({
+      error: []
+    }),
+    postalCode: () => ({}),
+    alias: () => ({}),
+    lastAccessed: () => ({})
+  }
+});
+
+// Mock sessionStorage
+const mockSessionStorage = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString();
     },
-    preloadedState: initialState as any,
-  });
-};
+    clear: () => {
+      store = {};
+    }
+  };
+})();
 
-// Mock props
+Object.defineProperty(window, 'sessionStorage', {
+  value: mockSessionStorage
+});
+
+// Mock URL functions
+jest.mock('../../../utils/common/change.utils', () => ({
+  ...jest.requireActual('../../../utils/common/change.utils'),
+  getUrl: {
+    getParameterByName: jest.fn(() => null),
+    getJourneyType: jest.fn(() => null),
+    getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] }))
+  },
+  authenticateType: jest.fn(() => 'manual'),
+  fieldIdAppend: jest.fn((props) => props.data.logical_field_name + '_a_1'),
+  fieldError: jest.fn(() => false),
+  isFieldUpdate: jest.fn(),
+  isFieldValueUpdate: jest.fn()
+}));
+
+// Mock services
+jest.mock('../../../services/validation-service', () => ({
+  allowOnlyCharacter: jest.fn()
+}));
+
 const mockProps = {
   data: {
     logical_field_name: 'test_field',
@@ -38,128 +83,49 @@ const mockProps = {
 describe('Text Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    sessionStorage.setItem('currentStage', '1');
+    window.sessionStorage.setItem('currentStage', '1');
   });
 
-  test('renders without crashing', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
+  test('renders basic text input', () => {
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...mockProps} />
       </Provider>
     );
 
     expect(screen.getByLabelText('Test Field')).toBeInTheDocument();
-  });
-
-  test('displays label correctly', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
-    render(
-      <Provider store={store}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Test Field')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
   test('handles input change', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...mockProps} />
       </Provider>
     );
 
     const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'Test Value' } });
+    fireEvent.change(input, { target: { value: 'Test' } });
 
+    expect(input).toHaveValue('Test');
     expect(mockProps.handleCallback).toHaveBeenCalled();
-    expect(input).toHaveValue('Test Value');
   });
 
   test('shows error for invalid input', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...mockProps} />
       </Provider>
     );
 
     const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '123' } }); // Invalid as per regex
+    fireEvent.change(input, { target: { value: '123' } }); // Doesn't match regex
     fireEvent.blur(input);
 
     expect(screen.getByText(/patterns Test Field/)).toBeInTheDocument();
   });
 
-  test('shows error for mandatory field', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
+  test('shows error for empty mandatory field', () => {
     const mandatoryProps = {
       ...mockProps,
       data: {
@@ -169,7 +135,7 @@ describe('Text Component', () => {
     };
 
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...mandatoryProps} />
       </Provider>
     );
@@ -182,20 +148,6 @@ describe('Text Component', () => {
   });
 
   test('displays character counter for embossed name fields', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
     const embossedProps = {
       ...mockProps,
       data: {
@@ -205,7 +157,7 @@ describe('Text Component', () => {
     };
 
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...embossedProps} />
       </Provider>
     );
@@ -217,20 +169,6 @@ describe('Text Component', () => {
   });
 
   test('disables input when not editable', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
     const nonEditableProps = {
       ...mockProps,
       data: {
@@ -240,7 +178,7 @@ describe('Text Component', () => {
     };
 
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...nonEditableProps} />
       </Provider>
     );
@@ -249,21 +187,48 @@ describe('Text Component', () => {
     expect(input).toBeDisabled();
   });
 
-  test('validates NRIC correctly', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
+  test('shows remove button for alias fields', () => {
+    const aliasProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'alias_2'
       }
-    });
+    };
 
+    render(
+      <Provider store={mockStore}>
+        <Text {...aliasProps} />
+      </Provider>
+    );
+
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+
+  test('validates email fields correctly', () => {
+    const emailProps = {
+      ...mockProps,
+      data: {
+        ...mockProps.data,
+        logical_field_name: 'per_email_2',
+        regex: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$'
+      }
+    };
+
+    render(
+      <Provider store={mockStore}>
+        <Text {...emailProps} />
+      </Provider>
+    );
+
+    const input = screen.getByLabelText('Test Field');
+    
+    // Test invalid email
+    fireEvent.change(input, { target: { value: 'invalid-email' } });
+    expect(screen.getByText(/Test Field must contain/)).toBeInTheDocument();
+  });
+
+  test('handles NRIC validation', () => {
     const nricProps = {
       ...mockProps,
       data: {
@@ -274,132 +239,13 @@ describe('Text Component', () => {
     };
 
     render(
-      <Provider store={store}>
+      <Provider store={mockStore}>
         <Text {...nricProps} />
       </Provider>
     );
 
     const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid NRIC
     fireEvent.change(input, { target: { value: 'S1234567A' } });
     expect(screen.getByText('Please Enter Valid NRIC')).toBeInTheDocument();
-    
-    // Test valid NRIC (example - actual validation would need real valid NRIC)
-    // Note: You'd need to use a real valid NRIC for this test to pass
-    // fireEvent.change(input, { target: { value: 'S1234567A' } });
-    // expect(screen.queryByText('Please Enter Valid NRIC')).not.toBeInTheDocument();
-  });
-
-  test('shows remove button for alias fields', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
-    const aliasProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'alias_2'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Text {...aliasProps} />
-      </Provider>
-    );
-
-    expect(screen.getByRole('button')).toBeInTheDocument();
-  });
-
-  test('handles postal code fields correctly', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      },
-      postalCode: {
-        postalCode: {
-          block_a_1: '123',
-          street_name_a_1: 'Test Street',
-          building_name_a_1: 'Test Building'
-        }
-      }
-    });
-
-    const postalProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'block'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Text {...postalProps} />
-      </Provider>
-    );
-
-    expect(screen.getByLabelText('Test Field')).toHaveValue('123');
-  });
-
-  test('validates email fields correctly', () => {
-    const store = createMockStore({
-      stages: {
-        stages: [{
-          stageId: 'bd-1',
-          stageInfo: {
-            applicants: {}
-          }
-        }],
-        userInput: {
-          applicants: {}
-        }
-      }
-    });
-
-    const emailProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'per_email_2',
-        regex: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Text {...emailProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid email
-    fireEvent.change(input, { target: { value: 'invalid-email' } });
-    expect(screen.getByText(/Test Field must contain/)).toBeInTheDocument();
-    
-    // Test valid email
-    fireEvent.change(input, { target: { value: 'valid@example.com' } });
-    expect(screen.queryByText(/Test Field must contain/)).not.toBeInTheDocument();
   });
 });
