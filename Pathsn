@@ -1,75 +1,157 @@
-import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import Rules_ld_1 from './Rules_ld_1';
 import rulesUtils from './rules.utils';
 import { checkProductDetails } from '../../services/common-service';
-import { authenticateType, getUrl } from '../../utils/common/change.utils';
+import { authenticateType } from '../../utils/common/change.utils';
 
-const Rules_ld_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
- const validationObj: ValidationObjModel = {
+// Mock dependencies
+jest.mock('./rules.utils');
+jest.mock('../../services/common-service');
+jest.mock('../../utils/common/change.utils');
+
+describe('Rules_ld_1 Utility Function', () => {
+  const mockProps = {};
+  const mockStageInfo = {
+    products: 'mock-product',
+    applicants: {
+      residency_status_a_1: 'CT'
+    }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (rulesUtils as jest.Mock).mockImplementation(() => ({}));
+  });
+
+  describe('Authentication Type: manual', () => {
+    beforeEach(() => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+    });
+
+    it('should return correct validation object for manual auth', () => {
+      (checkProductDetails as jest.Mock).mockReturnValue(true);
+
+      const result = Rules_ld_1(mockProps, mockStageInfo);
+
+      expect(result).toBeDefined();
+      expect(rulesUtils).toHaveBeenCalledWith(mockProps, {
         nonEditable: [],
-        hidden: [],
-        modifyVisibility:[]
-    };
-    const auth = authenticateType()
-    const isCASAProduct = checkProductDetails(stageInfo.products);
-    let defaultVisiblity:any= []
-    /*istanbul ignore else */
-    if(auth === "manual"||"myinfo"){
-      let hiddenFields = ["email","full_name","date_of_birth","mobile_number","residency_status","NRIC","work_type","year_of_assessment_fff_1","year_of_assessment_fff_2","annual_income_fff_1","annual_income_fff_2","dsa_code",
-        "credit_limit_consent"]
-        /*istanbul ignore else */
-       if(auth === "myinfo") {
-            hiddenFields.push(
-            "postal_code",
-            "postal",
-            "block",
-            "building_name",
-            "street_name",
-            "unit_no",
-            "account_currency_9",
-            "myinfo_data_cli",
-            "banca_ins_request_1",
-            "banca_ins_request_2",
-            "banca_ins_request_amount",
-            "banca_ins_Consent_rp2",
-            "banca_ins_Consent_rp3",
-            "banca_ins_Consent_rp5",
-            "banca_ins_Consent_rp6",
-            "myinfo_data_cli_1",
-            "contact_preference",
-            "multi_currency_selection",
-            "credit_limit_consent_1",
-            "contact_preference_casa"
-            );
-            defaultVisiblity.push("residential_address")
-            const nonEditableFields = ["marital_status","residential_address"]
-            validationObj.nonEditable.push(nonEditableFields)
-        }
-         
-/*istanbul ignore else */
-        if(!isCASAProduct){
-            hiddenFields.push('nationality_add');
-        }
-        /*istanbul ignore else */
-        if(stageInfo.applicants['residency_status_a_1'] === "CT"){
-            hiddenFields.push("postal_code_other")
- 
-        }
-        /*istanbul ignore else */
-        if(stageInfo.applicants['residency_status_a_1'] === "FR"){
-            hiddenFields.push("postal_code")
- 
-        }
-        /*istanbul ignore else */
-        if(stageInfo.applicants['residency_status_a_1'] === "FR"){
-            defaultVisiblity = ["overseas_contact_country_code","overseas_contact_area_code","overseas_contact_no"];
-        }
-        defaultVisiblity.push( "residential_address_consent","block","street_name")
-        validationObj.hidden!.push(hiddenFields);
-        validationObj.modifyVisibility!.push(defaultVisiblity)
-      }
- 
-    return rulesUtils(props, validationObj);
-}
+        hidden: [
+          expect.arrayContaining([
+            "email", "full_name", "date_of_birth", "mobile_number", 
+            "residency_status", "NRIC", "work_type", "year_of_assessment_fff_1",
+            "year_of_assessment_fff_2", "annual_income_fff_1", "annual_income_fff_2",
+            "dsa_code", "credit_limit_consent"
+          ])
+        ],
+        modifyVisibility: [
+          expect.arrayContaining([
+            "residential_address_consent", "block", "street_name"
+          ])
+        ]
+      });
+    });
 
-export default Rules_ld_1;
-Please write test cases using jest with RTL
+    it('should hide nationality_add for non-CASA products', () => {
+      (checkProductDetails as jest.Mock).mockReturnValue(false);
+
+      const result = Rules_ld_1(mockProps, mockStageInfo);
+
+      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
+        hidden: [
+          expect.arrayContaining(['nationality_add'])
+        ]
+      }));
+    });
+
+    it('should hide postal_code_other for residency_status CT', () => {
+      const result = Rules_ld_1(mockProps, {
+        ...mockStageInfo,
+        applicants: { residency_status_a_1: 'CT' }
+      });
+
+      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
+        hidden: [
+          expect.arrayContaining(['postal_code_other'])
+        ]
+      }));
+    });
+  });
+
+  describe('Authentication Type: myinfo', () => {
+    beforeEach(() => {
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+    });
+
+    it('should return correct validation object for myinfo auth', () => {
+      (checkProductDetails as jest.Mock).mockReturnValue(true);
+
+      const result = Rules_ld_1(mockProps, mockStageInfo);
+
+      expect(result).toBeDefined();
+      expect(rulesUtils).toHaveBeenCalledWith(mockProps, {
+        nonEditable: [expect.arrayContaining(["marital_status", "residential_address"])],
+        hidden: [
+          expect.arrayContaining([
+            "email", "full_name", "date_of_birth", "mobile_number", 
+            "residency_status", "NRIC", "work_type", "year_of_assessment_fff_1",
+            "year_of_assessment_fff_2", "annual_income_fff_1", "annual_income_fff_2",
+            "dsa_code", "credit_limit_consent", "postal_code", "postal", "block",
+            "building_name", "street_name", "unit_no", "account_currency_9",
+            "myinfo_data_cli", "banca_ins_request_1", "banca_ins_request_2",
+            "banca_ins_request_amount", "banca_ins_Consent_rp2", "banca_ins_Consent_rp3",
+            "banca_ins_Consent_rp5", "banca_ins_Consent_rp6", "myinfo_data_cli_1",
+            "contact_preference", "multi_currency_selection", "credit_limit_consent_1",
+            "contact_preference_casa"
+          ])
+        ],
+        modifyVisibility: [
+          expect.arrayContaining([
+            "residential_address", "residential_address_consent", "block", "street_name"
+          ])
+        ]
+      });
+    });
+
+    it('should show overseas contact fields for FR residency status', () => {
+      const result = Rules_ld_1(mockProps, {
+        ...mockStageInfo,
+        applicants: { residency_status_a_1: 'FR' }
+      });
+
+      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
+        modifyVisibility: [
+          expect.arrayContaining([
+            "overseas_contact_country_code", "overseas_contact_area_code", "overseas_contact_no"
+          ])
+        ]
+      }));
+    });
+
+    it('should hide postal_code for FR residency status', () => {
+      const result = Rules_ld_1(mockProps, {
+        ...mockStageInfo,
+        applicants: { residency_status_a_1: 'FR' }
+      });
+
+      expect(rulesUtils).toHaveBeenCalledWith(mockProps, expect.objectContaining({
+        hidden: [
+          expect.arrayContaining(['postal_code'])
+        ]
+      }));
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle empty stageInfo', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      const result = Rules_ld_1(mockProps, {} as any);
+      expect(result).toBeDefined();
+    });
+
+    it('should handle undefined applicants in stageInfo', () => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+      const result = Rules_ld_1(mockProps, { products: 'mock' } as any);
+      expect(result).toBeDefined();
+    });
+  });
+});
