@@ -1,408 +1,1371 @@
-import Rules_bd_1 from './Rules_bd_1';
-import { authenticateType, getUrl } from '../../utils/common/change.utils';
-import rulesUtils from './rules.utils';
+import React, { useEffect, useLayoutEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import {
+  fieldError,
+  fieldIdAppend,
+  getUrl,
+  isFieldUpdate,
+  isFieldValueUpdate,
+} from "../../../utils/common/change.utils";
+import "./text.scss";
+import validateService from "../../../services/validation-service";
+import errorMsg from "../../../assets/_json/error.json";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import Cards from "../cards/cards";
+import { aliasAction } from "../../../utils/store/alias-slice";
+import { fieldErrorAction } from "../../../utils/store/field-error-slice";
+import { lastAction } from "../../../utils/store/last-accessed-slice";
+import { authenticateType } from "../../../utils/common/change.utils";
+import { store } from "../../../utils/store/store";
+// import ReferralCode from "../../../shared/components/referral-code/referral-code";
+// import { referralcodeAction } from "../../../utils/store/referral-code-slice";
+export function validateNRIC(nric: string) {
 
-// Mock dependencies
-jest.mock('../../utils/common/change.utils');
-jest.mock('./rules.utils');
+  if (!/^[STFG]\d{7}[A-Z]$/.test(nric)) {
 
-const mockAuthenticateType = authenticateType as jest.MockedFunction<typeof authenticateType>;
-const mockGetUrl = getUrl as jest.MockedFunction<typeof getUrl>;
-const mockRulesUtils = rulesUtils as jest.MockedFunction<typeof rulesUtils>;
+    return false;
 
-// Mock localStorage
-const mockLocalStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
+  }
+ 
+  const prefix = nric[0];
+
+  const digits = nric.slice(1, 8).split("").map(Number);
+
+  const checksumLetter = nric[8];
+ 
+  // Multipliers for checksum calculation
+
+  const weights = [2, 7, 6, 5, 4, 3, 2];
+
+  const checksumBase = digits.reduce((sum, digit, index) => sum + digit * weights[index], 0);
+ 
+  // Add offset based on prefix
+
+  const offset = prefix === "T" || prefix === "G" ? 4 : 0;
+
+  const total = checksumBase + offset;
+ 
+  // Compute remainder
+
+  const remainder = total % 11;
+ 
+  // Checksum letters for different prefixes
+
+  const checksumLetters: { [key: string]: string } = {
+    S: "JZIHGFEDCBA",
+    T: "JZIHGFEDCBA",
+    F: "XWUTRQPNMLK",
+    G: "XWUTRQPNMLK"
+  };
+
+  // Validate checksum letter
+  return checksumLetter === checksumLetters[prefix][remainder];
+
 };
+const Text = (props: KeyWithAnyModel) => {
+  const [error, setError] = useState("");
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const specialCharRegex = /^[^a-zA-Z0-9]+$/;
+ 
+  const userInputSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput
+  );
+  const applicantsSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput.applicants
+  );
+  const fieldErrorSelector = useSelector(
+    (state: StoreModel) => state.fielderror.error
+  );
+  const postalCodeSelector = useSelector(
+    (state: StoreModel) => state.postalCode.postalCode
+  );
+  // const referralcodeSelector = useSelector((state: StoreModel) => state.referralcode);
+  const resumeSelector = useSelector(
+    (state: StoreModel) => state.urlParam.resume
+  );
+  const dispatch = useDispatch();
+ 
+  const [defaultValue, setDefaultValue] = useState("");
+  const [embossCounter, setEmbossCounter] = useState(0);
+  const [postalCode, setPostalCode] = useState<any>({});
+  const [hide,show] = useState(true);
+  // const [showReferralCode, setShowReferralcode] = useState(false);
+  const stage = store.getState();
+  const [regexPattern, setRegexPattern] = useState('');
+  const applicantNo = sessionStorage.getItem("currentStage")? sessionStorage.getItem("currentStage"):1;
 
-Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
-  writable: true,
-});
+  const changeHandler = (
+    fieldName: string,
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    embossedNameCounter(event.target.value);
+    setDefaultValue(event.target.value);
+    props.handleCallback(props.data, event.target.value);
+    setError("");
+    if (
+      (props.data.mandatory === "Yes" ||
+        props.data.mandatory === "Conditional") &&
+      event.target.value.length < 1 &&
+      props.data.logical_field_name !== "referral_id_2"
+      &&props.data.logical_field_name !=="tax_id_no_1"&&
+      props.data.logical_field_name !=="tax_id_no_2"&&
+      props.data.logical_field_name !=="tax_id_no_3"&&
+      props.data.logical_field_name !=="tax_id_no_4"
 
-describe('Rules_bd_1', () => {
-  let mockProps: any;
-  let mockStageInfo: any;
+    ) {
+      setError(`${errorMsg.emity} ${props.data.rwb_label_name}`);
+    } else if (
+      `${event.target.value}`[0] === " " ||
+      `${event.target.value}`[`${event.target.value}`.length - 1] === " "
+    ) {
+      setError(
+        `${props.data.rwb_label_name} cannot have leading or trailing spaces`
+      );
+    }else if (
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.logical_field_name == "embossed_name"
+    ) {
+      setError(`${props.data.rwb_label_name} ${errorMsg.containtext}`);
+ 
+    } else if (
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      (props.data.logical_field_name === "per_email_2" || props.data.logical_field_name === "office_email_1" || props.data.logical_field_name === "office_email_2")
+    ) {
+      setError(`${props.data.rwb_label_name} ${errorMsg.nameAN}`);
+ 
+    }else if(
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.rwb_label_name ==="Alias (s) 1"
+    ){
+        setError(`${props.data.rwb_label_name}${errorMsg.alias}`)
+    }
+    else if(
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.rwb_label_name ==="Alias (s) 2"
+    ){
+        setError(`${props.data.rwb_label_name}${errorMsg.alias}`)
+    }
+    else if(
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.rwb_label_name ==="Alias (s) 3"
+    ){
+        setError(`${props.data.rwb_label_name}${errorMsg.alias}`)
+    }
+    else if(
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.rwb_label_name ==="Alias (s) 4"
+    ){
+        setError(`${props.data.rwb_label_name}${errorMsg.alias}`)
+    } else if (
+      props.data.regex &&
+      !`${event.target.value}`.match(regexPattern) &&
+      props.data.logical_field_name !== "referral_id_2" &&
+      props.data.logical_field_name !== "full_name" &&props.data.logical_field_name !== "NRIC" &&props.data.logical_field_name !== "passport_no"
+      &&props.data.rwb_label_name !=="Alias (s) 1"&&props.data.rwb_label_name !=="Alias (s) 2"&&props.data.rwb_label_name !=="Alias (s) 3"&&props.data.rwb_label_name !=="Alias (s) 4"
+) {
+  if(props.data.logical_field_name === "name_of_employer_other" || props.data.logical_field_name === "name_of_business"){
+    setError(`${props.data.rwb_label_name} ${errorMsg.nameAN}`);
+  }
+  else if(props.data.logical_field_name !=="tax_id_no_1"&&
+  props.data.logical_field_name !=="tax_id_no_2"&&
+  props.data.logical_field_name !=="tax_id_no_3"&&
+  props.data.logical_field_name !=="short_name"&&
+  props.data.logical_field_name !=="tax_id_no_4"){
+    setError(`${errorMsg.patterns} ${props.data.rwb_label_name}`);
+  }
+    }
+    else if (
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.logical_field_name !== "referral_id_2" && props.data.logical_field_name !== "name_of_business" &&
+      props.data.logical_field_name == "full_name"
+ 
+    ) {
+      setError(`${errorMsg.fullName} `);
+     
+    }
+    else if (
+      props.data.regex &&
+      event.target.value.length>0 &&
+      props.data.logical_field_name == "NRIC"
+     
+    ) {
+     const errorMsg= validateNRIC(event.target.value)?'':'Please Enter Valid NRIC'
+      setError(errorMsg);
+    }
+    else if (
+      props.data.regex &&
+      !`${event.target.value}`.match(props.data.regex) &&
+      props.data.logical_field_name == "passport_no"
+     
+    ) {
+    setError(`${errorMsg.passportAn}`);
+    }
+   
+   // Check for pattern match
+ 
+   
+   else if (
+      props.data.min_length &&
+      `${event.target.value}`.length < props.data.min_length &&
+      (props.data.logical_field_name !== "referral_id_2" && props.data.logical_field_name !== "staff_id" && props.data.logical_field_name !== "staff_name")
+    ) {
+      setError(`${errorMsg.minLength} ${props.data.min_length} characters`);
+    }
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    // Setup default mock data
-    mockProps = [
-      [
-        {
-          field_set_name: 'Basic Information',
-          fields: [
-            { logical_field_name: 'full_name' },
-            { logical_field_name: 'email' },
-            { logical_field_name: 'mobile_number' },
-            { logical_field_name: 'nationality' },
-            { logical_field_name: 'gender' }
-          ]
-        },
-        {
-          field_set_name: '   ',
-          fields: [
-            { 
-              logical_field_name: 'product_field',
-              sub_product_code: 'SAVINGS_ACCOUNT'
+    else if(props.data.logical_field_name === "full_name" &&(event.target.value.match(/@/g)||[]).length>1){
+       setError(`${errorMsg.fullNameRegexLimit}`)
+    }
+   
+    else if(props.data.logical_field_name === "name_of_business" && event.target.value.length>1){
+   
+      setError("");
+    }
+    else if(props.data.logical_field_name === "crs_comments" && event.target.value.length>0){
+        dispatch(fieldErrorAction.getMandatoryFields([]));
+        let valObj:any={
+          casa_fatca_declaration_a_1: '',
+          country_of_tax_residence_a_1: '',
+          crs_reason_code_a_1: ''
+        }
+        for(let key in valObj) {
+          if(applicantsSelector[key]!==""&&applicantsSelector[key]!==undefined){
+               valObj[key] = applicantsSelector[key];
+          }else{
+            delete valObj[key];
+          }
+      }
+      valObj={...valObj,
+        crs_comments_a_1: event.target.value,
+      }
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["tax_id_no","name_of_employer", "nature_of_employer", "job_title","office_phone_number","name_of_business","NRIC"],
+            newFields: ["casa_fatca_declaration","country_of_tax_residence","crs_reason_code","crs_comments","per_block","per_street_name","alt_block_1","alt_street_name_1","alt_block_2","alt_street_name_2","alt_block_3","alt_street_name_3","alt_block_4","alt_street_name_4","alt_block_5","alt_street_name_5"],
+            value:valObj
+          })
+        );
+    }
+    else {
+      if((props.data.logical_field_name === "per_email_2" || props.data.logical_field_name === "office_email_1" || props.data.logical_field_name === "office_email_2") && !event.target.validity.valid){
+        setError(`${props.data.rwb_label_name} ${errorMsg.nameAN}`);
+      }
+      else{
+        setError(
+          !event.target.validity.valid &&
+          props.data.logical_field_name !== "referral_id_2"
+            ? `${errorMsg.patterns} ${props.data.rwb_label_name}`
+            : ""
+        );
+      }
+    }
+
+  };
+ 
+  useEffect(() => {
+    setPostalCode(postalCodeSelector);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postalCodeSelector]);
+ 
+  useEffect(() => {
+    let setPostalValue = null;
+    /*istanbul ignore else*/
+    if (
+      props.data.logical_field_name === "block" ||
+      props.data.logical_field_name === "building_name" ||
+      props.data.logical_field_name === "street_name"
+    ) {
+      if (props.data.logical_field_name === "block") {
+        setPostalValue = postalCode.block_a_1 || "";
+      } else if (props.data.logical_field_name === "building_name") {
+        setPostalValue = postalCode.building_name_a_1 || "";
+      } else if (props.data.logical_field_name === "street_name") {
+        setPostalValue = postalCode.street_name_a_1 || "";
+      }
+      /*istanbul ignore else*/
+      if (setPostalValue) {
+        setDefaultValue(setPostalValue);
+        props.handleCallback(props.data, setPostalValue);
+        dispatch(isFieldValueUpdate(props, stageSelector, setPostalValue));
+        dispatch(
+          isFieldUpdate(props, setPostalValue, props.data.logical_field_name)
+        );
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postalCode]);
+ 
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if(props.data.regex === "null" || null){
+      if(props.data.logical_field_name === "name_of_business"){
+        setRegexPattern("^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$");
+      }
+    }else {
+      setRegexPattern(props.data.regex);
+    }
+    /*istanbul ignore else*/
+    if(props.data.regex === "null" || null){
+      if(props.data.logical_field_name === "name_of_business"){
+        setRegexPattern("^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$");
+      }
+    }else {
+      setRegexPattern(props.data.regex);
+    }
+    /*istanbul ignore else*/
+    if (
+      stageSelector &&
+      stageSelector[0] &&
+      stageSelector[0].stageInfo &&
+      stageSelector[0].stageInfo.applicants
+    ) {
+      const userInputResponse =
+        userInputSelector.applicants[fieldIdAppend(props)];
+ 
+      const stageIndex = getUrl
+        .getUpdatedStage()
+        .updatedStageInputs.findIndex(
+          (ref: any) => ref && ref.stageId === stageSelector[0].stageId
+        );
+      let updatedVal = null;
+      /*istanbul ignore else*/
+      if (stageIndex > -1) {
+        updatedVal =
+          getUrl.getUpdatedStage().updatedStageInputs[stageIndex].applicants[
+            fieldIdAppend(props)
+          ];
+      }
+ 
+      let fieldValue = "";
+      if (updatedVal) {
+        fieldValue = updatedVal;
+      } else if (userInputResponse) {
+        fieldValue = userInputResponse;
+      } else if (
+        stageSelector[0].stageInfo.applicants[fieldIdAppend(props)] &&
+        updatedVal !== ""
+      ) {
+        fieldValue =
+          stageSelector[0].stageInfo.applicants[fieldIdAppend(props)];
+      }
+      /*istanbul ignore else*/
+      if(props.data.logical_field_name === "city_rwb" && authenticateType() === 'manual'){
+        setDefaultValue("Singapore");
+      }
+      /*istanbul ignore else*/
+   if (props.data.logical_field_name === `residential_address_rwb_${applicantNo}`) {
+        let myInfoAddress :string = "";
+        /*istanbul ignore else*/
+        if ((getUrl.getParameterByName("isMyInfoVirtual") === "true") || (authenticateType() === 'manual' && (getUrl.getJourneyType() === 'ETC' || getUrl.getJourneyType() === 'NTC' ))) {
+          const block = stageSelector[0].stageInfo.applicants["block_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_line1_a_1"];
+          const building = stageSelector[0].stageInfo.applicants["building_name_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_line2_a_1"];
+          const street = stageSelector[0].stageInfo.applicants["street_name_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_line3_a_1"];
+          const unitNo = stageSelector[0].stageInfo.applicants["unit_no_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_line4_a_1"];
+          const postalCode = stageSelector[0].stageInfo.applicants["postal_code_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_postal_code_a_1"];
+          const country = (stageSelector[0].stageInfo.applicants["country_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_country_a_1"]) === 'SG' ? 'Singapore' : (stageSelector[0].stageInfo.applicants["country_rwb_a_1"] || stageSelector[0].stageInfo.applicants["res_existing_country_a_1"]);
+            /*istanbul ignore else*/
+            if (block || building || street || unitNo || postalCode || country) {
+              myInfoAddress = [
+                block,
+                building,
+                street,
+                unitNo,
+                postalCode,
+                country
+              ]
+                .filter(Boolean)
+                .join(",");
             }
+
+        }
+        if(myInfoAddress){
+        setDefaultValue(myInfoAddress);
+        dispatch(
+          isFieldUpdate(props, myInfoAddress, props.data.logical_field_name)
+          );
+        }
+      }else if (props.data.logical_field_name === `permanent_address_rwb_${applicantNo}`) {
+        let myInfoPrAddress :string = "";
+        /*istanbul ignore else*/
+        if ((getUrl.getParameterByName("isMyInfoVirtual") === "true") || (authenticateType() === 'manual' && (getUrl.getJourneyType() === 'ETC' || getUrl.getJourneyType() === 'NTC'))) {
+        const block = stageSelector[0].stageInfo.applicants["per_existing_line1_a_1"];
+        const building =
+          stageSelector[0].stageInfo.applicants["per_existing_line2_a_1"];
+        const street = stageSelector[0].stageInfo.applicants["per_existing_line3_a_1"];
+        const unitNo = stageSelector[0].stageInfo.applicants["per_existing_line4_a_1"];
+        const city = stageSelector[0].stageInfo.applicants["per_existing_city_a_1"];
+        const state = stageSelector[0].stageInfo.applicants["per_existing_state_a_1"];
+        const postalCode =
+          stageSelector[0].stageInfo.applicants["per_existing_postal_code_a_1"];
+        const country =
+        stageSelector[0].stageInfo.applicants["per_existing_country_a_1"] === 'SG'?'Singapore':stageSelector[0].stageInfo.applicants["per_existing_country_a_1"];
+        // if (block && street && country) {
+          myInfoPrAddress = [
+            block,
+            building,
+            street,
+            unitNo,
+            city,
+            state,
+            postalCode,
+            country
           ]
-        }
-      ]
-    ];
-
-    mockStageInfo = {
-      application: {
-        source_system_name: '2'
+            .filter(value => value) // Exclude null or empty values
+            .join(",");
+        // }
       }
-    };
-
-    // Mock getUrl object methods
-    mockGetUrl.getParameterByName = jest.fn().mockReturnValue('false');
-    mockGetUrl.getStageInfo = jest.fn().mockReturnValue([{
-      stageId: 'bd-1',
-      stageInfo: {
-        applicants: {
-          auth_mode_a_1: 'NORMAL',
-          account_currency_9_a_1: 'SGD',
-          account_currency_a_1: 'SGD'
+        if(myInfoPrAddress){
+        setDefaultValue(myInfoPrAddress);
+        dispatch(
+          isFieldUpdate(props, myInfoPrAddress, props.data.logical_field_name)
+          );
+        }
+      } else if (
+        props.data.logical_field_name === "tax_id_no" &&
+        stageSelector[0].stageInfo.applicants["casa_fatca_declaration_a_1"] ===
+          "Y"
+      ) {
+        setDefaultValue(stageSelector[0].stageInfo.applicants["NRIC_a_1"]);
+        dispatch(
+          isFieldUpdate(
+            props,
+            stageSelector[0].stageInfo.applicants["NRIC_a_1"],
+            props.data.logical_field_name
+          )
+        );
+      }else if(props.data.logical_field_name === "tax_id_no" &&
+      stageSelector[0].stageInfo.applicants["tax_id_no_a_1"] !== ""){
+        setDefaultValue(stageSelector[0].stageInfo.applicants["tax_id_no_a_1"]);
+        dispatch(
+          isFieldUpdate(props,stageSelector[0].stageInfo.applicants["tax_id_no_a_1"], props.data.logical_field_name)
+          );
+      } else if (
+        ((props.data.logical_field_name === "embossed_dc_name" &&
+          !stageSelector[0].stageInfo.applicants["embossed_dc_name_a_1"]) ||
+          (props.data.logical_field_name === "embossed_name" &&
+            !stageSelector[0].stageInfo.applicants["embossed_name_a_1"]) ||
+          (props.data.logical_field_name === "embossed_name_2" &&
+            !stageSelector[0].stageInfo.applicants["embossed_name_2_a_1"])) &&
+        new RegExp(props.data.regex).test(
+          stageSelector[0].stageInfo.applicants["full_name_a_1"]
+        )
+      ) {
+        const fullName =
+          fieldValue || stageSelector[0].stageInfo.applicants["full_name_a_1"];
+        if (fullName && fullName.length >= 19) {
+          let firstName = fullName.split(" ")[0];
+          firstName = firstName.length >= 19 ? "" : firstName;
+          embossedNameCounter(firstName);
+          setDefaultValue(firstName);
+          dispatch(
+            isFieldUpdate(props, firstName, props.data.logical_field_name)
+          );
+          props.handleCallback(props.data, firstName);
+        } else {
+          embossedNameCounter(fullName);
+          setDefaultValue(fullName);
+          dispatch(
+            isFieldUpdate(props, fullName, props.data.logical_field_name)
+          );
+          props.handleCallback(props.data, fullName);
+        }
+      } else if (
+        userInputSelector.applicants[props.data.logical_field_name + "_a_" + applicantNo] !==
+          undefined &&
+        props.data.logical_field_name.substring(0, 9) === "tax_id_no"
+      ) {
+        setDefaultValue(fieldValue);
+        dispatch(
+          isFieldUpdate(
+            props,
+            fieldValue ||
+              userInputSelector.applicants[
+                props.data.logical_field_name + "_a_" + applicantNo
+              ],
+            props.data.logical_field_name
+          )
+        );
+        props.handleCallback(
+          props.data,
+          userInputSelector.applicants[props.data.logical_field_name +  "_a_" + applicantNo]
+        );
+      } else if (
+        (stageSelector[0].stageInfo.applicants[
+          props.data.logical_field_name +  "_a_" + applicantNo
+        ] ||
+        fieldValue)
+      ) {
+        setDefaultValue(fieldValue);
+        if (
+          !(stageSelector[0].stageId === "ssf-2" && getUrl.getJourneyType())
+        ) {
+          dispatch(
+            isFieldUpdate(props, fieldValue, props.data.logical_field_name)
+          );
+          props.handleCallback(props.data, fieldValue);
+        } else {
+          dispatch(
+            isFieldUpdate(
+              props,
+              fieldValue ||
+                stageSelector[0].stageInfo.applicants[
+                  props.data.logical_field_name +  "_a_" + applicantNo
+                ],
+              props.data.logical_field_name
+            )
+          );
+          props.handleCallback(
+            props.data,
+            fieldValue ||
+              stageSelector[0].stageInfo.applicants[
+                props.data.logical_field_name +  "_a_" + applicantNo
+              ]
+          );
+        }
+        if (
+          props.data.logical_field_name === "embossed_dc_name" ||
+          props.data.logical_field_name === "embossed_name" ||
+          props.data.logical_field_name === "embossed_name_2"
+        ) {
+          embossedNameCounter(
+            stageSelector[0].stageInfo.applicants[
+              props.data.logical_field_name +  "_a_" + applicantNo
+            ]
+          );
+        }
+      } else if (props.data.logical_field_name === "passport_no") {
+        const passVal =
+          userInputSelector.applicants[
+            props.data.logical_field_name +  "_a_" + applicantNo
+          ] || "";
+        setDefaultValue(passVal);
+        dispatch(isFieldUpdate(props, passVal, props.data.logical_field_name));
+        props.handleCallback(props.data, passVal);
+      } else if(props.data.logical_field_name === "ofc_block"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        if(existingData.ofc_existing_line1_a_1){
+          fieldValue = existingData.ofc_existing_line1_a_1;
+          setDefaultValue(fieldValue);
+          dispatch(isFieldUpdate(props, fieldValue, props.data.logical_field_name));
+        }
+      }else if(props.data.logical_field_name === "ofc_building_name"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        if(existingData.ofc_existing_line2_a_1){
+          fieldValue = existingData.ofc_existing_line2_a_1;
+          setDefaultValue(fieldValue);
+          dispatch(isFieldUpdate(props, fieldValue, props.data.logical_field_name));
+        }
+      }else if(props.data.logical_field_name === "ofc_street_name"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        if(existingData.ofc_existing_line3_a_1){
+          fieldValue = existingData.ofc_existing_line3_a_1;
+          setDefaultValue(fieldValue);
+          dispatch(isFieldUpdate(props, fieldValue, props.data.logical_field_name));
+        }
+      }else if(props.data.logical_field_name === "ofc_unit_no"){
+        let existingData: any = store.getState().stages.stages[0].stageInfo.applicants;
+        if(existingData.ofc_existing_line4_a_1){
+          fieldValue = existingData.ofc_existing_line4_a_1;
+          setDefaultValue(fieldValue);
+          dispatch(isFieldUpdate(props, fieldValue, props.data.logical_field_name));
+        }
+      }else {
+        if(props.data.logical_field_name !== "referral_id_2"&&(props.data.logical_field_name !=="city_rwb" && authenticateType() === 'manual')){
+          setDefaultValue(fieldValue);  
+        }  
+        /*istanbul ignore else*/
+        if (
+          !(stageSelector[0].stageId === "ssf-2" && getUrl.getJourneyType())
+        ) {
+          dispatch(
+            isFieldUpdate(props, fieldValue, props.data.logical_field_name)
+          );
+          props.handleCallback(props.data, fieldValue);
         }
       }
-    }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if (props.data.logical_field_name === "annual_income") {
+      setDefaultValue(userInputSelector.applicants.annual_income_a_1);}
 
-    mockAuthenticateType.mockReturnValue('normal');
-    mockLocalStorage.getItem.mockReturnValue(JSON.stringify([
-      {
-        product_type: 'SAVINGS',
-        product_category_name: 'Savings',
-        name: 'Basic Savings'
+  }, [
+    userInputSelector.applicants.annual_income_a_1,
+
+  ]);
+ 
+  const bindHandler = (
+    fieldName: string,
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    /*istanbul ignore else*/
+    if (event.target.validity.valid && fieldName !== "name_of_employer") {
+      const fieldValue = event.target.value;
+      props.handleCallback(props.data, event.target.value);
+      dispatch(isFieldValueUpdate(props, stageSelector, fieldValue));
+      dispatch(isFieldUpdate(props, fieldValue, fieldName));
+      /*istanbul ignore else*/
+      if (fieldName === "tax_id_no") {
+        dispatch(stagesAction.updateTaxToggle());
       }
-    ]));
-    mockRulesUtils.mockReturnValue({ success: true });
-  });
+      /*istanbul ignore else*/
+      if (
+        fieldName &&
+        fieldName.substring(0, 9) === "tax_id_no" &&
+        fieldName.length > 9
+      ) {
+        dispatch(stagesAction.updateAddTaxToggle());
+      }
+    }
+  };
+ 
+  useEffect(() => {
+    if (fieldError(fieldErrorSelector, props)) {
+      setError(`${errorMsg.emity} ${props.data.rwb_label_name}`);
+    } else {
+      setError("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldErrorSelector]);
+ 
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(userInputSelector.applicants.crs_reason_code_a_1 !==undefined){
+    if(userInputSelector.applicants.crs_reason_code_a_1 !==""
+     && stageSelector[0].stageId==='ad-2' && props.data.logical_field_name === "tax_id_no"){
+        show(false);
+        setDefaultValue('');
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["tax_id_no"],
+            newFields: [],
+          })
+        );
+    }
+    else if(userInputSelector.applicants["country_of_tax_residence_a_1"] === "SG" && props.data.logical_field_name === "crs_comments"){
+      show(false);
+    }else if(userInputSelector.applicants["country_of_tax_residence_a_1"] !== "SG" && props.data.logical_field_name === "crs_comments"){
+      if(userInputSelector.applicants["crs_reason_code_a_1"]
+      && userInputSelector.applicants["crs_reason_code_a_1"] !== 'B00'){
+        show(false);
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: ["crs_comments"],
+            newFields: [],
+          })
+        );
+        setDefaultValue('');
+      }else{
+        show(true);
+        dispatch(
+          stagesAction.removeAddToggleField({
+            removeFields: [],
+            newFields: ["crs_comments"],
+            value:''
+          })
+        );
+      }
+    }
+    else{
+      show(true)
+    }
+  }
+  },[userInputSelector.applicants.crs_reason_code_a_1])
+ 
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if (userInputSelector.applicants["country_of_tax_residence_a_1"] === "SG") {
+      if(props.data.logical_field_name==='tax_id_no'){
+      show(true);
+      setError("");
+      setDefaultValue(stageSelector[0].stageInfo.applicants["NRIC_a_1"]);
+      dispatch(
+        isFieldUpdate(
+          props,
+          stageSelector[0].stageInfo.applicants["NRIC_a_1"],
+          props.data.logical_field_name
+        )
+      );
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["casa_declaration_info_3","tax_resident_of_other_country","NRIC","crs_reason_code"],
+          newFields: [],
+          // value: stageSelector[0].stageInfo.applicants["NRIC_a_1"]
+        })
+      );
+      }
+      else if(props.data.logical_field_name === "crs_comments"){
+        show(false);
+        setDefaultValue('');
+      }
+      else{
+        show(true)
+      }
+    }
+    else if(props.data.logical_field_name==='tax_id_no' &&
+    userInputSelector.applicants["country_of_tax_residence_a_1"] &&
+    userInputSelector.applicants["country_of_tax_residence_a_1"] === ''
+){
+    //   const valObj:any={
+    //     casa_fatca_declaration_a_1: '',
+    //     country_of_tax_residence_a_1: '',
+    //     crs_comments_a_1: '',
+    //     crs_reason_code_a_1: ''
+    //   }
+    //   for(let key in valObj) {
+    //     if(applicantsSelector[key]!==""&&applicantsSelector[key]!==undefined){
+    //          valObj[key] = applicantsSelector[key];
+    //     }else{
+    //       delete valObj[key];
+    //     }
+    // }
+    setDefaultValue('')
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["casa_declaration_info_3"],
+          newFields: ["crs_reason_code","crs_comments"],
+          // value:valObj
+        })
+      );
+     
+      if(stageSelector[0].stageInfo.applicants['tax_id_no_a_1']===''){
+          setDefaultValue('');
+      }
+    }
+    else if(props.data.logical_field_name==='tax_id_no' &&
+    !userInputSelector.applicants["country_of_tax_residence_a_1"]&&userInputSelector.applicants["country_of_tax_residence_a_1"] !==undefined){
+    setDefaultValue('')
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["tax_id_no"],
+          newFields: ["crs_reason_code","crs_comments"],
+          // value:valObj
+        })
+      );
+    }
+    else if(props.data.logical_field_name==='crs_comments' &&
+    userInputSelector.applicants["country_of_tax_residence_a_1"] &&
+    userInputSelector.applicants["country_of_tax_residence_a_1"] !== 'SG'){
+      show(false)
+      if(stageSelector[0].stageInfo.applicants['crs_comments_a_1']===''){
+        setDefaultValue('');
+    }
+    }
+    else{
+      show(true)
+    }
+  },[userInputSelector.applicants.country_of_tax_residence_a_1]);
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(userInputSelector.applicants["tax_resident_of_other_country_a_1"] ==="Y"){
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["crs_comments","crs_reason_code"],
+          newFields: [],
+        })
+      )
+    }
+   },[userInputSelector.applicants.tax_resident_of_other_country_a_1])
+   useEffect(()=>{
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-2"){
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["purpose_of_account","insurance_consent_SG-PA","mode_of_operation",
+          "pass_exp_dt",
+          "crs_reason_code",
+          "mobile_1_add",
+          "mobile_2_add",
+          "ofc1",
+          "ofc2",
+          "office_phone1",
+          "office_phone2",
+          "ohph1",
+          "ohph2",
+          "overseas_mobile1",
+          "overseas_mobile2",
+        ],
+          newFields: [],
+        })
+      )
+    }
+   },[])
+  useEffect(()=>{
+/*istanbul ignore else*/
+    if(stageSelector[0].stageId==="ad-1"){
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["banca_ins_request_2",
+          "crs_comments",
+          "crs_reason_code",
+          "deposit_insurance_scheme",
+          "purpose_of_account",
+          "tax_id_no",
+          "casa_declaration_info_3",
+          "casa_fatca_declaration",
+          "NRIC",
+          "annual_income_fff_2",
+          "banca_ins_request_1",
+          "credit_limit_consent",
+          "myinfo_data_cli",
+          "year_of_assessment_fff_2",
+          "myinfo_data_nocli"
+        ],
+          newFields: [],
+        })
+      );
+    }
+    if(userInputSelector.applicants["crs_reason_code_a_1"] &&
+    userInputSelector.applicants["crs_reason_code_a_1"] !== "B00" &&
+    props.data.logical_field_name === "crs_comments"){
+      show(false);
+    }else{
+      show(true);
+    }
+  },[])
+  // useLayoutEffect(()=>{
+  //   if(stageSelector[0].stageInfo.applicants['tax_id_no_a_1']){
+  //   if(props.data.logical_field_name === "crs_comments" &&
+  //   !userInputSelector.applicants["crs_comments_a_1"]){
+  //     show(false)
+  //   }
+  //   if(props.data.logical_field_name === "tax_id_no"){
+  //     show(true);
+  //   }
+  // }
+  //   if(!userInputSelector.applicants["tax_id_no_a_1"] &&
+  //   userInputSelector.applicants["crs_reason_code_a_1"] === "B00" &&
+  //   props.data.logical_field_name === "crs_comments"){
+  //     show(true);
+  //   }
+  // })
+  useEffect(()=>{
+    if(userInputSelector.applicants.tax_id_no_a_1!==''
+    && userInputSelector.applicants.tax_id_no_a_1!==undefined
+    && props.data.logical_field_name === "crs_comments"){
+      show(false);
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: ["crs_reason_code","crs_comments"],
+          newFields: [],
+        })
+      )
+    }
+    else if(userInputSelector.applicants.tax_id_no_a_1==='' && props.data.logical_field_name === "crs_comments"){
+      show(true);
+    }
+  },[userInputSelector.applicants.tax_id_no_a_1]);
+ 
+  useEffect(()=>{
+    if(props.data.logical_field_name === "embossed_dc_name_rwb"){
+      if(userInputSelector.applicants.issuance_type_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_a_1"] || userInputSelector.applicants["debit_card_request_rwb_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_a_1"] === "Y" && userInputSelector.applicants.issuance_type_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_a_1"] === "Y" && userInputSelector.applicants.issuance_type_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_a_1])
 
-  describe('iBanking flow (auth_mode_a_1 === "IX")', () => {
-    beforeEach(() => {
-      mockGetUrl.getStageInfo.mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: {
-          applicants: {
-            auth_mode_a_1: 'IX'
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_2"){
+      if(userInputSelector.applicants.issuance_type_2_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_2_a_1"] || userInputSelector.applicants["debit_card_request_rwb_2_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_2_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_2_a_1"] === "Y" && userInputSelector.applicants.issuance_type_2_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_2_a_1"] === "Y" && userInputSelector.applicants.issuance_type_2_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_2_a_1,userInputSelector.applicants.debit_card_request_rwb_2_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_3"){
+      if(userInputSelector.applicants.issuance_type_2_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_3_a_1"] || userInputSelector.applicants["debit_card_request_rwb_3_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_3_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_3_a_1"] === "Y" && userInputSelector.applicants.issuance_type_3_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_3_a_1"] === "Y" && userInputSelector.applicants.issuance_type_3_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_3_a_1,userInputSelector.applicants.debit_card_request_rwb_3_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_4"){
+      if(userInputSelector.applicants.issuance_type_4_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_4_a_1"] || userInputSelector.applicants["debit_card_request_rwb_4_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_4_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_4_a_1"] === "Y" && userInputSelector.applicants.issuance_type_4_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_4_a_1"] === "Y" && userInputSelector.applicants.issuance_type_4_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_4_a_1,userInputSelector.applicants.debit_card_request_rwb_4_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_5"){
+      if(userInputSelector.applicants.issuance_type_5_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_5_a_1"] || userInputSelector.applicants["debit_card_request_rwb_5_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_5_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_5_a_1"] === "Y" && userInputSelector.applicants.issuance_type_5_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_5_a_1"] === "Y" && userInputSelector.applicants.issuance_type_5_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_5_a_1,userInputSelector.applicants.debit_card_request_rwb_5_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_6"){
+      if(userInputSelector.applicants.issuance_type_6_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_6_a_1"] || userInputSelector.applicants["debit_card_request_rwb_6_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_6_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_6_a_1"] === "Y" && userInputSelector.applicants.issuance_type_6_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_6_a_1"] === "Y" && userInputSelector.applicants.issuance_type_6_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_6_a_1,userInputSelector.applicants.debit_card_request_rwb_6_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_7"){
+      if(userInputSelector.applicants.issuance_type_7_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_7_a_1"] || userInputSelector.applicants["debit_card_request_rwb_7_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_7_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_7_a_1"] === "Y" && userInputSelector.applicants.issuance_type_7_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_7_a_1"] === "Y" && userInputSelector.applicants.issuance_type_7_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_7_a_1,userInputSelector.applicants.debit_card_request_rwb_7_a_1])
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(props.data.logical_field_name === "embossed_dc_name_rwb_8"){
+      if(userInputSelector.applicants.issuance_type_8_a_1 === undefined || (!userInputSelector.applicants["debit_card_request_rwb_8_a_1"] || userInputSelector.applicants["debit_card_request_rwb_8_a_1"] === "") || userInputSelector.applicants["debit_card_request_rwb_8_a_1"] === "N"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_8_a_1"] === "Y" && userInputSelector.applicants.issuance_type_8_a_1 === "I"){
+        show(false)
+      }else if(userInputSelector.applicants["debit_card_request_rwb_8_a_1"] === "Y" && userInputSelector.applicants.issuance_type_8_a_1 === "P"){
+        show(true)
+      }else{
+        show(false)
+      }
+    }else if(stageSelector[0].stageId !== "ad-1"){
+      show(true)
+    }
+  },[userInputSelector.applicants.issuance_type_8_a_1,userInputSelector.applicants.debit_card_request_rwb_8_a_1])
+
+ 
+  useEffect(()=>{
+    if((userInputSelector.applicants.select_alt_contacts_a_1 === undefined || userInputSelector.applicants.select_alt_contacts_a_1 === "") && (props.data.logical_field_name === "per_email_2" || props.data.logical_field_name === "office_email_1" || props.data.logical_field_name === "office_email_2")){
+      show(false)
+    }else if(userInputSelector.applicants.select_alt_contacts_a_1){
+      let displayFields = userInputSelector.applicants.select_alt_contacts_a_1.split(",");
+      if(displayFields.includes("CO1") && props.data.logical_field_name === "per_email_2"){
+        show(true)
+      }else if(displayFields.includes("EMO") && props.data.logical_field_name === "office_email_1"){
+        show(true)
+      }else if(displayFields.includes("EM1") && props.data.logical_field_name === "office_email_2"){
+        show(true)
+      }else if((!displayFields.includes("CO1") || !displayFields.includes("EMO") || !displayFields.includes("EM1")) && (props.data.logical_field_name === "per_email_2" || props.data.logical_field_name === "office_email_1" || props.data.logical_field_name === "office_email_2")){
+        show(false)
+      }
+    }
+    else{
+      show(true)
+    }
+  },[userInputSelector.applicants.select_alt_contacts_a_1])
+
+useEffect(() => {  
+  /*istanbul ignore else*/
+  if(props.data.logical_field_name === "ofc_block"){
+    /*istanbul ignore else*/
+    if(userInputSelector.applicants.ofc_country_a_1 || stageSelector[0].stageInfo.applicants.ofc_country_a_1){
+      dispatch(fieldErrorAction.getMandatoryFields(["ofc_block"]));
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: [],
+          newFields: ["ofc_block"],
+          value: userInputSelector.applicants.ofc_block_a_1?userInputSelector.applicants.ofc_block_a_1:stageSelector[0].stageInfo.applicants.ofc_block_a_1,
+        })
+      );            
+    }
+    /*istanbul ignore else*/
+    if(applicantsSelector?.["ofc_country_a_1"]===''){
+      /*istanbul ignore else*/
+      if(applicantsSelector?.ofc_block_a_1 === '' || stageSelector[0].stageInfo.applicants.ofc_country_a_1 === ""){
+        setDefaultValue('');
+      }
+    }
+  }
+  /*istanbul ignore else*/
+  if(props.data.logical_field_name === "ofc_street_name"){
+    const stageIndex = getUrl
+        .getUpdatedStage()
+        .updatedStageInputs.filter(
+          (ref: any) => ref && ref.stageId === 'ad-1'
+        );
+        /*istanbul ignore else*/
+    if(userInputSelector.applicants.ofc_country_a_1 || stageSelector[0].stageInfo.applicants.ofc_country_a_1){
+      dispatch(fieldErrorAction.getMandatoryFields(["ofc_street_name"]));
+      dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: [],
+          newFields: ["ofc_street_name"],
+          value: userInputSelector.applicants.ofc_street_name_a_1?userInputSelector.applicants.ofc_street_name_a_1:stageSelector[0].stageInfo.applicants.ofc_street_name_a_1,
+        })
+      );            
+    }
+    /*istanbul ignore else*/
+    if(applicantsSelector?.["ofc_country_a_1"]===''){
+      /*istanbul ignore else*/
+      if(applicantsSelector?.ofc_street_name_a_1 === '' || stageSelector[0].stageInfo.applicants.ofc_country_a_1 === ""){
+        setDefaultValue('');
+      }
+    }
+  }
+  /*istanbul ignore else*/
+  if(props.data.logical_field_name === "ofc_building_name"){
+    /*istanbul ignore else*/
+    if(applicantsSelector?.["ofc_country_a_1"]===''){
+      /*istanbul ignore else*/
+      if(applicantsSelector?.ofc_building_name_a_1 === '' || stageSelector[0].stageInfo.applicants.ofc_country_a_1 === ""){
+        setDefaultValue('');
+      }
+    }
+  }
+  /*istanbul ignore else*/
+  if(props.data.logical_field_name === "ofc_unit_no"){
+    /*istanbul ignore else*/
+    if(applicantsSelector?.["ofc_country_a_1"]===''){
+      /*istanbul ignore else*/
+      if(applicantsSelector?.ofc_unit_no_a_1 === '' || stageSelector[0].stageInfo.applicants.ofc_country_a_1 === ""){
+        setDefaultValue('');
+      }
+    }
+  }
+}, [userInputSelector.applicants.ofc_country_a_1]);
+useEffect(() => {
+  /*istanbul ignore else*/
+  if(stageSelector[0].stageId === "bd-2"){
+  const textValueMapping: Record<string, string[]> = {
+    PER: ["per_block", "per_building_name", "per_street_name", "per_unit_no"],
+    AL1: ["alt_block_1", "alt_street_name_1", "alt_building_name_1", "alt_unit_no_1"],
+    AL2: ["alt_block_2", "alt_street_name_2", "alt_building_name_2", "alt_unit_no_2"],
+    AL3: ["alt_block_3", "alt_street_name_3", "alt_building_name_3", "alt_unit_no_3"],
+    AL4: ["alt_block_4", "alt_street_name_4", "alt_building_name_4", "alt_unit_no_4"],
+    AL5: ["alt_block_5", "alt_street_name_5", "alt_building_name_5", "alt_unit_no_5"],
+  };
+
+  // Ensure the field is reset properly
+  const resetFieldIfNeeded = () => {
+    /*istanbul ignore else*/
+    if (userInputSelector.applicants.select_alt_addresses_a_1) {
+      const selectedValues = userInputSelector.applicants.select_alt_addresses_a_1.split(",");
+      Object.entries(textValueMapping).forEach(([key, fields]) => {
+        /*istanbul ignore else*/
+        if (!selectedValues.includes(key)) {
+          fields.forEach((field) => {
+            /*istanbul ignore else*/
+            if (field === props.data.logical_field_name) {
+              setDefaultValue(""); 
+              dispatch(stagesAction.removeAddToggleField({
+                removeFields: [field],
+                newFields: [],
+              }))
+              
+            }
+          });
+        }
+      });
+    }
+    /*istanbul ignore else*/
+    if (!userInputSelector.applicants.select_alt_addresses_a_1 && 
+      !stageSelector[0].stageInfo.applicants?.select_alt_addresses_a_1) {
+      Object.entries(textValueMapping).forEach(([key, fields]) => {
+
+        fields.forEach((field) => {
+          /*istanbul ignore else*/
+          if (field === props.data.logical_field_name) {
+            setDefaultValue(""); 
+            dispatch(stagesAction.removeAddToggleField({
+              removeFields: [field],
+              newFields: [],
+            }))
           }
-        }
-      }]);
-    });
+        });
+      });
+    }
 
-    it('should handle iBanking authentication correctly', () => {
-      const result = Rules_bd_1(mockProps, mockStageInfo);
+  };
+  
+  resetFieldIfNeeded();
+}
+}, [userInputSelector.applicants.select_alt_addresses_a_1, props.data.logical_field_name]);
 
-      expect(mockRulesUtils).toHaveBeenCalled();
-      expect(result).toEqual({ success: true });
-    });
 
-    it('should set non-editable fields for iBanking', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
+  const embossedNameCounter = (value: string) => {
+    setEmbossCounter(value.length);
+  };
 
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
+  const placeHolderText = (fieldName: string) => {
+    /*istanbul ignore else*/
+    if (fieldName === "passport_no") {
+      return "Enter your passport Number";
+    }if (fieldName === "referral_id_2" && stageSelector[0].stageId !== "bd-1") {
+      return "Enter referral code here";
+    } else {
+      return props.data.rwb_label_name;
+    }
+  };
+  const removeAliasField = () => {
+    dispatch(aliasAction.removeAliasField(props.data.logical_field_name));
+    dispatch(
+      fieldErrorAction.removeMandatoryFields([props.data.logical_field_name])
+    );
+    dispatch(
+      stagesAction.removeAddToggleField({
+        removeFields: [props.data.logical_field_name],
+        newFields: [],
+        value:'N'
+      })
+    );
+  };
+  const focusHandler = (
+    fieldName: string,
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    dispatch(lastAction.getField(fieldName));
+  };
+ 
+  const allowNumericCharacter = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    fieldName: string
+  ) => {
+    /*istanbul ignore else*/
+    if(fieldName === 'referral_id_2'){
+      validateService.allowOnlyCharacter(event, fieldName);
+    }
+  };
 
-      expect(validationObj.nonEditable.length).toBeGreaterThan(0);
-      expect(validationObj.nonEditable[0]).toContain('full_name');
-      expect(validationObj.nonEditable[0]).toContain('email');
-      expect(validationObj.nonEditable[0]).toContain('mobile_number');
-    });
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if(stageSelector[0].stageId==="bd-3"){
+      if(props.data.logical_field_name === "existing_personal_email_co1" && userInputSelector.applicants.existing_personal_email_co1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_personal_email_co1" && userInputSelector.applicants.existing_personal_email_co1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_office_email_em1" && userInputSelector.applicants.existing_office_email_em1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_office_email_em1" && userInputSelector.applicants.existing_office_email_em1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_office_email_em2" && userInputSelector.applicants.existing_office_email_em2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_office_email_em2" && userInputSelector.applicants.existing_office_email_em2_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_mobile_mo1" && userInputSelector.applicants.existing_mobile_mo1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_mobile_mo1" && userInputSelector.applicants.existing_mobile_mo1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_mobile_mo2" && userInputSelector.applicants.existing_mobile_mo2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_mobile_mo2" && userInputSelector.applicants.existing_mobile_mo2_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_overseas_mobile_mf1" && userInputSelector.applicants.existing_overseas_mobile_mf1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_overseas_mobile_mf1" && userInputSelector.applicants.existing_overseas_mobile_mf1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_overseas_mobile_mf2" && userInputSelector.applicants.existing_overseas_mobile_mf2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_overseas_mobile_mf2" && userInputSelector.applicants.existing_overseas_mobile_mf2_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_office_telephone_ot1" && userInputSelector.applicants.existing_office_telephone_ot1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_office_telephone_ot1" && userInputSelector.applicants.existing_office_telephone_ot1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_office_telephone_ot2" && userInputSelector.applicants.existing_office_telephone_ot2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_office_telephone_ot2" && userInputSelector.applicants.existing_office_telephone_ot2_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_residential_telephone_rt2" && userInputSelector.applicants.existing_residential_telephone_rt2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_residential_telephone_rt2" && userInputSelector.applicants.existing_residential_telephone_rt2_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_overseas_office_telno_of1" && userInputSelector.applicants.existing_overseas_office_telno_of1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_overseas_office_telno_of1" && userInputSelector.applicants.existing_overseas_office_telno_of1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_overseas_office_telno_of2" && userInputSelector.applicants.existing_overseas_office_telno_of2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_overseas_office_telno_of2" && userInputSelector.applicants.existing_overseas_office_telno_of2_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_overseas_residential_telno_rf1" && userInputSelector.applicants.existing_overseas_residential_telno_rf1_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_overseas_residential_telno_rf1" && userInputSelector.applicants.existing_overseas_residential_telno_rf1_a_1 === ""){
+        show(false)
+      }else if(props.data.logical_field_name === "existing_overseas_residential_telno_rf2" && userInputSelector.applicants.existing_overseas_residential_telno_rf2_a_1 !== ""){
+        show(true)
+      }else if(props.data.logical_field_name === "existing_overseas_residential_telno_rf2" && userInputSelector.applicants.existing_overseas_residential_telno_rf2_a_1 === ""){
+        show(false)
+      }
+    }
+   },[userInputSelector.applicants])
 
-    it('should hide non-iBanking fields', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.hidden.length).toBeGreaterThan(0);
-      expect(validationObj.hidden[0]).toContain('nationality');
-      expect(validationObj.hidden[0]).toContain('gender');
-    });
-  });
-
-  describe('MyInfo flow', () => {
-    beforeEach(() => {
-      mockAuthenticateType.mockReturnValue('myinfo');
-      mockStageInfo.application.source_system_name = '2';
-    });
-
-    it('should handle myinfo authentication', () => {
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(mockRulesUtils).toHaveBeenCalled();
-      expect(result).toEqual({ success: true });
-    });
-
-    it('should set hidden fields for myinfo', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.hidden.length).toBeGreaterThan(0);
-      expect(validationObj.hidden[0]).toContain('dsa_code');
-      expect(validationObj.hidden[0]).toContain('nationality');
-      expect(validationObj.hidden[0]).toContain('gender');
-    });
-
-    it('should set non-editable fields for myinfo', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.nonEditable.length).toBeGreaterThan(0);
-      expect(validationObj.nonEditable[0]).toContain('full_name');
-      expect(validationObj.nonEditable[0]).toContain('email');
-    });
-  });
-
-  describe('MyInfo Virtual flow', () => {
-    beforeEach(() => {
-      mockAuthenticateType.mockReturnValue('normal');
-      mockGetUrl.getParameterByName.mockReturnValue('true');
-      mockStageInfo.application.source_system_name = '2';
-    });
-
-    it('should handle myinfo virtual authentication', () => {
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(mockRulesUtils).toHaveBeenCalled();
-      expect(result).toEqual({ success: true });
-    });
-
-    it('should apply same rules as myinfo', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.hidden[0]).toContain('dsa_code');
-      expect(validationObj.nonEditable[0]).toContain('full_name');
-    });
-  });
-
-  describe('Resume flow', () => {
-    beforeEach(() => {
-      mockAuthenticateType.mockReturnValue('resume');
-      mockStageInfo.application.source_system_name = '2';
-    });
-
-    it('should handle resume authentication', () => {
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(mockRulesUtils).toHaveBeenCalled();
-      expect(result).toEqual({ success: true });
-    });
-  });
-
-  describe('Manual flow', () => {
-    beforeEach(() => {
-      mockAuthenticateType.mockReturnValue('manual');
-    });
-
-    it('should handle manual authentication', () => {
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(mockRulesUtils).toHaveBeenCalled();
-      expect(result).toEqual({ success: true });
-    });
-
-    it('should set correct hidden fields for manual', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.hidden[0]).toContain('ownership_status');
-      expect(validationObj.hidden[0]).toContain('education_level');
-    });
-
-    it('should set correct non-editable fields for manual', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.nonEditable[0]).toContain('full_name');
-      expect(validationObj.nonEditable[0]).toContain('email');
-    });
-  });
-
-  describe('Default flow', () => {
-    beforeEach(() => {
-      mockAuthenticateType.mockReturnValue('normal');
-      mockStageInfo.application.source_system_name = '1';
-    });
-
-    it('should handle default authentication', () => {
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(mockRulesUtils).toHaveBeenCalled();
-      expect(result).toEqual({ success: true });
-    });
-
-    it('should only hide myInfo consent fields', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.hidden[0]).toContain('see_other_myInfo_details');
-      expect(validationObj.hidden[0]).toContain('see_other_myInfo_details_consent');
-    });
-  });
-
-  describe('Account currency handling', () => {
-    beforeEach(() => {
-      mockAuthenticateType.mockReturnValue('myinfo');
-      mockStageInfo.application.source_system_name = '2';
-    });
-
-    it('should hide account currency fields when empty', () => {
-      mockGetUrl.getStageInfo.mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: {
-          applicants: {
-            account_currency_9_a_1: '',
-            account_currency_a_1: ''
+   return (
+    <>
+      {(props.data.logical_field_name === "embossed_dc_name" ||
+        props.data.logical_field_name === "embossed_name" ||
+        props.data.logical_field_name === "embossed_name_2") && (
+        <Cards name={defaultValue} />
+      )}
+     {/* {(showReferralCode || */}
+ 
+       { hide&&(props.data.logical_field_name !== "referral_id_2") && (
+      <div className={`${(((userInputSelector.applicants["application_sourcing_a_1"] === null ||
+      userInputSelector.applicants["application_sourcing_a_1"] === '1') && (props.data.logical_field_name === "staff_id" || props.data.logical_field_name === "staff_name")) || 
+      (stageSelector[0].stageId === "bd-2" && (props.data.logical_field_name === "alt_address_rwb_1" || props.data.logical_field_name === "alt_address_rwb_2" || props.data.logical_field_name === "alt_address_rwb_3" || props.data.logical_field_name === "alt_address_rwb_4" || props.data.logical_field_name === "alt_address_rwb_5"))) ? 'novisiblity':'text'}`}
+      id={(stageSelector[0].stageId ==="bd-1" || stageSelector[0].stageId === "ad-1") && props.data.logical_field_name}>
+        <label htmlFor={props.data.logical_field_name}>
+          {props.data.rwb_label_name}
+        </label>
+        {/* {showReferralCode && stageSelector[0].stageId !== "bd-1" && (<ReferralCode />)} */}
+        <div
+          className={`text__count ${
+            (stageSelector[0].stageId === "bd-1" &&
+              props.data.logical_field_name.substring(0, 5) === "alias")
+              ? "disabled"
+              : ""
+          } ${
+            stageSelector[0].stageId === "ssf-1" && authenticateType() === "myinfo" && props.data.logical_field_name === "NRIC"
+              ? "disabled"
+              : ""
+          }${
+            stageSelector[0].stageId === "ssf-1" && authenticateType() === "myinfo" && props.data.logical_field_name === "full_name"
+              ? "disabled"
+              : ""
+          }${
+              stageSelector[0].stageId === "ad-2" && authenticateType() === "myinfo" && props.data.logical_field_name === "tax_id_no"
+              && userInputSelector.applicants["country_of_tax_residence_a_1"] === "SG"
+                ? "disabled"
+                : ""
+            }
+          ${
+              stageSelector[0].stageId === "bd-2" && authenticateType() === "myinfo" && ((props.data.logical_field_name === "block_rwb" || props.data.logical_field_name === "building_name_rwb" || props.data.logical_field_name==="street_name_rwb" ||props.data.logical_field_name==="unit_no_rwb" ||props.data.logical_field_name==="permanent_address_rwb_1"||props.data.logical_field_name==="residential_address_rwb_1"))
+                ? "disabled"
+                : ""
+            }
+            ${
+              stageSelector[0].stageId === "bd-2" && (((props.data.logical_field_name === "permanent_address_rwb_1" && stageSelector[0].stageInfo.applicants.permanent_address_rwb_1_a_1) 
+              || (props.data.logical_field_name === "residential_address_rwb_1" && stageSelector[0].stageInfo.applicants.residential_address_rwb_1_a_1)))
+                ? "disabled"
+                : ""
+            }
+            ${
+              stageSelector[0].stageId === "bd-3" && authenticateType() === "myinfo" && ((props.data.logical_field_name === "existing_personal_email_co1" || props.data.logical_field_name === "existing_office_email_em1" || 
+              props.data.logical_field_name==="existing_office_email_em2" || props.data.logical_field_name==="existing_mobile_mo1" || props.data.logical_field_name==="existing_mobile_mo2" || props.data.logical_field_name==="existing_overseas_mobile_mf1" ||
+              props.data.logical_field_name==="existing_overseas_mobile_mf2" || props.data.logical_field_name==="existing_office_telephone_ot1" || props.data.logical_field_name === "existing_office_telephone_ot2" || props.data.logical_field_name === "existing_residential_telephone_rt2" ||
+              props.data.logical_field_name === "existing_overseas_office_telno_of1" || props.data.logical_field_name === "existing_overseas_office_telno_of2" || props.data.logical_field_name === "existing_overseas_residential_telno_rf1" ||
+              props.data.logical_field_name === "existing_overseas_residential_telno_rf2"))
+                ? "disabled"
+                : ""
+            }`
           }
-        }
-      }]);
-
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.hidden[0]).toContain('account_currency_9');
-      expect(validationObj.hidden[0]).toContain('account_currency');
-    });
-
-    it('should handle RWB account currency fields', () => {
-      mockGetUrl.getStageInfo.mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: {
-          applicants: {
-            account_currency_rwb_field1_p_1: 'value1',
-            account_currency_rwb_field2_p_1: 'value2'
-          }
-        }
-      }]);
-
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj.nonEditable[0]).toContain('account_currency_rwb_field1');
-      expect(validationObj.nonEditable[0]).toContain('account_currency_rwb_field2');
-    });
-  });
-
-  describe('Product filtering', () => {
-    it('should process products from localStorage', () => {
-      const products = [
-        {
-          product_type: 'SAVINGS',
-          product_category_name: 'Savings',
-          name: 'Premium Savings'
-        }
-      ];
-      mockLocalStorage.getItem.mockReturnValue(JSON.stringify(products));
-
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(mockLocalStorage.getItem).toHaveBeenCalledWith('products');
-      expect(mockRulesUtils).toHaveBeenCalled();
-    });
-
-    it('should handle empty products array', () => {
-      mockLocalStorage.getItem.mockReturnValue('[]');
-
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(result).toEqual({ success: true });
-    });
-
-    it('should handle null products', () => {
-      mockLocalStorage.getItem.mockReturnValue(null);
-
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(result).toEqual({ success: true });
-    });
-  });
-
-  describe('Validation object structure', () => {
-    it('should always create validation object with required properties', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const validationObj = callArgs[1];
-
-      expect(validationObj).toHaveProperty('nonEditable');
-      expect(validationObj).toHaveProperty('hidden');
-      expect(validationObj).toHaveProperty('modifyVisibility');
-      expect(Array.isArray(validationObj.nonEditable)).toBe(true);
-      expect(Array.isArray(validationObj.hidden)).toBe(true);
-      expect(Array.isArray(validationObj.modifyVisibility)).toBe(true);
-    });
-  });
-
-  describe('Field set filtering', () => {
-    it('should filter out empty field set names', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const fieldSets = callArgs[0];
-
-      // Should filter out field sets with name "   "
-      const emptyFieldSets = fieldSets[0].filter((fs: any) => fs.field_set_name === '   ');
-      expect(emptyFieldSets.length).toBe(0);
-    });
-
-    it('should keep Basic Information field set', () => {
-      Rules_bd_1(mockProps, mockStageInfo);
-
-      const callArgs = mockRulesUtils.mock.calls[0];
-      const fieldSets = callArgs[0];
-
-      const basicInfoSet = fieldSets[0].find((fs: any) => fs.field_set_name === 'Basic Information');
-      expect(basicInfoSet).toBeDefined();
-    });
-  });
-
-  describe('Function return', () => {
-    it('should return result from rulesUtils', () => {
-      const expectedResult = { status: 'success', data: 'test' };
-      mockRulesUtils.mockReturnValue(expectedResult);
-
-      const result = Rules_bd_1(mockProps, mockStageInfo);
-
-      expect(result).toEqual(expectedResult);
-    });
-  });
-
-  describe('Error handling', () => {
-    it('should handle missing props gracefully', () => {
-      const emptyProps = [[]];
-      
-      expect(() => Rules_bd_1(emptyProps, mockStageInfo)).not.toThrow();
-    });
-
-    it('should handle missing stage info gracefully', () => {
-      const emptyStageInfo = {};
-      
-      expect(() => Rules_bd_1(mockProps, emptyStageInfo)).not.toThrow();
-    });
-  });
-});
+        >
+          <input
+            type={props.data.type}
+            name={props.data.logical_field_name}
+            aria-label={props.data.logical_field_name}
+            id={fieldIdAppend(props)}
+            placeholder={placeHolderText(props.data.logical_field_name)}
+            value={(stageSelector[0].stageId === "ad-1" && props.data.logical_field_name === "td_client_rate" && userInputSelector.applicants["td_client_rate_a_1"]) ? userInputSelector.applicants["td_client_rate_a_1"]:defaultValue}
+            minLength={props.data.logical_field_name !== "referral_id_2" && props.data.min_length}
+            maxLength={props.data.length}
+            pattern={regexPattern}
+            onKeyDown={(event) => {
+              if ( props.data.logical_field_name === "short_name" && !/[a-zA-Z]/.test(event.key)) {
+                event.preventDefault();
+              }
+            }}
+            onChange={changeHandler.bind(this, props.data.logical_field_name)}
+            onBlur={bindHandler.bind(this, props.data.logical_field_name)}
+            disabled={
+              ((props.data.editable || stageSelector[0].stageId === "bd-1")
+               &&
+               props.data.logical_field_name !== "referral_id_2") ||
+             (stageSelector[0].stageId === "bd-1" &&
+               props.data.logical_field_name === "referral_id_2") ||
+             (stageSelector[0].stageId === "ad-1" &&
+               props.data.logical_field_name === "td_client_rate") ||
+               (stageSelector[0].stageId === "bd-3" &&userInputSelector.applicants["ofc_country_a_1"] ===""&&(props.data.logical_field_name!=="name_of_business" 
+               && props.data.logical_field_name!=="per_email_2" && props.data.logical_field_name!=="office_email_1" 
+               && props.data.logical_field_name!=="office_email_2" && props.data.logical_field_name!=="staff_id" && props.data.logical_field_name!=="staff_name" && props.data.logical_field_name!=="name_of_employer_other")) ||
+               (stageSelector[0].stageId === "bd-3" && store.getState().stages.stages[0].stageInfo.applicants.ofc_existing_country_a_1 && (props.data.logical_field_name === "ofc_block" || props.data.logical_field_name === "ofc_building_name" || props.data.logical_field_name === "ofc_street_name" || props.data.logical_field_name === "ofc_unit_no"))
+             }
+            onFocus={focusHandler.bind(this, props.data.logical_field_name)}
+            onKeyPress={(event) =>
+              allowNumericCharacter(event, props.data.logical_field_name)
+            }
+          />
+          {error && <span className="error-msg">{error}</span>}
+          {props.data.logical_field_name &&
+            props.data.logical_field_name.split("_")[0] === "alias" &&
+            props.data.logical_field_name.split("_")[1] !== "1" &&
+            !props.data.hide_remove_btn && (
+              <span
+                className="text__remove__button"
+                onClick={() => removeAliasField()}
+              ></span>
+            )}
+          {(props.data.logical_field_name === "embossed_dc_name" ||
+            props.data.logical_field_name === "embossed_name" ||
+            props.data.logical_field_name === "embossed_name_2") && (
+            <span className="text__count__num">{embossCounter}/19</span>
+          )}
+        </div>
+      </div>
+      )}
+    </>
+  );
+};
+ 
+export default Text;
+Please write test cases using jest with RTL
