@@ -1,148 +1,281 @@
-import { authenticateType, getUrl } from "../../utils/common/change.utils";
-import {
-  KeyWithAnyModel,
-  ValidationObjModel,
-} from "../../utils/model/common-model";
-import rulesUtils from "./rules.utils";
+import Rules_bd_1 from './Rules_bd_1';
+import { authenticateType, getUrl } from '../../utils/common/change.utils';
+import rulesUtils from './rules.utils';
 
-const Rules_bd_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
-  const auth = authenticateType();
-  const isMyInfoVirtual = getUrl.getParameterByName("isMyInfoVirtual");
-  const stageSelector = getUrl.getStageInfo()[0];
-  const applicantsSelector = stageSelector.stageInfo.applicants;
-  const fieldSet = props[0].filter((fields:any)=> fields.field_set_name === 'Basic Information');
-  const products = JSON.parse(localStorage.getItem('products') || '[]');
-  const filteredFields = props[0].filter((fields: any) => fields.field_set_name === "   ");
-  filteredFields[0]?.fields.map((product: any) => {
-    products.forEach((prod: any) => {
-      if (product.sub_product_code.includes(prod.product_type)) {
-        filteredFields.push({
-          field_set_name: prod.product_category_name + " - " + prod.name,
-          fields: [product]
-        });
-      }
+// Mock dependencies
+jest.mock('../../utils/common/change.utils', () => ({
+  authenticateType: jest.fn(),
+  getUrl: {
+    getParameterByName: jest.fn(),
+    getStageInfo: jest.fn(),
+  },
+}));
+
+jest.mock('./rules.utils', () => jest.fn());
+
+describe('Rules_bd_1 Utility Function', () => {
+  const mockProps = [
+    [
+      {
+        field_set_name: 'Basic Information',
+        fields: [
+          { logical_field_name: 'full_name' },
+          { logical_field_name: 'email' },
+          { logical_field_name: 'mobile_number' },
+          { logical_field_name: 'account_currency_9' },
+          { logical_field_name: 'account_currency' },
+          { logical_field_name: 'contact_preference_casa' },
+          { logical_field_name: 'dsa_code' },
+          { logical_field_name: 'nationality' },
+          { logical_field_name: 'residential_address' },
+        ],
+      },
+      {
+        field_set_name: '   ',
+        fields: [
+          { logical_field_name: 'product_field_1', sub_product_code: ['TYPE1'] },
+        ],
+      },
+    ],
+  ];
+
+  const mockStageInfo = {
+    application: {
+      source_system_name: '2',
+    },
+  };
+
+  const mockStageSelector = {
+    stageId: 'bd-1',
+    stageInfo: {
+      applicants: {
+        auth_mode_a_1: '',
+        account_currency_9_a_1: '',
+        account_currency_a_1: '',
+      },
+    },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    
+    // Default mock implementations
+    (authenticateType as jest.Mock).mockReturnValue('manual');
+    (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
+    (getUrl.getStageInfo as jest.Mock).mockReturnValue([mockStageSelector]);
+    (rulesUtils as jest.Mock).mockImplementation((fields, validation) => ({
+      fields,
+      validation,
+    }));
+    
+    localStorage.setItem('products', JSON.stringify([
+      { product_type: 'TYPE1', product_category_name: 'Category1', name: 'Product1' }
+    ]));
+  });
+
+  it('should handle product field organization', () => {
+    const result = Rules_bd_1(mockProps, mockStageInfo);
+    
+    // Verify product fields are organized correctly
+    expect(result.fields[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field_set_name: 'Basic Information'
+        }),
+        expect.objectContaining({
+          field_set_name: 'Category1 - Product1'
+        })
+      ])
+    );
+  });
+
+  describe('iBanking authentication mode', () => {
+    beforeEach(() => {
+      mockStageSelector.stageInfo.applicants.auth_mode_a_1 = 'IX';
+    });
+
+    it('should set non-editable fields for iBanking', () => {
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.nonEditable).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'full_name',
+            'email',
+            'mobile_number',
+            'account_currency_9',
+            'account_currency',
+            'contact_preference_casa'
+          ])
+        ])
+      );
+    });
+
+    it('should hide non-iBanking fields', () => {
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      // Should hide fields not in the iBanking fields list
+      expect(result.validation.hidden).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'dsa_code',
+            'nationality',
+            'residential_address'
+          ])
+        ])
+      );
     });
   });
-  fieldSet.push(...filteredFields);
-  const validationObj: ValidationObjModel = {
-    nonEditable: [],
-    hidden: [],
-    modifyVisibility: [],
-  };
-  let defaultVisiblity:any= []
-  //ibanking back nav issue fix
-  if (stageSelector.stageInfo.applicants['auth_mode_a_1'] === 'IX') {
-    const ibankingFields = [
-      "full_name",
-      "email",
-      "mobile_number",
-      "account_currency_9",
-      "account_currency",
-      "contact_preference_casa"
-    ];
 
-    validationObj.nonEditable.push(ibankingFields);
-
-    let hiddenFields: any[] = [];
-
-    fieldSet.forEach((field: KeyWithAnyModel) => {
-      field.fields.forEach((fieldName: KeyWithAnyModel) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-        ibankingFields.indexOf(fieldName["logical_field_name"]) === -1
-          ? hiddenFields.push(fieldName["logical_field_name"])
-          : "";
-      });
+  describe('MyInfo/Resume authentication', () => {
+    beforeEach(() => {
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+      mockStageInfo.application.source_system_name = '2';
     });
 
-    validationObj.hidden!.push(hiddenFields);
-  }
+    it('should set correct hidden fields for MyInfo', () => {
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'dsa_code',
+            'nationality',
+            'country_of_birth',
+            'contact_preference',
+            'gender',
+            'marital_status'
+          ])
+        ])
+      );
+    });
 
-  //Adding resume here, incase of manual flow this condition has to be modified.
-  else if (
-    stageInfo.application.source_system_name === "2" &&
-    (auth === "myinfo" || isMyInfoVirtual === "true" || auth === "resume")
-  ) {
+    it('should set correct non-editable fields for MyInfo', () => {
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.nonEditable).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'full_name',
+            'email',
+            'mobile_number',
+            'residential_address',
+            'see_other_myInfo_details',
+            'see_other_myInfo_details_consent'
+          ])
+        ])
+      );
+    });
 
-    let hiddenFields = [
-      "dsa_code",
-      "nationality",
-      "country_of_birth",
-      "contact_preference",
-      "gender",
-      "marital_status",
-      "nationality_add",
-      "other_name_or_alias",
-      "education_level",
-      "pass_exp_dt",
-      "mode_of_operation"
-    ];
-    /*istanbul ignore else */
-    if (stageSelector.stageId === 'bd-1' && (stageSelector.stageInfo.applicants['account_currency_9_a_1'] === '' || stageSelector.stageInfo.applicants['account_currency_a_1'] === '')) {
-      hiddenFields.push('account_currency_9', 'account_currency');
-    }
-    validationObj.hidden!.push(hiddenFields);
-    const nonEditableFields = [
-      "full_name",
-      "email",
-      "mobile_number",
-      "residential_address",
-      "see_other_myInfo_details",
-      "see_other_myInfo_details_consent",
-      "ownership_status",
-      "account_currency_9",
-      "account_currency",
-      "residency_status",
-      "NRIC",
-      "passport_no"
-    ];
-    if (stageSelector.stageId === 'bd-1' && Object.keys(applicantsSelector).filter(key =>key.startsWith('account_currency_rwb_'))) {
-      const accountCurrency:any = Object.keys(applicantsSelector).filter(key =>key.startsWith('account_currency_rwb_'));
-      accountCurrency.forEach((acctcurrency:any) => nonEditableFields.push(acctcurrency.split('_p_1')[0]))
-    }
-    validationObj.nonEditable.push(nonEditableFields);
-  } else if (auth === "manual") {
-    const hiddenFields = [
-      "ownership_status",
-      "education_level",
-      "nationality",
-      "nationality_add",
-      "country_of_birth",
-      "contact_preference",
-      "other_name_or_alias",
-      "education_level",
-      "gender",
-      "marital_status",
-      "residential_address",
-      "see_other_myInfo_details",
-      "see_other_myInfo_details_consent",
-      'mode_of_operation',
-      "pass_exp_dt",
-      "detailed_full_name"
-    ];
-    const nonEditableFields = [
-      "full_name",
-      "email",
-      "mobile_number",
-      "residential_status",
-      "account_currency_9",
-      "account_currency",
-      "residency_status",
-      "NRIC",
-      "passport_no"
-    ];
-    validationObj.nonEditable.push(nonEditableFields);
-    validationObj.hidden!.push(hiddenFields);
-  } else {
-    const hiddenFields = [
-      "see_other_myInfo_details",
-      "see_other_myInfo_details_consent",
-    ];
-    validationObj.hidden!.push(hiddenFields);
-  }
-  validationObj.modifyVisibility!.push(defaultVisiblity)
-  const updatedAccountCurrencyFields = fieldSet.filter((fields: any) => fields.field_set_name !== "   ");
-  return rulesUtils([updatedAccountCurrencyFields], validationObj);
-};
+    it('should hide account currency fields when empty', () => {
+      mockStageSelector.stageInfo.applicants.account_currency_9_a_1 = '';
+      mockStageSelector.stageInfo.applicants.account_currency_a_1 = '';
+      
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'account_currency_9',
+            'account_currency'
+          ])
+        ])
+      );
+    });
 
-export default Rules_bd_1;
-Please write test cases using jest with RTL
+    it('should handle virtual MyInfo case', () => {
+      (getUrl.getParameterByName as jest.Mock).mockReturnValue('true');
+      
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'dsa_code',
+            'nationality',
+            'country_of_birth'
+          ])
+        ])
+      );
+    });
+  });
+
+  describe('Manual authentication', () => {
+    beforeEach(() => {
+      (authenticateType as jest.Mock).mockReturnValue('manual');
+    });
+
+    it('should set correct hidden fields for manual auth', () => {
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'ownership_status',
+            'education_level',
+            'nationality',
+            'residential_address'
+          ])
+        ])
+      );
+    });
+
+    it('should set correct non-editable fields for manual auth', () => {
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.nonEditable).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'full_name',
+            'email',
+            'mobile_number',
+            'residential_status',
+            'account_currency_9',
+            'account_currency'
+          ])
+        ])
+      );
+    });
+  });
+
+  describe('Default case', () => {
+    it('should hide only MyInfo details fields by default', () => {
+      // Set auth to something not covered by other cases
+      (authenticateType as jest.Mock).mockReturnValue('unknown');
+      
+      const result = Rules_bd_1(mockProps, mockStageInfo);
+      
+      expect(result.validation.hidden).toEqual(
+        expect.arrayContaining([
+          expect.arrayContaining([
+            'see_other_myInfo_details',
+            'see_other_myInfo_details_consent'
+          ])
+        ])
+      );
+    });
+  });
+
+  it('should call rulesUtils with updated fields and validation object', () => {
+    Rules_bd_1(mockProps, mockStageInfo);
+    
+    expect(rulesUtils).toHaveBeenCalled();
+    const [fieldsArg, validationArg] = (rulesUtils as jest.Mock).mock.calls[0];
+    
+    expect(fieldsArg[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field_set_name: 'Basic Information' }),
+        expect.objectContaining({ field_set_name: 'Category1 - Product1' })
+      ])
+    );
+    
+    expect(validationArg).toEqual(
+      expect.objectContaining({
+        nonEditable: expect.any(Array),
+        hidden: expect.any(Array),
+        modifyVisibility: expect.any(Array),
+      })
+    );
+  });
+});
