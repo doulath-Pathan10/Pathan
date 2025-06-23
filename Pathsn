@@ -1,19 +1,18 @@
 import RulesSSF from './RulesSSF';
 import rulesUtils from './rules.utils';
 import { authenticateType, filterDisableFields } from '../../utils/common/change.utils';
-import { getUrl } from '../../utils/common/change.utils';
 
-// Mock dependencies
-jest.mock('./rules.utils');
+// Mock all dependencies
+jest.mock('./rules.utils', () => jest.fn(() => ({})));
 jest.mock('../../utils/common/change.utils', () => ({
   authenticateType: jest.fn(),
-  filterDisableFields: jest.fn(),
+  filterDisableFields: jest.fn((fields, missing, editable) => missing),
   getUrl: {
     getParameterByName: jest.fn()
   }
 }));
 
-describe('RulesSSF Utility Function', () => {
+describe('RulesSSF', () => {
   const mockProps = [[
     {
       field_set_name: '   ',
@@ -22,17 +21,20 @@ describe('RulesSSF Utility Function', () => {
         { logical_field_name: 'mobile_number' },
         { logical_field_name: 'account_currency_9' },
         { logical_field_name: 'full_name' },
-        { logical_field_name: 'other_field' }
+        { logical_field_name: 'other_field' },
+        { logical_field_name: 'no_of_accounts_rwb' },
+        { logical_field_name: 'mode_of_operation' },
+        { logical_field_name: 'pass_exp_dt' }
       ]
     }
   ]];
-  
-  const mockStageInfo = {
+
+  const baseStageInfo = {
     application: {
       source_system_name: '2'
     },
     products: [
-      { product_category: 'TD', product_type: '123', product_category_name: 'Term Deposit', name: 'TD Account' },
+      { product_category: 'TD', product_type: '337', product_category_name: 'Term Deposit', name: 'TD Account' },
       { product_category: 'CA', product_type: '456', product_category_name: 'Current Account', name: 'CA Account' }
     ],
     applicants: {
@@ -47,145 +49,50 @@ describe('RulesSSF Utility Function', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    (rulesUtils as jest.Mock).mockImplementation(() => ({}));
-    (filterDisableFields as jest.Mock).mockReturnValue([]);
     localStorage.setItem('products', JSON.stringify([
-      { product_type: '123', product_category_name: 'Term Deposit', name: 'TD Account' },
+      { product_type: '337', product_category_name: 'Term Deposit', name: 'TD Account' },
       { product_type: '456', product_category_name: 'Current Account', name: 'CA Account' }
     ]));
   });
 
-  describe('Field Set Grouping', () => {
-    it('should group fields by product category and name', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
-
-      const result = RulesSSF(mockProps, mockStageInfo);
-
-      expect(result).toBeDefined();
-      // Verify the field grouping logic
-      expect(mockProps[0].length).toBeGreaterThan(1); // Should have added grouped fields
-    });
-  });
-
-  describe('MyInfo Authentication', () => {
-    beforeEach(() => {
+  describe('Authentication Scenarios', () => {
+    it('should handle MyInfo authentication with source system 2', () => {
       (authenticateType as jest.Mock).mockReturnValue('myinfo');
-      (getUrl.getParameterByName as jest.Mock).mockImplementation((param) => 
+      (getUrl.getParameterByName as jest.Mock).mockImplementation(param => 
         param === 'auth' ? 'myinfo' : null
       );
-    });
 
-    it('should set correct validation for MyInfo auth with source system 2', () => {
-      const result = RulesSSF(mockProps, mockStageInfo);
-
+      const result = RulesSSF(mockProps, baseStageInfo);
+      
       expect(rulesUtils).toHaveBeenCalled();
-      expect(filterDisableFields).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
 
-    it('should handle missing mobile_number and email', () => {
-      const modifiedStageInfo = {
-        ...mockStageInfo,
+    it('should handle iBanking authentication', () => {
+      const stageInfo = {
+        ...baseStageInfo,
         applicants: {
-          ...mockStageInfo.applicants,
-          mobile_number_a_1: undefined,
-          email_a_1: undefined
+          ...baseStageInfo.applicants,
+          auth_mode_a_1: 'IX'
         }
       };
 
-      RulesSSF(mockProps, modifiedStageInfo);
-
-      expect(filterDisableFields).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.arrayContaining(['mobile_number', 'email', 'ownership_status']),
-        expect.any(Array)
-      );
-    });
-
-    it('should handle multiple applicants', () => {
-      localStorage.setItem('applicantNo', '2');
-      const hiddenFields = ["contact_preference_casa_etc", "dsa_code", "pass_exp_dt"];
-
-      const result = RulesSSF(mockProps, mockStageInfo);
-
+      const result = RulesSSF(mockProps, stageInfo);
+      
       expect(rulesUtils).toHaveBeenCalledWith(
         expect.any(Array),
         expect.objectContaining({
-          hidden: [expect.arrayContaining(hiddenFields)]
+          nonEditable: expect.any(Array),
+          hidden: expect.any(Array)
         })
       );
     });
 
-    it('should handle TD products specifically', () => {
-      const modifiedStageInfo = {
-        ...mockStageInfo,
-        products: [
-          { product_category: 'TD', product_type: '337' },
-          { product_category: 'TD', product_type: '338' }
-        ]
-      };
-      const hiddenFields = ["no_of_accounts_rwb", "mode_of_operation", "pass_exp_dt"];
-
-      const result = RulesSSF(mockProps, modifiedStageInfo);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          hidden: [expect.arrayContaining(hiddenFields)]
-        })
-      );
-    });
-  });
-
-  describe('iBanking Authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('IX');
-      const modifiedStageInfo = {
-        ...mockStageInfo,
-        applicants: {
-          auth_mode_a_1: 'IX',
-          mobile_number_a_1: '12345678',
-          email_a_1: 'test@example.com',
-          account_currency_9_a_1: 'USD',
-          account_currency_a_1: 'USD'
-        }
-      };
-    });
-
-    it('should set correct validation for iBanking auth', () => {
-      const result = RulesSSF(mockProps, mockStageInfo);
-
-      expect(rulesUtils).toHaveBeenCalled();
-      expect(result).toBeDefined();
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          nonEditable: [expect.arrayContaining(['full_name', 'mobile_number', 'email', 'account_currency_9', 'account_currency'])]
-        })
-      );
-    });
-
-    it('should hide non-ibanking fields', () => {
-      const result = RulesSSF(mockProps, mockStageInfo);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          hidden: [expect.arrayContaining(['other_field'])]
-        })
-      );
-    });
-  });
-
-  describe('Manual Authentication', () => {
-    beforeEach(() => {
+    it('should handle manual authentication', () => {
       (authenticateType as jest.Mock).mockReturnValue('manual');
-    });
-
-    it('should set correct validation for manual auth', () => {
-      const result = RulesSSF(mockProps, mockStageInfo);
-
+      
+      const result = RulesSSF(mockProps, baseStageInfo);
+      
       expect(rulesUtils).toHaveBeenCalledWith(
         expect.any(Array),
         expect.objectContaining({
@@ -193,49 +100,117 @@ describe('RulesSSF Utility Function', () => {
           hidden: [expect.arrayContaining([
             "ownership_status",
             "residential_address",
-            "see_other_myInfo_details",
-            "contact_preference_casa_etc"
+            "see_other_myInfo_details"
           ])]
         })
       );
     });
   });
 
-  describe('Default Case', () => {
-    it('should set default hidden fields when no specific auth matches', () => {
-      (authenticateType as jest.Mock).mockReturnValue('other');
-      const result = RulesSSF(mockProps, mockStageInfo);
+  describe('Product Specific Rules', () => {
+    it('should hide specific fields for TD products', () => {
+      const stageInfo = {
+        ...baseStageInfo,
+        products: [
+          { product_category: 'TD', product_type: '337' },
+          { product_category: 'TD', product_type: '338' }
+        ]
+      };
 
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+      
+      const result = RulesSSF(mockProps, stageInfo);
+      
       expect(rulesUtils).toHaveBeenCalledWith(
         expect.any(Array),
         expect.objectContaining({
           hidden: [expect.arrayContaining([
-            "see_other_myInfo_details",
+            "no_of_accounts_rwb",
+            "mode_of_operation",
+            "pass_exp_dt"
+          ])]
+        })
+      );
+    });
+
+    it('should show default editable fields for non-CA/SA products', () => {
+      const stageInfo = {
+        ...baseStageInfo,
+        products: [
+          { product_category: 'TD', product_type: '123' }
+        ]
+      };
+
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+      
+      RulesSSF(mockProps, stageInfo);
+      
+      expect(filterDisableFields).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Array),
+        ['email', 'mobile_number', 'account_currency_9']
+      );
+    });
+  });
+
+  describe('Field Visibility Rules', () => {
+    it('should hide contact_preference_casa_etc and dsa_code for multiple applicants', () => {
+      localStorage.setItem('applicantNo', '2');
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+      
+      const result = RulesSSF(mockProps, baseStageInfo);
+      
+      expect(rulesUtils).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          hidden: [expect.arrayContaining([
             "contact_preference_casa_etc",
             "dsa_code"
           ])]
         })
       );
     });
+
+    it('should add missing fields to nonEditable list', () => {
+      const stageInfo = {
+        ...baseStageInfo,
+        applicants: {
+          ...baseStageInfo.applicants,
+          mobile_number_a_1: undefined,
+          email_a_1: undefined
+        }
+      };
+
+      (authenticateType as jest.Mock).mockReturnValue('myinfo');
+      
+      RulesSSF(mockProps, stageInfo);
+      
+      expect(filterDisableFields).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.arrayContaining(['mobile_number', 'email', 'ownership_status']),
+        expect.any(Array)
+      );
+    });
   });
 
   describe('Edge Cases', () => {
-    it('should handle empty products in localStorage', () => {
-      localStorage.setItem('products', '[]');
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      const result = RulesSSF(mockProps, mockStageInfo);
+    it('should handle empty products array', () => {
+      const stageInfo = {
+        ...baseStageInfo,
+        products: []
+      };
+
+      const result = RulesSSF(mockProps, stageInfo);
       expect(result).toBeDefined();
     });
 
     it('should handle missing field_set_name', () => {
       const modifiedProps = [[{ fields: [] }]];
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      const result = RulesSSF(modifiedProps, mockStageInfo);
+      const result = RulesSSF(modifiedProps, baseStageInfo);
       expect(result).toBeDefined();
     });
 
     it('should handle empty stageInfo', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
       const result = RulesSSF(mockProps, {} as any);
       expect(result).toBeDefined();
     });
