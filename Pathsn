@@ -1,239 +1,75 @@
-import Rules_bd_2 from './Rules_bd_2';
-import { authenticateType, getUrl } from '../../utils/common/change.utils';
-import { checkProductDetails } from '../../services/common-service';
+import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
 import rulesUtils from './rules.utils';
+import { checkProductDetails } from '../../services/common-service';
+import { authenticateType, getUrl } from '../../utils/common/change.utils';
 
-// Mock dependencies
-jest.mock('../../utils/common/change.utils', () => ({
-  authenticateType: jest.fn(),
-  getUrl: {
-    getJourneyType: jest.fn(),
-  },
-}));
+const Rules_ld_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+ const validationObj: ValidationObjModel = {
+        nonEditable: [],
+        hidden: [],
+        modifyVisibility:[]
+    };
+    const auth = authenticateType()
+    const isCASAProduct = checkProductDetails(stageInfo.products);
+    let defaultVisiblity:any= []
+    /*istanbul ignore else */
+    if(auth === "manual"||"myinfo"){
+      let hiddenFields = ["email","full_name","date_of_birth","mobile_number","residency_status","NRIC","work_type","year_of_assessment_fff_1","year_of_assessment_fff_2","annual_income_fff_1","annual_income_fff_2","dsa_code",
+        "credit_limit_consent"]
+        /*istanbul ignore else */
+       if(auth === "myinfo") {
+            hiddenFields.push(
+            "postal_code",
+            "postal",
+            "block",
+            "building_name",
+            "street_name",
+            "unit_no",
+            "account_currency_9",
+            "myinfo_data_cli",
+            "banca_ins_request_1",
+            "banca_ins_request_2",
+            "banca_ins_request_amount",
+            "banca_ins_Consent_rp2",
+            "banca_ins_Consent_rp3",
+            "banca_ins_Consent_rp5",
+            "banca_ins_Consent_rp6",
+            "myinfo_data_cli_1",
+            "contact_preference",
+            "multi_currency_selection",
+            "credit_limit_consent_1",
+            "contact_preference_casa"
+            );
+            defaultVisiblity.push("residential_address")
+            const nonEditableFields = ["marital_status","residential_address"]
+            validationObj.nonEditable.push(nonEditableFields)
+        }
+         
+/*istanbul ignore else */
+        if(!isCASAProduct){
+            hiddenFields.push('nationality_add');
+        }
+        /*istanbul ignore else */
+        if(stageInfo.applicants['residency_status_a_1'] === "CT"){
+            hiddenFields.push("postal_code_other")
+ 
+        }
+        /*istanbul ignore else */
+        if(stageInfo.applicants['residency_status_a_1'] === "FR"){
+            hiddenFields.push("postal_code")
+ 
+        }
+        /*istanbul ignore else */
+        if(stageInfo.applicants['residency_status_a_1'] === "FR"){
+            defaultVisiblity = ["overseas_contact_country_code","overseas_contact_area_code","overseas_contact_no"];
+        }
+        defaultVisiblity.push( "residential_address_consent","block","street_name")
+        validationObj.hidden!.push(hiddenFields);
+        validationObj.modifyVisibility!.push(defaultVisiblity)
+      }
+ 
+    return rulesUtils(props, validationObj);
+}
 
-jest.mock('../../services/common-service', () => ({
-  checkProductDetails: jest.fn(),
-}));
-
-jest.mock('./rules.utils', () => jest.fn());
-
-describe('Rules_bd_2 Utility Function', () => {
-  const mockProps = [
-    {
-      fields: [
-        { logical_field_name: 'full_name' },
-        { logical_field_name: 'email' },
-        { logical_field_name: 'mobile_number' },
-        { logical_field_name: 'residential_address' },
-        { logical_field_name: 'postal_code' },
-        { logical_field_name: 'dsa_code' },
-        // Add more fields as needed for testing
-      ],
-    },
-  ];
-
-  const mockStageInfo = {
-    products: ['CASA'],
-    applicants: {
-      residency_status_a_1: '',
-      permanent_address_rwb_1_a_1: '',
-      residential_address_rwb_1_a_1: '',
-    },
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    // Default mock implementations
-    (authenticateType as jest.Mock).mockReturnValue('manual');
-    (getUrl.getJourneyType as jest.Mock).mockReturnValue('default');
-    (checkProductDetails as jest.Mock).mockReturnValue(true);
-    (rulesUtils as jest.Mock).mockImplementation((props, validation) => ({
-      props,
-      validation,
-    }));
-  });
-
-  it('should initialize with empty validation object', () => {
-    const result = Rules_bd_2(mockProps, mockStageInfo);
-    
-    expect(result.validation).toEqual({
-      nonEditable: [],
-      hidden: expect.any(Array),
-      modifyVisibility: expect.any(Array),
-    });
-  });
-
-  describe('for manual/myinfo authentication', () => {
-    it('should set common hidden fields for manual auth', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'email',
-          'full_name',
-          'date_of_birth',
-          'mobile_number',
-          'dsa_code',
-          'credit_limit_consent'
-        ])
-      );
-    });
-
-    it('should set additional hidden fields for non-ETC journey', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('default');
-      
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'postal_code',
-          'block',
-          'building_name',
-          'street_name',
-          'unit_no',
-          'account_currency_9'
-        ])
-      );
-    });
-
-    it('should set additional hidden fields for ETC journey', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ETC');
-      
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'postal_code_rwb',
-          'block_rwb',
-          'country_rwb',
-          'building_name_rwb',
-          'unit_no_rwb',
-          'street_name_rwb'
-        ])
-      );
-    });
-
-    it('should set modifyVisibility for non-ETC/NTC journey', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('default');
-      
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'residential_address',
-          'nationality_add',
-          'per_country',
-          'per_postal_code'
-        ])
-      );
-    });
-
-    it('should set modifyVisibility for ETC/NTC journey with residential address', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ETC');
-      mockStageInfo.applicants.residential_address_rwb_1_a_1 = 'some value';
-      
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'residential_address_rwb_1',
-          'nationality_add',
-          'per_country'
-        ])
-      );
-      expect(result.validation.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'residential_address',
-          'country_rwb',
-          'postal_code_rwb'
-        ])
-      );
-    });
-  });
-
-  describe('for myinfo authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('myinfo');
-    });
-
-    it('should set non-editable fields for myinfo', () => {
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.nonEditable[0]).toEqual(
-        expect.arrayContaining([
-          'marital_status',
-          'residential_address'
-        ])
-      );
-    });
-
-    it('should hide specific fields for myinfo', () => {
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'state_rwb',
-          'city_rwb'
-        ])
-      );
-    });
-  });
-
-  describe('residency status handling', () => {
-    it('should hide postal_code_other for CT residency status', () => {
-      mockStageInfo.applicants.residency_status_a_1 = 'CT';
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.hidden[0]).toContain('postal_code_other');
-    });
-
-    it('should hide postal_code for FR residency status', () => {
-      mockStageInfo.applicants.residency_status_a_1 = 'FR';
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.hidden[0]).toContain('postal_code');
-    });
-
-    it('should set modifyVisibility for FR residency status', () => {
-      mockStageInfo.applicants.residency_status_a_1 = 'FR';
-      const result = Rules_bd_2(mockProps, mockStageInfo);
-      
-      expect(result.validation.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'overseas_contact_country_code',
-          'overseas_contact_area_code',
-          'overseas_contact_no'
-        ])
-      );
-    });
-  });
-
-  it('should always hide detailed_full_name', () => {
-    const result = Rules_bd_2(mockProps, mockStageInfo);
-    expect(result.validation.hidden[0]).toContain('detailed_full_name');
-  });
-
-  it('should always include residential_address_consent in modifyVisibility', () => {
-    const result = Rules_bd_2(mockProps, mockStageInfo);
-    expect(result.validation.modifyVisibility[0]).toContain('residential_address_consent');
-  });
-
-  it('should call rulesUtils with props and validation object', () => {
-    Rules_bd_2(mockProps, mockStageInfo);
-    
-    expect(rulesUtils).toHaveBeenCalledWith(
-      mockProps,
-      expect.objectContaining({
-        nonEditable: expect.any(Array),
-        hidden: expect.any(Array),
-        modifyVisibility: expect.any(Array),
-      })
-    );
-  });
-});
+export default Rules_ld_1;
+Please write test cases using jest with RTL
