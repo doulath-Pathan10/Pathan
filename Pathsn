@@ -1,239 +1,254 @@
-import { json } from 'stream/consumers';
-import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
-import { store } from '../../utils/store/store';
+import Rules_ad_1 from './Rules_ad_1';
 import rulesUtils from './rules.utils';
+import { store } from '../../utils/store/store';
 
-const Rules_ad_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
-  const validationObj: ValidationObjModel = {
-    nonEditable: [],
-    hidden: [],
-    modifyVisibility: []
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString();
+    },
+    clear: () => {
+      store = {};
+    }
   };
-  const filteredFields:any = [];
-  const products = JSON.parse(localStorage.getItem('products') || '[]');
-  const FieldSetMap:any = {};
- 
-    let defaultVisiblity:any= []
-    let hidhenFields:Array<string> = [];
-    let modifyVisibilityFields:Array<string> = [];
-    const repeatCount = stageInfo?.applicants.no_of_accounts_rwb_a_1? stageInfo?.applicants.no_of_accounts_rwb_a_1:1 ;
-    const additionalDetails =props[0].filter((fields:any)=> fields.field_set_name === "Additional Details");
-    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Additional Details"));
-    const name = products[0].product_category_name + " - " + products[0].name;
-    const TDProducts = stageInfo?.products.filter((product: any) => product?.product_category === 'TD');
-    
-    /*istanbul ignore else*/
-    if(products.length>1){
-      /*istanbul ignore else*/
-      if(filteredFields[0]?.[0]?.field_set_name === 'Additional Details'){
-      filteredFields[0].shift() 
-      filteredFields[0].unshift({
-        field_set_name: `${name} Additional Details`,
-        fields: props[0][3].fields.map((f:any)=>({
-          ...f,
-          logical_field_name:`${f.logical_field_name}`,
-          rwb_index: 1,
-          mandatory: "true",
-        })),
-      })
-    }
-    }
+})();
 
-    const filteredBankingServicesDetails = props[0].filter((fields:any)=> fields.field_set_name === "Banking Services");
-    /*istanbul ignore else*/
-    if(filteredFields[0].length > 0){
-      /*istanbul ignore else*/
-      if(products.length>1){
-      const name = products[0].product_category_name + " - " + products[0].name;
-    if((stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="318"))||(stageInfo.products.some((p:any)=>p.product_type ==="339") && stageInfo.products.some((p:any)=>p.product_type ==="318") || TDProducts)){
-      filteredFields[0].push(
-      {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
-        ![
-          'debit_card_request_rwb','issuance_type',
-          'embossed_dc_name_rwb','existing_account_no_dc',
-          "cheque_book_request_rwb"
-        ].includes(f.logical_field_name)).map((f:any)=>({
-        ...f,
-        logical_field_name:`${f.logical_field_name}`,
-        rwb_index: 2,
-        }))});}
-        else if((stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="516"))||(stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="507"))){
-          filteredFields[0].push(
-            {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
-              ![
-                'debit_card_request_rwb','issuance_type',
-                'embossed_dc_name_rwb',
-                "cheque_book_request_rwb"
-              ].includes(f.logical_field_name)).map((f:any)=>({
-              ...f,
-              logical_field_name:`${f.logical_field_name}`,
-              rwb_index: 2,
-              }))});
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock
+});
 
-        }
-        else{
-          filteredFields[0].push({field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
-            ...f,
-            logical_field_name:`${f.logical_field_name}`,
-            rwb_index: 2,
-          })),})
+// Mock rulesUtils
+jest.mock('./rules.utils', () => jest.fn());
 
-        }
-    ;}
-     else{
-        filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields});
+describe('Rules_ad_1 Utility Function', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    jest.clearAllMocks();
+  });
+
+  const mockProps = [
+    [
+      {
+        field_set_name: "Additional Details",
+        fields: [
+          { logical_field_name: "reason_for_account_rwb", component_type: "Text" },
+          { logical_field_name: "Initial_deposit_rwb", component_type: "Number" },
+          { logical_field_name: "source_of_fund_rwb", component_type: "Text" }
+        ]
+      },
+      {
+        field_set_name: "Banking Services",
+        fields: [
+          { logical_field_name: "debit_card_request_rwb", component_type: "Checkbox" },
+          { logical_field_name: "issuance_type", component_type: "Radio" },
+          { logical_field_name: "embossed_dc_name_rwb", component_type: "Text" },
+          { logical_field_name: "existing_account_no_dc", component_type: "Text" },
+          { logical_field_name: "cheque_book_request_rwb", component_type: "Checkbox" }
+        ]
+      },
+      {
+        field_set_name: "Time Deposit Details",
+        fields: [
+          { logical_field_name: "td_product_currency_value", component_type: "Text" },
+          { logical_field_name: "td_depoist_amount", component_type: "Number" }
+        ]
       }
-     }
-     /*istanbul ignore else*/
-     if(repeatCount){
-      /*istanbul ignore else*/
-     if(stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307")||stageInfo.products.some((p:any)=>p.product_type ==="324")){
-    for(let i =0;i<repeatCount - 1 ;i++){
-      filteredFields[0].push({field_set_name: "Additional Details", fields: additionalDetails[0].fields.map((f:any)=>({
-        ...f,
-        logical_field_name:`${f.logical_field_name}_${i+2}`,
-        rwb_index: i+2,
-      }))});
-      /*istanbul ignore else*/
-      if(filteredFields[0].length > 0){
-         filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
-          ...f,
-          logical_field_name:`${f.logical_field_name}_${i+2}`,
-          rwb_index: i+2,
-         }))});
-       }
+    ]
+  ];
+
+  const mockStageInfo = {
+    applicants: {
+      no_of_accounts_rwb_a_1: 2
+    },
+    products: [
+      { product_category: 'CA', product_type: '307', product_category_name: 'Current Account', name: 'Premium Account' }
+    ]
+  };
+
+  describe('Basic functionality', () => {
+    it('should return filtered fields with validation object', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Current Account', name: 'Premium Account' }]));
       
-    }
-/*istanbul ignore else*/
-    if((stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307"))){
-      hidhenFields.push("cheque_book_request_rwb","cheque_book_request_rwb_2","cheque_book_request_rwb_3","cheque_book_request_rwb_4","cheque_book_request_rwb_5","cheque_book_request_rwb_6","cheque_book_request_rwb_7","cheque_book_request_rwb_8","reason_for_account_rwb","Initial_deposit_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
-      ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
-      ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
-       }
-   
-       if(stageInfo.products.some((p:any)=>p.product_type ==="307")){
-        hidhenFields.push("reason_for_account_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
-        ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
-        ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
-         }
-}
-}
-
-if(products.length>1){
-      for(let i =0;i<products.length-1 ;i++){
-        const name = products[i].product_category_name + " - " + products[i].name;
-        if((stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="310"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="339"))
-        ||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="504"))||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="507")) || TDProducts){
-        filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
-          ...f,
-          logical_field_name:`${f.logical_field_name}_2`,
-          rwb_index: 2,
-          mandatory: "true",
-        }))},
-        {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
-          ![
-            'debit_card_request_rwb','issuance_type',
-            'embossed_dc_name_rwb','existing_account_no_dc',
-            "cheque_book_request_rwb","cheque_book_request_rwb_2"
-          ].includes(f.logical_field_name)).map((f:any)=>({
-          ...f,
-          logical_field_name:`${f.logical_field_name}_2`,
-          rwb_index: 2,
-          }))});}
-          else if((stageInfo.products.some((p:any)=>p.product_type ==="504")&& stageInfo.products.some((p:any)=>p.product_type ==="507"))||stageInfo.products.some((p:any)=>p.product_type ==="516") && stageInfo.products.some((p:any)=>p.product_type ==="507") || TDProducts){
-            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
-              ...f,
-              logical_field_name:`${f.logical_field_name}_2`,
-              rwb_index: 2,
-              mandatory: "true",
-            }))},
-            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
-              ![
-                'debit_card_request_rwb','issuance_type', 
-                'embossed_dc_name_rwb',
-                "cheque_book_request_rwb","cheque_book_request_rwb_2"
-              ].includes(f.logical_field_name)).map((f:any)=>({
-              ...f,
-              logical_field_name:`${f.logical_field_name}_2`,
-              rwb_index: 2,
-              }))});
-
-          }
-          else{
-            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
-              ...f,
-              logical_field_name:`${f.logical_field_name}_2`,
-              rwb_index: 2,
-              mandatory: "true",
-            }))},
-            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.map((f:any)=>({
-              ...f,
-              logical_field_name:`${f.logical_field_name}_2`,
-              rwb_index: 2,
-            }))});
-
-          }
-        }}
-        /*istanbul ignore else*/
-     if(stageInfo.products[0].product_category === "TD" && filteredFields[0].length > 0){
-       const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
-       
-      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
+      Rules_ad_1(mockProps, mockStageInfo);
       
-      filteredFields[0].forEach((item:any, index: number) => {
-        item.fields = item.fields.map((field:any) => {
-          /*istanbul ignore else*/
-          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
-            return {
-              ...field,
-              component_type: "SelectionBox" // text to selection box converted
-            };
-          }
-          return field;
-        });
+      expect(rulesUtils).toHaveBeenCalled();
+      expect(rulesUtils.mock.calls[0][0]).toBeDefined();
+      expect(rulesUtils.mock.calls[0][1]).toEqual({
+        nonEditable: [],
+        hidden: expect.any(Array),
+        modifyVisibility: expect.any(Array)
       });
+    });
+  });
 
+  describe('Single product scenarios', () => {
+    it('should handle single product with Additional Details', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Current Account', name: 'Premium Account' }]));
+      
+      Rules_ad_1(mockProps, mockStageInfo);
+      
+      const filteredFields = rulesUtils.mock.calls[0][0];
+      expect(filteredFields[0][0].field_set_name).toContain('Additional Details');
+    });
 
+    it('should hide specific fields for CA product type 307', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Current Account', name: 'Premium Account' }]));
+      
+      Rules_ad_1(mockProps, mockStageInfo);
+      
+      const validationObj = rulesUtils.mock.calls[0][1];
+      expect(validationObj.hidden[0]).toContain('reason_for_account_rwb');
+      expect(validationObj.hidden[0]).toContain('source_of_fund_rwb');
+    });
+  });
 
-      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
-      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb","td_fund_account_etc_currency","td_fund_account_new_currency")
-    }
-    if(stageInfo.products.length>1 && TDProducts){
-      const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
-       
-      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
-     
-      filteredFields[0].forEach((item:any, index: number) => {
-        item.fields = item.fields.map((field:any) => {
-          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
-            return {
-              ...field,
-              component_type: "SelectionBox" // text to selection box converted
-            };
-          }
-          return field;
-        });
-      });
-
-
-      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
-      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb","td_fund_account_etc_currency","td_fund_account_new_currency")
-     
-      if(stageInfo?.products.filter((product: any) => product?.product_type.includes('337')) ){
-        hidhenFields.push("embossed_dc_name_rwb");
+  describe('Multiple products scenarios', () => {
+    it('should handle multiple products with prefixed field names', () => {
+      localStorage.setItem('products', JSON.stringify([
+        { product_category_name: 'Current Account', name: 'Premium Account' },
+        { product_category_name: 'Savings Account', name: 'Basic Savings' }
+      ]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        products: [
+          { product_category: 'CA', product_type: '307' },
+          { product_category: 'SA', product_type: '310' }
+        ]
       };
-    }
-    /*istanbul ignore else*/
-    if(stageInfo.products[0].product_category === 'CA' && (stageInfo.products.some((p:any)=>p.product_type ==="317") || stageInfo.products.some((p:any)=>p.product_type ==="314"))){
-      hidhenFields.push("reason_for_account_rwb")
-    }
-    hidhenFields.push("Initial_deposit_rwb");
-    validationObj.hidden!.push(hidhenFields);
-    validationObj.modifyVisibility!.push(modifyVisibilityFields);
-    validationObj.modifyVisibility!.push(defaultVisiblity)
-    
-      return rulesUtils(filteredFields, validationObj);
-}
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      const filteredFields = rulesUtils.mock.calls[0][0];
+      expect(filteredFields[0][0].field_set_name).toContain('Current Account - Premium Account');
+      expect(filteredFields[0][1].field_set_name).toContain('Current Account - Premium Account');
+    });
 
-export default Rules_ad_1;
-Please write test cases using jest with RTL
+    it('should filter banking services fields for specific product combinations', () => {
+      localStorage.setItem('products', JSON.stringify([
+        { product_category_name: 'Current Account', name: 'Premium Account' },
+        { product_category_name: 'Savings Account', name: 'Basic Savings' }
+      ]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        products: [
+          { product_category: 'CA', product_type: '307' },
+          { product_category: 'SA', product_type: '318' }
+        ]
+      };
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      const filteredFields = rulesUtils.mock.calls[0][0];
+      const bankingServicesFields = filteredFields[0][1].fields;
+      expect(bankingServicesFields.some((f: any) => f.logical_field_name === 'cheque_book_request_rwb')).toBe(false);
+    });
+  });
+
+  describe('Time Deposit product scenarios', () => {
+    it('should handle TD products and modify field types', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Time Deposit', name: 'Fixed Deposit' }]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        products: [
+          { product_category: 'TD', product_type: '500' }
+        ]
+      };
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      const filteredFields = rulesUtils.mock.calls[0][0];
+      const tdFields = filteredFields[0].find((fs: any) => fs.field_set_name === 'Time Deposit Details').fields;
+      const currencyField = tdFields.find((f: any) => f.logical_field_name === 'td_product_currency_value');
+      expect(currencyField.component_type).toBe('SelectionBox');
+    });
+
+    it('should hide debit card fields for TD products', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Time Deposit', name: 'Fixed Deposit' }]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        products: [
+          { product_category: 'TD', product_type: '500' }
+        ]
+      };
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      const validationObj = rulesUtils.mock.calls[0][1];
+      expect(validationObj.hidden[0]).toContain('debit_card_request_rwb');
+      expect(validationObj.hidden[0]).toContain('existing_account_no_dc');
+    });
+  });
+
+  describe('Repeat count functionality', () => {
+    it('should create additional field sets based on repeat count', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Current Account', name: 'Premium Account' }]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        applicants: {
+          no_of_accounts_rwb_a_1: 3
+        },
+        products: [
+          { product_category: 'CA', product_type: '310' }
+        ]
+      };
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      const filteredFields = rulesUtils.mock.calls[0][0];
+      expect(filteredFields[0].length).toBeGreaterThan(2); // Original + 2 repeats
+      expect(filteredFields[0][2].field_set_name).toBe('Additional Details');
+      expect(filteredFields[0][2].fields[0].logical_field_name).toContain('_2');
+    });
+
+    it('should hide fields for repeated accounts with specific product types', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Current Account', name: 'Premium Account' }]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        applicants: {
+          no_of_accounts_rwb_a_1: 3
+        },
+        products: [
+          { product_category: 'CA', product_type: '310' }
+        ]
+      };
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      const validationObj = rulesUtils.mock.calls[0][1];
+      expect(validationObj.hidden[0]).toContain('cheque_book_request_rwb_2');
+      expect(validationObj.hidden[0]).toContain('reason_for_account_rwb_2');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should handle empty products array in localStorage', () => {
+      localStorage.setItem('products', JSON.stringify([]));
+      
+      Rules_ad_1(mockProps, mockStageInfo);
+      
+      expect(rulesUtils).toHaveBeenCalled();
+    });
+
+    it('should handle missing no_of_accounts_rwb_a_1 in stageInfo', () => {
+      localStorage.setItem('products', JSON.stringify([{ product_category_name: 'Current Account', name: 'Premium Account' }]));
+      
+      const modifiedStageInfo = {
+        ...mockStageInfo,
+        applicants: {}
+      };
+      
+      Rules_ad_1(mockProps, modifiedStageInfo);
+      
+      expect(rulesUtils).toHaveBeenCalled();
+    });
+  });
+});
