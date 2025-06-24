@@ -1,114 +1,181 @@
-import React from "react";
-import "./model.scss";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import { useDispatch, useSelector } from "react-redux";
-import { errorAction } from "../../../utils/store/error-slice";
-import {
-  dispatchLoader,
-  redirectingToIbanking,
-} from "../../../services/common-service";
-import DOMPurify from "dompurify";
-import { getUrl } from "../../../utils/common/change.utils";
-import { Player } from "@lottiefiles/react-lottie-player";
-import lottieSrc from "../../../assets/_json/lottie/oops.json";
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { DynamicModel } from './DynamicModel';
+import { useDispatch, useSelector } from 'react-redux';
+import { getUrl } from '../../../utils/common/change.utils';
+import { dispatchLoader, redirectingToIbanking } from '../../../services/common-service';
+import { errorAction } from '../../../utils/store/error-slice';
+import { Player } from '@lottiefiles/react-lottie-player';
 
-export const DynamicModel = (props: KeyWithAnyModel) => {
-  const modelData = props.errorList;
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  const dispatch = useDispatch();
-  const handlebuttonClick = () => {
-    if (props.errorList.error_type === "CancelApplication" || props.errorList.error_type === "cancelResume") {
-      if (
-        (getUrl.getParameterByName("SSCode") || getUrl.getParameterByName('transfer-token') ||  getUrl.getUpdatedStage()?.ccplChannel=== "IBK" || getUrl.getUpdatedStage()?.ccplChannel=== "MBNK") || 
-        (stageSelector && stageSelector[0] && stageSelector[0].stageInfo  && 
-          stageSelector[0].stageInfo.applicants && (stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IX" || stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IM"))
-      ) {
-        if (getUrl.getParameterByName("source") === "scm") {
-          //Ibanking redirection for app
-          window.location.href = `${process.env.REACT_APP_IBANKING_SC_MOBILE}`;
-        } else if(getUrl.getUpdatedStage()?.ccplChannel=== "MBNK" || getUrl.getParameterByName("channel") === "MBNK") {
-          const redirectUrl =  `${process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER}`;
-          window.location.href = redirectUrl;
-        } else {
-          redirectingToIbanking();
-        }
-      } else {
-        if(props.errorList.error_type === "cancelResume"){
-          window.location.href = `${process.env.REACT_APP_RESUME_URL}`;
-        }else{
-          window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`;
-        }
-      }
-    } else if (props.handlebuttonClick) {
-      props.handlebuttonClick();
-    } else {
-      dispatch(dispatchLoader(false));
-      dispatch(errorAction.getExceptionList([]));
-    }
+// Mock dependencies
+jest.mock('react-redux', () => ({
+  useDispatch: jest.fn(),
+  useSelector: jest.fn()
+}));
+
+jest.mock('../../../utils/common/change.utils', () => ({
+  getUrl: {
+    getParameterByName: jest.fn(),
+    getUpdatedStage: jest.fn()
+  }
+}));
+
+jest.mock('../../../services/common-service', () => ({
+  dispatchLoader: jest.fn(),
+  redirectingToIbanking: jest.fn()
+}));
+
+jest.mock('../../../utils/store/error-slice', () => ({
+  errorAction: {
+    getExceptionList: jest.fn()
+  }
+}));
+
+jest.mock('@lottiefiles/react-lottie-player', () => ({
+  Player: jest.fn(() => null)
+}));
+
+jest.mock('dompurify', () => ({
+  sanitize: jest.fn((content) => content)
+}));
+
+describe('DynamicModel', () => {
+  const mockDispatch = jest.fn();
+  const mockErrorList = {
+    error_type: 'CancelApplication',
+    error_header: 'Test Header',
+    errorList: [
+      { detail: 'Test error detail 1' },
+      { detail: 'Test error detail 2' }
+    ],
+    error_button: 'Test Button'
   };
 
-  const getMarkup = (content: any) => {
-    return {
-      __html: DOMPurify.sanitize(content),
-    };
-  };
+  beforeEach(() => {
+    (useDispatch as jest.Mock).mockReturnValue(mockDispatch);
+    (useSelector as jest.Mock).mockReturnValue([{ stageInfo: { applicants: {} } }]);
+    (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
+    (getUrl.getUpdatedStage as jest.Mock).mockReturnValue({});
+  });
 
-  return (
-    <>
-      {modelData && modelData && (
-        <div className="popup">
-          <div className="popup__container">
-            <div className="waring__icon">
-              <Player src={lottieSrc} className="player" loop autoplay />
-            </div>
-            <div className="popup__info">
-              {modelData.error_header && (
-                <>
-                  {modelData.errorList &&
-                    modelData.errorList.application_reference && (
-                      <div className="app__ref">
-                        APPLICATION NO:{" "}
-                        {modelData.errorList.application_reference}
-                      </div>
-                    )}
-                  <div className="popup__info__head">
-                    {modelData.error_header}
-                  </div>
-                </>
-              )}
-              <div className="popup__info__desc">
-                {modelData.errorList.map(
-                  (content: KeyWithAnyModel, index: number) => {
-                    return (
-                      <p key={`${content}${index}`}>
-                        {content.detail ? (
-                          <span
-                            dangerouslySetInnerHTML={getMarkup(content.detail)}
-                          />
-                        ) : (
-                          "Something went wrong!"
-                        )}
-                      </p>
-                    );
-                  }
-                )}
-                {modelData.error_button && (
-                  <p
-                    className="btn"
-                    onClick={() => handlebuttonClick()}
-                    key={`${modelData.error_button}`}
-                  >
-                    {modelData.error_button}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
-export default DynamicModel;
-Please write test cases using jest only for this method
+  it('renders without crashing', () => {
+    render(<DynamicModel errorList={mockErrorList} />);
+    expect(screen.getByText('Test Header')).toBeInTheDocument();
+  });
+
+  describe('handlebuttonClick', () => {
+    it('redirects to ibanking when error_type is CancelApplication and conditions met', () => {
+      (getUrl.getParameterByName as jest.Mock).mockImplementation((param) => 
+        param === 'SSCode' ? 'test' : null
+      );
+
+      render(<DynamicModel errorList={mockErrorList} />);
+      fireEvent.click(screen.getByText('Test Button'));
+      
+      expect(redirectingToIbanking).toHaveBeenCalled();
+    });
+
+    it('redirects to mobile ibanking when channel is MBNK', () => {
+      (getUrl.getUpdatedStage as jest.Mock).mockReturnValue({ ccplChannel: 'MBNK' });
+      delete window.location;
+      window.location = { href: '' } as any;
+
+      render(<DynamicModel errorList={mockErrorList} />);
+      fireEvent.click(screen.getByText('Test Button'));
+      
+      expect(window.location.href).toBe(process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER);
+    });
+
+    it('redirects to home page when error_type is CancelApplication and no ibanking conditions', () => {
+      delete window.location;
+      window.location = { href: '' } as any;
+
+      render(<DynamicModel errorList={mockErrorList} />);
+      fireEvent.click(screen.getByText('Test Button'));
+      
+      expect(window.location.href).toBe(process.env.REACT_APP_HOME_PAGE_URL);
+    });
+
+    it('redirects to resume URL when error_type is cancelResume', () => {
+      delete window.location;
+      window.location = { href: '' } as any;
+      const resumeError = { ...mockErrorList, error_type: 'cancelResume' };
+
+      render(<DynamicModel errorList={resumeError} />);
+      fireEvent.click(screen.getByText('Test Button'));
+      
+      expect(window.location.href).toBe(process.env.REACT_APP_RESUME_URL);
+    });
+
+    it('calls props.handlebuttonClick when provided', () => {
+      const mockHandleClick = jest.fn();
+      render(<DynamicModel errorList={mockErrorList} handlebuttonClick={mockHandleClick} />);
+      fireEvent.click(screen.getByText('Test Button'));
+      
+      expect(mockHandleClick).toHaveBeenCalled();
+    });
+
+    it('dispatches loader and error list when no specific conditions met', () => {
+      const genericError = { ...mockErrorList, error_type: 'GenericError' };
+      render(<DynamicModel errorList={genericError} />);
+      fireEvent.click(screen.getByText('Test Button'));
+      
+      expect(dispatchLoader).toHaveBeenCalledWith(false);
+      expect(errorAction.getExceptionList).toHaveBeenCalledWith([]);
+    });
+  });
+
+  describe('Rendering Logic', () => {
+    it('displays application reference when present', () => {
+      const errorWithRef = {
+        ...mockErrorList,
+        errorList: [{ application_reference: 'APP123' }, ...mockErrorList.errorList]
+      };
+      render(<DynamicModel errorList={errorWithRef} />);
+      
+      expect(screen.getByText('APPLICATION NO: APP123')).toBeInTheDocument();
+    });
+
+    it('renders multiple error details', () => {
+      render(<DynamicModel errorList={mockErrorList} />);
+      
+      expect(screen.getByText('Test error detail 1')).toBeInTheDocument();
+      expect(screen.getByText('Test error detail 2')).toBeInTheDocument();
+    });
+
+    it('shows default message when no detail provided', () => {
+      const errorWithoutDetail = {
+        ...mockErrorList,
+        errorList: [{}]
+      };
+      render(<DynamicModel errorList={errorWithoutDetail} />);
+      
+      expect(screen.getByText('Something went wrong!')).toBeInTheDocument();
+    });
+
+    it('does not render when modelData is falsy', () => {
+      const { container } = render(<DynamicModel errorList={null} />);
+      expect(container.firstChild).toBeNull();
+    });
+  });
+
+  describe('Lottie Player', () => {
+    it('renders the Lottie Player component', () => {
+      render(<DynamicModel errorList={mockErrorList} />);
+      expect(Player).toHaveBeenCalledWith(
+        expect.objectContaining({
+          src: expect.any(Object),
+          className: 'player',
+          loop: true,
+          autoplay: true
+        }),
+        {}
+      );
+    });
+  });
+});
