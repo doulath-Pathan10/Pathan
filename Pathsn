@@ -1,142 +1,122 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import SliderWithLimit from './SliderWithLimit';
-import Slider from '../slider/slider';
-import Model from '../model/model';
-import { store } from '../../../utils/store/store';
-import * as validateService from '../../../services/validation-service';
-import trustBankConstant from '../../../assets/_json/trust-bank.json';
+import React, { useEffect, useState } from "react";
+import { KeyWithAnyModel } from "../../../utils/model/common-model";
+import "./slider-with-limit.scss";
+import Slider from "../slider/slider";
+import { store } from "../../../utils/store/store";
+import { useDispatch } from "react-redux";
+import { isFieldUpdate } from "../../../utils/common/change.utils";
+import trustBankConstant from "../../../assets/_json/trust-bank.json";
+import validateService from "../../../services/validation-service";
+import Model from "../model/model";
 
-// Mock dependencies
-jest.mock('../slider/slider', () => jest.fn(({ options, updateSliderValue }) => (
-  <div className="mock-slider" onClick={() => updateSliderValue('5000')}>
-    Mock Slider
-  </div>
-)));
+const SliderWithLimit = (props: KeyWithAnyModel) => {
+  const dispatch = useDispatch();
+  const trustBank = store.getState().trustBank.trustBank;
+  const [showModel, setShowModel] = useState(false);
+  const [phoenixDetails, setPhoenixDetails] = useState({ minValue: 0, maxValue: 0, phoenixCustomerLimit: 0, offerApprovedAmount: 0 })
+  const [sliderValue, setsliderValue] = useState(0);
+  const [availableCredit, setAvailableCredit] = useState(0);
 
-jest.mock('../model/model', () => jest.fn(() => <div>Mock Model</div>));
-
-jest.mock('../../../utils/store/store', () => ({
-  getState: jest.fn(),
-  dispatch: jest.fn()
-}));
-
-jest.mock('../../../services/validation-service', () => ({
-  formateCurrency: jest.fn((value) => value)
-}));
-
-jest.mock('../../../utils/common/change.utils', () => ({
-  isFieldUpdate: jest.fn()
-}));
-
-describe('SliderWithLimit', () => {
-  const mockProps = {
-    data: {
-      logical_field_name: 'test_slider'
-    },
-    handleFieldDispatch: jest.fn(),
-    handleCallback: jest.fn()
-  };
-
-  const mockTrustBankState = {
-    trustBank: {
-      applicants: {
-        minimum_limit_amount_portable_a_1: '1000',
-        maximum_limit_amount_portable_a_1: '10000',
-        phoenix_customer_limit_a_1: '5000'
-      },
-      products: [{
-        offer_details: [{
-          approved_amount: '3000'
-        }]
-      }]
+  const updateSliderValue = (value: string) => {
+    props.handleFieldDispatch(props.data.logical_field_name, value);
+    dispatch(isFieldUpdate(props, value, props.data.logical_field_name));
+    setsliderValue(parseInt(value));
+    const amount = phoenixDetails.offerApprovedAmount !== 0 ? phoenixDetails.offerApprovedAmount : phoenixDetails.minValue
+    if(parseInt(value) <= amount){
+      props.handleCallback(props.data, "");
+    } else {
+      props.handleCallback(props.data, value);
     }
   };
 
-  beforeEach(() => {
-    (store.getState as jest.Mock).mockReturnValue(mockTrustBankState);
-    (validateService.formateCurrency as jest.Mock).mockImplementation(val => val);
-  });
+  useEffect(() => {
+    setAvailableCredit(phoenixDetails.phoenixCustomerLimit);
+    setsliderValue(phoenixDetails.minValue)
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[phoenixDetails.phoenixCustomerLimit, phoenixDetails.minValue])
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('renders without crashing', () => {
-    render(<SliderWithLimit {...mockProps} />);
-    expect(screen.getByText(trustBankConstant.sliderCreditLimitLabel)).toBeInTheDocument();
-  });
-
-  it('initializes with correct values from trustBank state', () => {
-    render(<SliderWithLimit {...mockProps} />);
-    
-    expect(screen.getByText('S$ 1000')).toBeInTheDocument();
-    expect(screen.getByText('S$ 10000')).toBeInTheDocument();
-    expect(screen.getByText('5000')).toBeInTheDocument();
-  });
-
-  it('updates slider value and calls callbacks', () => {
-    render(<SliderWithLimit {...mockProps} />);
-    
-    fireEvent.click(screen.getByText('Mock Slider'));
-    
-    expect(mockProps.handleFieldDispatch).toHaveBeenCalledWith('test_slider', '5000');
-    expect(mockProps.handleCallback).toHaveBeenCalled();
-  });
-
-  it('shows model when info icon is clicked', () => {
-    render(<SliderWithLimit {...mockProps} />);
-    
-    fireEvent.click(screen.getByRole('button', { name: '' })); // Clicking the info icon
-    expect(screen.getByText('Mock Model')).toBeInTheDocument();
-  });
-
-  it('calculates available credit correctly', () => {
-    render(<SliderWithLimit {...mockProps} />);
-    
-    // Initial available credit should be phoenixCustomerLimit (5000) minus 
-    // (sliderValue (1000) - offerApprovedAmount (3000)) = 5000 - (1000-3000) = 7000
-    expect(screen.getByText('7000')).toBeInTheDocument();
-  });
-
-  it('handles case when offerApprovedAmount is 0', () => {
-    const modifiedState = {
-      ...mockTrustBankState,
-      trustBank: {
-        ...mockTrustBankState.trustBank,
-        products: [{
-          offer_details: [{
-            approved_amount: '0'
-          }]
-        }]
+  useEffect(() => {
+    if(trustBank){
+      let approvedAmount = 0;
+      if (
+        trustBank.products &&
+        trustBank.products.length > 0 &&
+        trustBank.products[0].offer_details &&
+        trustBank.products[0].offer_details.length > 0
+      ) {
+        approvedAmount = trustBank.products[0].offer_details[0].approved_amount;
       }
-    };
-    (store.getState as jest.Mock).mockReturnValue(modifiedState);
-    
-    render(<SliderWithLimit {...mockProps} />);
-    
-    // Available credit should be phoenixCustomerLimit (5000) minus 
-    // (sliderValue (1000) - minValue (1000)) = 5000 - 0 = 5000
-    expect(screen.getByText('5000')).toBeInTheDocument();
-  });
+      setAvailableCredit(phoenixDetails.phoenixCustomerLimit);
+      setsliderValue(phoenixDetails.minValue)
+      setPhoenixDetails({ 
+        minValue: parseFloat(trustBank.applicants.minimum_limit_amount_portable_a_1) || 0,
+        maxValue: parseFloat(trustBank.applicants.maximum_limit_amount_portable_a_1) || 0,
+        phoenixCustomerLimit: parseFloat(trustBank.applicants.phoenix_customer_limit_a_1) || 0,
+        offerApprovedAmount: approvedAmount || 0
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  it('renders the "Find out more" link correctly', () => {
-    render(<SliderWithLimit {...mockProps} />);
-    
-    const link = screen.getByText(trustBankConstant.findOutMoreLabel);
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', process.env.REACT_APP_TRUST_LIMIT_FIND_OUT_MORE);
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noreferrer');
-  });
+  useEffect(() => {
+    const phinixLimit =
+      phoenixDetails.phoenixCustomerLimit -
+      (sliderValue -
+        (phoenixDetails.offerApprovedAmount !== 0 ? phoenixDetails.offerApprovedAmount : phoenixDetails.minValue));
+    setAvailableCredit(phinixLimit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliderValue]);
 
-  it('handles missing trustBank data gracefully', () => {
-    (store.getState as jest.Mock).mockReturnValue({ trustBank: null });
+  const getMarks = () => {
+    let marks: { [key: string]: any } = {};
+    marks[phoenixDetails.minValue] = `S$${phoenixDetails.minValue}`;
+    marks[phoenixDetails.maxValue] = `S$${phoenixDetails.maxValue}`;
+    return marks;
+  };
+
+  const options = {
+    min: phoenixDetails.minValue,
+    max: phoenixDetails.maxValue,
+    step: 500,
+    dots: true,
+    marks: getMarks(),
+  };
+
+  const handlePopupBackButton = () =>{
+    setShowModel(false);
+  }
+
+  const showInfo = () => {
+    setShowModel(true);
+  }
+  return (
+    <>
+    <div className="credit__limit__top">
+      <div className="credit__limit">
+        <div className="credit__limit__head">{trustBankConstant.sliderCreditLimitLabel}  <span className="infoIcon" onClick={showInfo}></span></div>
+        <div className="slider__amount">
+          S$ {validateService.formateCurrency(sliderValue.toFixed(2))}
+        </div>
+        <div className="availabe__credit">
+          S$ {validateService.formateCurrency(availableCredit.toFixed(2))}{" "}
+          <span>{trustBankConstant.sliderAvailabeCrdLmtLabel}</span>
+        </div>
+      </div>
+      <div className="rc-slider">
+        <Slider options={options} updateSliderValue={updateSliderValue} />
+      </div>
+      <div className="credit__limit__note">
+        {trustBankConstant.sliderCreditLimitNote}
+      </div>
+      <a rel="noreferrer" href={process.env.REACT_APP_TRUST_LIMIT_FIND_OUT_MORE} target="_blank" className="find-out-more" >{trustBankConstant.findOutMoreLabel}</a>
+      {showModel && (
+        <Model name="showTrustInfo" handlebuttonClick={handlePopupBackButton} />
+      )}
+      </div>
+    </>
     
-    render(<SliderWithLimit {...mockProps} />);
-    
-    // Should render with default/empty values
-    expect(screen.getByText('S$ 0')).toBeInTheDocument();
-    expect(screen.getByText('0')).toBeInTheDocument();
-  });
-});
+  );
+};
+
+export default SliderWithLimit;
+Please write test cases using jest with RTL
