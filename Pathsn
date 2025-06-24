@@ -1,273 +1,238 @@
-import Rules_bd_1 from './Rules_bd_1';
+import { json } from 'stream/consumers';
+import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import { store } from '../../utils/store/store';
 import rulesUtils from './rules.utils';
-import { authenticateType, getUrl } from '../../utils/common/change.utils';
 
-// Mock all dependencies
-jest.mock('./rules.utils', () => jest.fn(() => ({})));
-jest.mock('../../utils/common/change.utils', () => ({
-  authenticateType: jest.fn(),
-  getUrl: {
-    getParameterByName: jest.fn(),
-    getStageInfo: jest.fn()
-  }
-}));
-
-describe('Rules_bd_1', () => {
-  const mockProps = [[
-    {
-      field_set_name: 'Basic Information',
-      fields: [
-        { logical_field_name: 'full_name' },
-        { logical_field_name: 'email' },
-        { logical_field_name: 'mobile_number' },
-        { logical_field_name: 'account_currency_9' },
-        { logical_field_name: 'account_currency' },
-        { logical_field_name: 'contact_preference_casa' },
-        { logical_field_name: 'dsa_code' },
-        { logical_field_name: 'nationality' },
-        { logical_field_name: 'other_field' }
-      ]
-    },
-    {
-      field_set_name: '   ',
-      fields: [
-        { 
-          logical_field_name: 'product_field',
-          sub_product_code: ['prod1', 'prod2']
-        }
-      ]
-    }
-  ]];
-
-  const createStageInfo = (overrides = {}) => ({
-    application: {
-      source_system_name: '2'
-    },
-    products: [
-      { product_type: 'prod1', product_category_name: 'Category1', name: 'Product1' },
-      { product_type: 'prod2', product_category_name: 'Category2', name: 'Product2' }
-    ],
-    applicants: {
-      auth_mode_a_1: '',
-      account_currency_9_a_1: 'USD',
-      account_currency_a_1: 'USD',
-      account_currency_rwb_1_p_1: 'EUR',
-      account_currency_rwb_2_p_1: 'GBP'
-    },
-    ...overrides
-  });
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    localStorage.clear();
-    localStorage.setItem('products', JSON.stringify([
-      { product_type: 'prod1', product_category_name: 'Category1', name: 'Product1' },
-      { product_type: 'prod2', product_category_name: 'Category2', name: 'Product2' }
-    ]));
+const Rules_ad_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: []
+  };
+  const filteredFields:any = [];
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const FieldSetMap:any = {};
+ 
+    let defaultVisiblity:any= []
+    let hidhenFields:Array<string> = [];
+    let modifyVisibilityFields:Array<string> = [];
+    const repeatCount = stageInfo?.applicants.no_of_accounts_rwb_a_1? stageInfo?.applicants.no_of_accounts_rwb_a_1:1 ;
+    const additionalDetails =props[0].filter((fields:any)=> fields.field_set_name === "Additional Details");
+    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Additional Details"));
+    const name = products[0].product_category_name + " - " + products[0].name;
+    const TDProducts = stageInfo?.products.filter((product: any) => product?.product_category === 'TD');
     
-    (getUrl.getStageInfo as jest.Mock).mockReturnValue([{
-      stageId: 'bd-1',
-      stageInfo: createStageInfo()
-    }]);
-  });
+    /*istanbul ignore else*/
+    if(products.length>1){
+      /*istanbul ignore else*/
+      if(filteredFields[0]?.[0]?.field_set_name === 'Additional Details'){
+      filteredFields[0].shift() 
+      filteredFields[0].unshift({
+        field_set_name: `${name} Additional Details`,
+        fields: props[0][3].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}`,
+          rwb_index: 1,
+          mandatory: "true",
+        })),
+      })
+    }
+    }
 
-  describe('iBanking Authentication', () => {
-    it('should set correct validation for iBanking auth', () => {
-      const stageInfo = createStageInfo({
-        applicants: {
-          auth_mode_a_1: 'IX'
+    const filteredBankingServicesDetails = props[0].filter((fields:any)=> fields.field_set_name === "Banking Services");
+    /*istanbul ignore else*/
+    if(filteredFields[0].length > 0){
+      /*istanbul ignore else*/
+      if(products.length>1){
+      const name = products[0].product_category_name + " - " + products[0].name;
+    if((stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="318"))||(stageInfo.products.some((p:any)=>p.product_type ==="339") && stageInfo.products.some((p:any)=>p.product_type ==="318") || TDProducts)){
+      filteredFields[0].push(
+      {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
+        ![
+          'debit_card_request_rwb','issuance_type',
+          'embossed_dc_name_rwb','existing_account_no_dc',
+          "cheque_book_request_rwb"
+        ].includes(f.logical_field_name)).map((f:any)=>({
+        ...f,
+        logical_field_name:`${f.logical_field_name}`,
+        rwb_index: 2,
+        }))});}
+        else if((stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="516"))||(stageInfo.products.some((p:any)=>p.product_type ==="504") && stageInfo.products.some((p:any)=>p.product_type ==="507"))){
+          filteredFields[0].push(
+            {field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.filter((f:any)=>
+              ![
+                'debit_card_request_rwb','issuance_type',
+                'embossed_dc_name_rwb',
+                "cheque_book_request_rwb"
+              ].includes(f.logical_field_name)).map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}`,
+              rwb_index: 2,
+              }))});
+
         }
-      });
-      
-      (getUrl.getStageInfo as jest.Mock).mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: stageInfo
-      }]);
+        else{
+          filteredFields[0].push({field_set_name: `${name} Banking Services`, fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
+            ...f,
+            logical_field_name:`${f.logical_field_name}`,
+            rwb_index: 2,
+          })),})
 
-      const result = Rules_bd_1(mockProps, stageInfo);
-      
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          nonEditable: [expect.arrayContaining([
-            "full_name",
-            "email",
-            "mobile_number",
-            "account_currency_9",
-            "account_currency",
-            "contact_preference_casa"
-          ])],
-          hidden: [expect.arrayContaining(['other_field'])]
-        })
-      );
-    });
-  });
-
-  describe('MyInfo/Resume Authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('myinfo');
-      (getUrl.getParameterByName as jest.Mock).mockReturnValue('true');
-    });
-
-    it('should set correct validation for MyInfo auth', () => {
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          nonEditable: [expect.arrayContaining([
-            "full_name",
-            "email",
-            "mobile_number",
-            "residential_address",
-            "account_currency_9",
-            "account_currency"
-          ])],
-          hidden: [expect.arrayContaining([
-            "dsa_code",
-            "nationality",
-            "country_of_birth"
-          ])]
-        })
-      );
-    });
-
-    it('should handle empty account currency fields', () => {
-      const stageInfo = createStageInfo({
-        applicants: {
-          account_currency_9_a_1: '',
-          account_currency_a_1: ''
         }
+    ;}
+     else{
+        filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields});
+      }
+     }
+     /*istanbul ignore else*/
+     if(repeatCount){
+      /*istanbul ignore else*/
+     if(stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307")||stageInfo.products.some((p:any)=>p.product_type ==="324")){
+    for(let i =0;i<repeatCount - 1 ;i++){
+      filteredFields[0].push({field_set_name: "Additional Details", fields: additionalDetails[0].fields.map((f:any)=>({
+        ...f,
+        logical_field_name:`${f.logical_field_name}_${i+2}`,
+        rwb_index: i+2,
+      }))});
+      /*istanbul ignore else*/
+      if(filteredFields[0].length > 0){
+         filteredFields[0].push({field_set_name: "Banking Services", fields: filteredBankingServicesDetails[0].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_${i+2}`,
+          rwb_index: i+2,
+         }))});
+       }
+      
+    }
+/*istanbul ignore else*/
+    if((stageInfo.products.some((p:any)=>p.product_type ==="310")||stageInfo.products.some((p:any)=>p.product_type ==="307"))){
+      hidhenFields.push("cheque_book_request_rwb","cheque_book_request_rwb_2","cheque_book_request_rwb_3","cheque_book_request_rwb_4","cheque_book_request_rwb_5","cheque_book_request_rwb_6","cheque_book_request_rwb_7","cheque_book_request_rwb_8","reason_for_account_rwb","Initial_deposit_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
+      ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
+      ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
+       }
+   
+       if(stageInfo.products.some((p:any)=>p.product_type ==="307")){
+        hidhenFields.push("reason_for_account_rwb","source_of_fund_rwb","reason_for_account_rwb_2","Initial_deposit_rwb_2","source_of_fund_rwb_2","reason_for_account_rwb_3","Initial_deposit_rwb_3","source_of_fund_rwb_3"
+        ,"reason_for_account_rwb_4","Initial_deposit_rwb_4","source_of_fund_rwb_4","reason_for_account_rwb_5","Initial_deposit_rwb_5","source_of_fund_rwb_5"
+        ,"reason_for_account_rwb_6","Initial_deposit_rwb_6","source_of_fund_rwb_6","reason_for_account_rwb_7","Initial_deposit_rwb_7","source_of_fund_rwb_7","reason_for_account_rwb_8","Initial_deposit_rwb_8","source_of_fund_rwb_8")
+         }
+}
+}
+
+if(products.length>1){
+      for(let i =0;i<products.length-1 ;i++){
+        const name = products[i].product_category_name + " - " + products[i].name;
+        if((stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="310"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="307") && stageInfo.products.some((p:any)=>p.product_type ==="329"))||(stageInfo.products.some((p:any)=>p.product_type ==="337") && stageInfo.products.some((p:any)=>p.product_type ==="339"))
+        ||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="504"))||(stageInfo.products.some((p:any)=>p.product_type ==="514") && stageInfo.products.some((p:any)=>p.product_type ==="507")) || TDProducts){
+        filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_2`,
+          rwb_index: 2,
+          mandatory: "true",
+        }))},
+        {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
+          ![
+            'debit_card_request_rwb','issuance_type',
+            'embossed_dc_name_rwb','existing_account_no_dc',
+            "cheque_book_request_rwb","cheque_book_request_rwb_2"
+          ].includes(f.logical_field_name)).map((f:any)=>({
+          ...f,
+          logical_field_name:`${f.logical_field_name}_2`,
+          rwb_index: 2,
+          }))});}
+          else if((stageInfo.products.some((p:any)=>p.product_type ==="504")&& stageInfo.products.some((p:any)=>p.product_type ==="507"))||stageInfo.products.some((p:any)=>p.product_type ==="516") && stageInfo.products.some((p:any)=>p.product_type ==="507") || TDProducts){
+            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              mandatory: "true",
+            }))},
+            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.filter((f:any)=>
+              ![
+                'debit_card_request_rwb','issuance_type', 
+                'embossed_dc_name_rwb',
+                "cheque_book_request_rwb","cheque_book_request_rwb_2"
+              ].includes(f.logical_field_name)).map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              }))});
+
+          }
+          else{
+            filteredFields[0].push({field_set_name: `${name} Additional Details`, fields: props[0][3].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+              mandatory: "true",
+            }))},
+            {field_set_name: `${name} Banking Services`, fields: props[0][4].fields.map((f:any)=>({
+              ...f,
+              logical_field_name:`${f.logical_field_name}_2`,
+              rwb_index: 2,
+            }))});
+
+          }
+        }}
+        /*istanbul ignore else*/
+     if(stageInfo.products[0].product_category === "TD" && filteredFields[0].length > 0){
+       const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
+       
+      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
+      
+      filteredFields[0].forEach((item:any, index: number) => {
+        item.fields = item.fields.map((field:any) => {
+          /*istanbul ignore else*/
+          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
+            return {
+              ...field,
+              component_type: "SelectionBox" // text to selection box converted
+            };
+          }
+          return field;
+        });
       });
-      
-      (getUrl.getStageInfo as jest.Mock).mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: stageInfo
-      }]);
 
-      const result = Rules_bd_1(mockProps, stageInfo);
-      
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          hidden: [expect.arrayContaining([
-            "account_currency_9",
-            "account_currency"
-          ])]
-        })
-      );
-    });
 
-    it('should include RWB account currencies in nonEditable', () => {
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          nonEditable: [expect.arrayContaining([
-            "account_currency_rwb_1",
-            "account_currency_rwb_2"
-          ])]
-        })
-      );
-    });
-  });
 
-  describe('Manual Authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-    });
+      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
+      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb","td_fund_account_etc_currency","td_fund_account_new_currency")
+    }
+    if(stageInfo.products.length>1 && TDProducts){
+      const filteredTimeDepositDetails = props[0].filter((fields:any)=> fields.field_set_name === "Time Deposit Details");
+       
+      filteredFields[0].push({field_set_name: "Time Deposit Details", fields: filteredTimeDepositDetails[0].fields});
+     
+      filteredFields[0].forEach((item:any, index: number) => {
+        item.fields = item.fields.map((field:any) => {
+          if (field.logical_field_name === "td_product_currency_value" && field.component_type === "Text") {
+            return {
+              ...field,
+              component_type: "SelectionBox" // text to selection box converted
+            };
+          }
+          return field;
+        });
+      });
 
-    it('should set correct validation for manual auth', () => {
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          nonEditable: [expect.arrayContaining([
-            "full_name",
-            "email",
-            "mobile_number",
-            "residential_status"
-          ])],
-          hidden: [expect.arrayContaining([
-            "ownership_status",
-            "education_level",
-            "nationality"
-          ])]
-        })
-      );
-    });
-  });
 
-  describe('Default Authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('other');
-    });
+      hidhenFields.push("debit_card_request_rwb", "existing_account_no_dc", "issuance_type");
+      modifyVisibilityFields.push("td_product_currency_value", "td_depoist_amount", "td_term_type", "td_value_date", "td_term_value_days", "td_term_value_months", "td_term_value_years", "td_fund_account_choice", "td_fund_account_etc", "td_fund_account_new", "td_rollover", "td_sign_verified_debiting_casa", "td_sign_verified_debiting_casa", "td_get_rate", "td_client_rate", "td_all_in_rate", "embossed_dc_name_rwb","td_fund_account_etc_currency","td_fund_account_new_currency")
+     /*istanbul ignore else*/
+      if(stageInfo?.products.filter((product: any) => product?.product_type.includes('337')) ){
+        hidhenFields.push("embossed_dc_name_rwb");
+      };
+    }
+    /*istanbul ignore else*/
+    if(stageInfo.products[0].product_category === 'CA' && (stageInfo.products.some((p:any)=>p.product_type ==="317") || stageInfo.products.some((p:any)=>p.product_type ==="314"))){
+      hidhenFields.push("reason_for_account_rwb")
+    }
+    hidhenFields.push("Initial_deposit_rwb");
+    validationObj.hidden!.push(hidhenFields);
+    validationObj.modifyVisibility!.push(modifyVisibilityFields);
+    validationObj.modifyVisibility!.push(defaultVisiblity)
+    
+      return rulesUtils(filteredFields, validationObj);
+}
 
-    it('should set default hidden fields', () => {
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          hidden: [expect.arrayContaining([
-            "see_other_myInfo_details",
-            "see_other_myInfo_details_consent"
-          ])]
-        })
-      );
-    });
-  });
-
-  describe('Field Grouping Logic', () => {
-    it('should group fields by product category and name', () => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-      
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      
-      // Verify the field grouping logic by checking the props passed to rulesUtils
-      const [updatedProps] = (rulesUtils as jest.Mock).mock.calls[0];
-      expect(updatedProps.length).toBeGreaterThan(1);
-      expect(updatedProps.some((field: any) => field.field_set_name.includes('Category1 - Product1'))).toBe(true);
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle empty products array', () => {
-      localStorage.setItem('products', '[]');
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      expect(result).toBeDefined();
-    });
-
-    it('should handle missing field_set_name', () => {
-      const modifiedProps = [[{ fields: [] }]];
-      const result = Rules_bd_1(modifiedProps, createStageInfo());
-      expect(result).toBeDefined();
-    });
-
-    it('should handle empty stageInfo', () => {
-      const result = Rules_bd_1(mockProps, {} as any);
-      expect(result).toBeDefined();
-    });
-
-    it('should handle missing applicants', () => {
-      const stageInfo = createStageInfo();
-      delete stageInfo.applicants;
-      (getUrl.getStageInfo as jest.Mock).mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: stageInfo
-      }]);
-      const result = Rules_bd_1(mockProps, stageInfo);
-      expect(result).toBeDefined();
-    });
-
-    it('should handle resume authentication', () => {
-      (authenticateType as jest.Mock).mockReturnValue('resume');
-      (getUrl.getParameterByName as jest.Mock).mockReturnValue('false');
-      
-      const result = Rules_bd_1(mockProps, createStageInfo());
-      expect(result).toBeDefined();
-    });
-  });
-});
+export default Rules_ad_1;
