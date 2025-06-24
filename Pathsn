@@ -1,251 +1,151 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
-import Text from './Text';
+import { authenticateType, getUrl } from "../../utils/common/change.utils";
+import {
+  KeyWithAnyModel,
+  ValidationObjModel,
+} from "../../utils/model/common-model";
+import rulesUtils from "./rules.utils";
 
-// Mock the redux store
-const mockStore = configureStore({
-  reducer: {
-    stages: () => ({
-      stages: [{
-        stageId: 'bd-1',
-        stageInfo: {
-          applicants: {}
-        }
-      }],
-      userInput: {
-        applicants: {}
+const Rules_bd_1 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
+  const auth = authenticateType();
+  const isMyInfoVirtual = getUrl.getParameterByName("isMyInfoVirtual");
+  const stageSelector = getUrl.getStageInfo()[0];
+  const applicantsSelector = stageSelector.stageInfo.applicants;
+  const fieldSet = props[0].filter((fields:any)=> fields.field_set_name === 'Basic Information');
+  const products = JSON.parse(localStorage.getItem('products') || '[]');
+  const filteredFields = props[0].filter((fields: any) => fields.field_set_name === "   ");
+  filteredFields[0]?.fields.map((product: any) => {
+    products.forEach((prod: any) => {
+      /*istanbul ignore else*/
+      if (product.sub_product_code.includes(prod.product_type)) {
+        filteredFields.push({
+          field_set_name: prod.product_category_name + " - " + prod.name,
+          fields: [product]
+        });
       }
-    }),
-    fielderror: () => ({
-      error: []
-    }),
-    postalCode: () => ({}),
-    alias: () => ({}),
-    lastAccessed: () => ({})
-  }
-});
-
-// Mock sessionStorage
-const mockSessionStorage = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value.toString();
-    },
-    clear: () => {
-      store = {};
-    }
+    });
+  });
+  fieldSet.push(...filteredFields);
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: [],
   };
-})();
+  let defaultVisiblity:any= []
+  //ibanking back nav issue fix
+  if (stageSelector.stageInfo.applicants['auth_mode_a_1'] === 'IX') {
+    const ibankingFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "account_currency_9",
+      "account_currency",
+      "contact_preference_casa"
+    ];
 
-Object.defineProperty(window, 'sessionStorage', {
-  value: mockSessionStorage
-});
+    validationObj.nonEditable.push(ibankingFields);
 
-// Mock URL functions
-jest.mock('../../../utils/common/change.utils', () => ({
-  ...jest.requireActual('../../../utils/common/change.utils'),
-  getUrl: {
-    getParameterByName: jest.fn(() => null),
-    getJourneyType: jest.fn(() => null),
-    getUpdatedStage: jest.fn(() => ({ updatedStageInputs: [] }))
-  },
-  authenticateType: jest.fn(() => 'manual'),
-  fieldIdAppend: jest.fn((props) => props.data.logical_field_name + '_a_1'),
-  fieldError: jest.fn(() => false),
-  isFieldUpdate: jest.fn(),
-  isFieldValueUpdate: jest.fn()
-}));
+    let hiddenFields: any[] = [];
 
-// Mock services
-jest.mock('../../../services/validation-service', () => ({
-  allowOnlyCharacter: jest.fn()
-}));
+    fieldSet.forEach((field: KeyWithAnyModel) => {
+      field.fields.forEach((fieldName: KeyWithAnyModel) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        ibankingFields.indexOf(fieldName["logical_field_name"]) === -1
+          ? hiddenFields.push(fieldName["logical_field_name"])
+          : "";
+      });
+    });
 
-const mockProps = {
-  data: {
-    logical_field_name: 'test_field',
-    rwb_label_name: 'Test Field',
-    mandatory: 'No',
-    type: 'text',
-    length: 50,
-    min_length: 3,
-    regex: '^[a-zA-Z ]+$',
-    hide_remove_btn: false,
-    editable: true,
-  },
-  handleCallback: jest.fn(),
+    validationObj.hidden!.push(hiddenFields);
+  }
+
+  //Adding resume here, incase of manual flow this condition has to be modified.
+  else if (
+    stageInfo.application.source_system_name === "2" &&
+    (auth === "myinfo" || isMyInfoVirtual === "true" || auth === "resume")
+  ) {
+
+    let hiddenFields = [
+      "dsa_code",
+      "nationality",
+      "country_of_birth",
+      "contact_preference",
+      "gender",
+      "marital_status",
+      "nationality_add",
+      "other_name_or_alias",
+      "education_level",
+      "pass_exp_dt",
+      "mode_of_operation"
+    ];
+    /*istanbul ignore else */
+    if (stageSelector.stageId === 'bd-1' && (stageSelector.stageInfo.applicants['account_currency_9_a_1'] === '' || stageSelector.stageInfo.applicants['account_currency_a_1'] === '')) {
+      hiddenFields.push('account_currency_9', 'account_currency');
+    }
+    validationObj.hidden!.push(hiddenFields);
+    const nonEditableFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      "ownership_status",
+      "account_currency_9",
+      "account_currency",
+      "residency_status",
+      "NRIC",
+      "passport_no"
+    ];
+    /*istanbul ignore else*/
+    if (stageSelector.stageId === 'bd-1' && Object.keys(applicantsSelector).filter(key =>key.startsWith('account_currency_rwb_'))) {
+      const accountCurrency:any = Object.keys(applicantsSelector).filter(key =>key.startsWith('account_currency_rwb_'));
+      accountCurrency.forEach((acctcurrency:any) => nonEditableFields.push(acctcurrency.split('_p_1')[0]))
+    }
+    validationObj.nonEditable.push(nonEditableFields);
+  } else if (auth === "manual") {
+    const hiddenFields = [
+      "ownership_status",
+      "education_level",
+      "nationality",
+      "nationality_add",
+      "country_of_birth",
+      "contact_preference",
+      "other_name_or_alias",
+      "education_level",
+      "gender",
+      "marital_status",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      'mode_of_operation',
+      "pass_exp_dt",
+      "detailed_full_name"
+    ];
+    const nonEditableFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "residential_status",
+      "account_currency_9",
+      "account_currency",
+      "residency_status",
+      "NRIC",
+      "passport_no"
+    ];
+    validationObj.nonEditable.push(nonEditableFields);
+    validationObj.hidden!.push(hiddenFields);
+  } else {
+    const hiddenFields = [
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+    ];
+    validationObj.hidden!.push(hiddenFields);
+  }
+  validationObj.modifyVisibility!.push(defaultVisiblity)
+  const updatedAccountCurrencyFields = fieldSet.filter((fields: any) => fields.field_set_name !== "   ");
+  return rulesUtils([updatedAccountCurrencyFields], validationObj);
 };
 
-describe('Text Component', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    window.sessionStorage.setItem('currentStage', '1');
-  });
+export default Rules_bd_1;
 
-  test('renders basic text input', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-
-    expect(screen.getByLabelText('Test Field')).toBeInTheDocument();
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  test('handles input change', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'Test' } });
-
-    expect(input).toHaveValue('Test');
-    expect(mockProps.handleCallback).toHaveBeenCalled();
-  });
-
-  test('shows error for invalid input', () => {
-    render(
-      <Provider store={mockStore}>
-        <Text {...mockProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '123' } }); // Doesn't match regex
-    fireEvent.blur(input);
-
-    expect(screen.getByText(/patterns Test Field/)).toBeInTheDocument();
-  });
-
-  test('shows error for empty mandatory field', () => {
-    const mandatoryProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        mandatory: 'Yes'
-      }
-    };
-
-    render(
-      <Provider store={mockStore}>
-        <Text {...mandatoryProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: '' } });
-    fireEvent.blur(input);
-
-    expect(screen.getByText(/cannot be empty/)).toBeInTheDocument();
-  });
-
-  test('displays character counter for embossed name fields', () => {
-    const embossedProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'embossed_name'
-      }
-    };
-
-    render(
-      <Provider store={mockStore}>
-        <Text {...embossedProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'Test' } });
-
-    expect(screen.getByText('4/19')).toBeInTheDocument();
-  });
-
-  test('disables input when not editable', () => {
-    const nonEditableProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        editable: false
-      }
-    };
-
-    render(
-      <Provider store={mockStore}>
-        <Text {...nonEditableProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    expect(input).toBeDisabled();
-  });
-
-  test('shows remove button for alias fields', () => {
-    const aliasProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'alias_2'
-      }
-    };
-
-    render(
-      <Provider store={mockStore}>
-        <Text {...aliasProps} />
-      </Provider>
-    );
-
-    expect(screen.getByRole('button')).toBeInTheDocument();
-  });
-
-  test('validates email fields correctly', () => {
-    const emailProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'per_email_2',
-        regex: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$'
-      }
-    };
-
-    render(
-      <Provider store={mockStore}>
-        <Text {...emailProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    
-    // Test invalid email
-    fireEvent.change(input, { target: { value: 'invalid-email' } });
-    expect(screen.getByText(/Test Field must contain/)).toBeInTheDocument();
-  });
-
-  test('handles NRIC validation', () => {
-    const nricProps = {
-      ...mockProps,
-      data: {
-        ...mockProps.data,
-        logical_field_name: 'NRIC',
-        regex: '^[STFG]\\d{7}[A-Z]$'
-      }
-    };
-
-    render(
-      <Provider store={mockStore}>
-        <Text {...nricProps} />
-      </Provider>
-    );
-
-    const input = screen.getByLabelText('Test Field');
-    fireEvent.change(input, { target: { value: 'S1234567A' } });
-    expect(screen.getByText('Please Enter Valid NRIC')).toBeInTheDocument();
-  });
-});
+Please write test cases using jest with RTL
