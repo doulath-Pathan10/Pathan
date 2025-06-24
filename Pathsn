@@ -1,239 +1,135 @@
-import Rules_bd_3 from './Rules_bd_3';
-import rulesUtils from './rules.utils';
-import { getUrl } from '../../utils/common/change.utils';
+import { AppDispatch } from "../../services/common-service";
+import { FindIndex } from "../../utils/common/change.utils";
+import { KeyWithAnyModel,StageDetails,StoreModel,taxStoreModel } from "../../utils/model/common-model";
+import { fieldErrorAction } from "../../utils/store/field-error-slice";
+import { stagesAction } from "../../utils/store/stages-slice";
+import { taxAction } from "../../utils/store/tax-slice";
+import { getUrl } from "../../utils/common/change.utils";
+import { useSelector } from "react-redux";
 
-// Mock dependencies
-jest.mock('./rules.utils', () => jest.fn(() => ({})));
-jest.mock('../../utils/common/change.utils', () => ({
-  getUrl: {
-    getJourneyType: jest.fn(),
-    getParameterByName: jest.fn()
-  }
-}));
+export const getFields = (
+  getStages: Array<StageDetails>,
+  taxSelector: taxStoreModel,
+  action: string,
+  applicantsSelectors:KeyWithAnyModel
 
-describe('Rules_bd_3', () => {
-  const baseProps = [
-    [
-      {
-        field_set_name: 'Employment Details',
-        fields: [{ logical_field_name: 'employment_field' }]
-      },
-      {
-        field_set_name: 'Office Address (Optional)',
-        fields: [{ logical_field_name: 'office_address_field' }]
-      },
-      {
-        field_set_name: 'Existing Contact Details',
-        fields: [{ logical_field_name: 'existing_contact_field' }]
-      },
-      {
-        field_set_name: 'Additional Contact Details',
-        fields: [{ logical_field_name: 'additional_contact_field' }]
-      },
-      {
-        field_set_name: 'Prefered Contact For Each Clasification',
-        fields: [{ logical_field_name: 'preferred_contact_field' }]
-      },
-      {
-        field_set_name: 'Select Primary Contact under Mobile Phone',
-        fields: [{ logical_field_name: 'mobile_primary_field' }]
-      },
-      {
-        field_set_name: 'Select Primary Contact under email',
-        fields: [{ logical_field_name: 'email_primary_field' }]
-      },
-      {
-        field_set_name: 'Select Primary Contact under Residential Telephone No.',
-        fields: [{ logical_field_name: 'residential_primary_field' }]
-      },
-      {
-        field_set_name: 'Select Primary Contact under Office No.',
-        fields: [{ logical_field_name: 'office_primary_field' }]
-      },
-      {
-        field_set_name: 'For Internal Use',
-        fields: [{ logical_field_name: 'internal_use_field' }]
-      },
-      {
-        field_set_name: 'Original Sighted',
-        fields: [{ logical_field_name: 'original_sighted_field' }]
-      },
-      {
-        field_set_name: 'Credit Card Details',
-        fields: [{ logical_field_name: 'credit_card_field' }]
+): any => {
+  return (dispatch: AppDispatch) => {
+    let fields: Array<KeyWithAnyModel> | undefined = getStages[0].stageInfo.fieldmetadata.data.stages[1].fields;
+    let newFileds: Array<KeyWithAnyModel> = [];
+    let newFieldsArray: Array<string> = [];
+    const journeyType = getUrl.getJourneyType();
+    const applicantsSelector = applicantsSelectors
+
+    let getClonedField = (logical_field_name: string) => {
+      if (fields) {
+        let field = fields.find(
+          fieldData => fieldData.logical_field_name === logical_field_name
+        );
+        if (field && field.logical_field_name) {
+          return { ...field };
+        } else {
+          return null;
+        }
+      } else {
+        return null;
       }
-    ]
-  ];
+    };
 
-  const createStageInfo = (overrides = {}) => ({
-    products: [
-      { product_category: 'CA' } // Default to Current Account
-    ],
-    application: {
-      journey_type: ''
-    },
-    ...overrides
-  });
+    taxSelector.fields.forEach((field: string) => {
+        
+      let no_of_tax_residency_country = getClonedField("no_of_tax_residency_country");
+      let country_of_tax_residence = getClonedField("country_of_tax_residence");
+      let tax_id_no =getClonedField("tax_id_no");
+      let crs_reason_code= getClonedField("crs_reason_code");
+      let crs_comments = getClonedField("crs_comments");
+      if (field ==="no_of_tax_residency_country"&& no_of_tax_residency_country) {
+        no_of_tax_residency_country.logical_field_name = field;
+        no_of_tax_residency_country.component_type = "Selection Box";
+        no_of_tax_residency_country.rwb_label_name = no_of_tax_residency_country.rwb_label_name;
+        if (journeyType) {
+            no_of_tax_residency_country.hide_remove_btn = true;
+        }
+        newFileds.push(no_of_tax_residency_country);
+        newFieldsArray.push(no_of_tax_residency_country.logical_field_name);
+      }
+      else if((field ==="country_of_tax_residence_1"||field ==="country_of_tax_residence_2"||field ==="country_of_tax_residence_3"||field ==="country_of_tax_residence_4")&& country_of_tax_residence){
+        country_of_tax_residence.logical_field_name=field;
+        country_of_tax_residence.component_type = "Selection Box";
+        country_of_tax_residence.rwb_label_name = country_of_tax_residence.rwb_label_name;
+      newFileds.push(country_of_tax_residence);
+      newFieldsArray.push(country_of_tax_residence.logical_field_name);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (getUrl.getJourneyType as jest.Mock).mockReturnValue('');
-  });
-
-  describe('Field Grouping Logic', () => {
-    it('should group all standard fields', () => {
-      const result = Rules_bd_3(baseProps, createStageInfo());
-      
-      const [filteredFields] = (rulesUtils as jest.Mock).mock.calls[0];
-      expect(filteredFields[0].length).toBe(8); // All standard fields except journey-specific ones
+      }
+      else if((field ==="tax_id_no_1"||field==="tax_id_no_2"||field==="tax_id_no_3"||field==="tax_id_no_4")&& tax_id_no){
+        tax_id_no.logical_field_name=field;
+        tax_id_no.component_type = "Text";
+        tax_id_no.rwb_label_name = tax_id_no.rwb_label_name;
+        if (journeyType) {
+          tax_id_no.hide_remove_btn = true;
+      }
+      newFileds.push(tax_id_no);
+      newFieldsArray.push(tax_id_no.logical_field_name);
+    }
+    else if((field ==="crs_reason_code_1"||field ==="crs_reason_code_2"||field ==="crs_reason_code_3"||field ==="crs_reason_code_4")&& crs_reason_code){
+      crs_reason_code.logical_field_name=field;
+      crs_reason_code.component_type = "Selection Box";
+      crs_reason_code.rwb_label_name = crs_reason_code.rwb_label_name;
+      if (journeyType) {
+        crs_reason_code.hide_remove_btn = true;
+    }
+    newFileds.push(crs_reason_code);
+    newFieldsArray.push(crs_reason_code.logical_field_name);
+  }
+  else if((field ==="crs_comments_1"||field ==="crs_comments_2"||field ==="crs_comments_3"||field ==="crs_comments_4")&& crs_comments){
+    crs_comments.logical_field_name=field;
+    crs_comments.component_type = "Text";
+    crs_comments.rwb_label_name = crs_comments.rwb_label_name;
+  if (journeyType) {
+      crs_comments.hide_remove_btn = true;
+  }
+   newFileds.push(crs_comments);
+  newFieldsArray.push(crs_comments.logical_field_name);
+  
+}
     });
-
-    it('should include NTC-specific fields for CA products', () => {
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
-      const stageInfo = createStageInfo({
-        products: [{ product_category: 'CA' }]
-      });
-
-      const result = Rules_bd_3(baseProps, stageInfo);
-      const [filteredFields] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(filteredFields[0].some((f: any) => 
-        f.field_set_name === 'Select Primary Contact under Residential Telephone No.'
-      )).toBe(true);
-    });
-
-    it('should unshift Credit Card Details for ECC journey', () => {
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ECC');
-      const result = Rules_bd_3(baseProps, createStageInfo());
-      
-      const [filteredFields] = (rulesUtils as jest.Mock).mock.calls[0];
-      expect(filteredFields[0][0].field_set_name).toBe('Credit Card Details');
-    });
-  });
-
-  describe('Default Visibility Rules', () => {
-    it('should set correct default visibility for contact fields', () => {
-      const result = Rules_bd_3(baseProps, createStageInfo());
-      const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(validationObj.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'existing_personal_email_co1',
-          'existing_office_email_em1',
-          'per_email_2',
-          'office_email_1'
-        ])
+if (newFieldsArray.length > 0) {
+      dispatch(fieldErrorAction.getMandatoryFields(newFieldsArray));
+      const valObj:any={
+        "no_of_tax_residency_country_a_1": "",
+        "country_of_tax_residence_1_a_1": "",
+        "country_of_tax_residence_2_a_1": "",
+        "country_of_tax_residence_3_a_1": "",
+        "country_of_tax_residence_4_a_1": "",
+        "tax_id_no_1_a_1":"",
+        "tax_id_no_2_a_1":"",
+        "tax_id_no_3_a_1":"",
+        "tax_id_no_4_a_1":"",
+        "crs_reason_code_1_a_1":"",
+        "crs_reason_code_2_a_1":"",
+        "crs_reason_code_3_a_1":"",
+        "crs_reason_code_4_a_1":"",
+        "crs_comments_1_a_1":"",
+        "crs_comments_2_a_1":"",
+        "crs_comments_3_a_1":"",
+        "crs_comments_4_a_1":"",
+      }
+      for(let key in valObj) {
+        if(applicantsSelector[key]!==""&&applicantsSelector[key]!==undefined){
+             valObj[key] = applicantsSelector[key];
+        }else{
+          delete valObj[key]
+        }
+    }
+     dispatch(
+        stagesAction.removeAddToggleField({
+          removeFields: [],
+          newFields: newFieldsArray,
+          value: valObj
+        })
       );
-    });
-
-    it('should set correct default visibility for internal use fields', () => {
-      const result = Rules_bd_3(baseProps, createStageInfo());
-      const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(validationObj.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'sourcing_id_2',
-          'sales_id_2'
-        ])
-      );
-    });
-  });
-
-  describe('Product Category Specific Rules', () => {
-    it('should hide specific fields for SA products', () => {
-      const stageInfo = createStageInfo({
-        products: [{ product_category: 'SA' }]
-      });
-      const result = Rules_bd_3(baseProps, stageInfo);
-      const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(validationObj.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'credit_limit_consent',
-          'myinfo_data_cli',
-          'ofc_postal_other_code'
-        ])
-      );
-    });
-
-    it('should set assessment fields for PL/CC products with NTC journey', () => {
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('NTC');
-      const stageInfo = createStageInfo({
-        products: [{ product_category: 'PL' }],
-        application: { journey_type: 'NTC' }
-      });
-
-      const result = Rules_bd_3(baseProps, stageInfo);
-      const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(validationObj.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'year_of_assessment_fff_1',
-          'annual_income_fff_1'
-        ])
-      );
-      expect(validationObj.nonEditable[0]).toEqual(
-        expect.arrayContaining([
-          'annual_income_fff_1',
-          'residential_address'
-        ])
-      );
-    });
-
-    it('should set assessment fields for PL/CC products without NTC journey', () => {
-      const stageInfo = createStageInfo({
-        products: [{ product_category: 'CC' }]
-      });
-
-      const result = Rules_bd_3(baseProps, stageInfo);
-      const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(validationObj.modifyVisibility[0]).toEqual(
-        expect.arrayContaining([
-          'year_of_assessment_fff_2',
-          'annual_income_fff_2'
-        ])
-      );
-    });
-  });
-
-  describe('Common Hidden Fields', () => {
-    it('should always hide office address fields', () => {
-      const result = Rules_bd_3(baseProps, createStageInfo());
-      const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-      
-      expect(validationObj.hidden[0]).toEqual(
-        expect.arrayContaining([
-          'ofc_postal_other_code',
-          'ofc_city',
-          'ofc_state'
-        ])
-      );
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle empty props', () => {
-      const result = Rules_bd_3([], createStageInfo());
-      expect(result).toBeDefined();
-    });
-
-    it('should handle missing field sets', () => {
-      const modifiedProps = [[{ fields: [] }]];
-      const result = Rules_bd_3(modifiedProps, createStageInfo());
-      expect(result).toBeDefined();
-    });
-
-    it('should handle empty products array', () => {
-      const stageInfo = createStageInfo({ products: [] });
-      const result = Rules_bd_3(baseProps, stageInfo);
-      expect(result).toBeDefined();
-    });
-
-    it('should handle missing Original Sighted field set', () => {
-      const modifiedProps = [baseProps[0].filter(f => f.field_set_name !== 'Original Sighted')];
-      const result = Rules_bd_3(modifiedProps, createStageInfo());
-      expect(result).toBeDefined();
-    });
-  });
-});
+    }
+  return newFileds;
+  };
+};
+Please write test cases using jest with RTL
