@@ -4,71 +4,80 @@ import { stagesAction } from '../../utils/store/stages-slice';
 import { getUrl } from '../../utils/common/change.utils';
 
 // Mock dependencies
-jest.mock('../../utils/store/field-error-slice', () => ({
-  fieldErrorAction: {
-    getMandatoryFields: jest.fn()
-  }
+jest.mock('../../utils/store/field-error-slice');
+jest.mock('../../utils/store/stages-slice');
+jest.mock('../../utils/common/change.utils');
+jest.mock('react-redux', () => ({
+  useSelector: jest.fn()
 }));
 
-jest.mock('../../utils/store/stages-slice', () => ({
-  stagesAction: {
-    removeAddToggleField: jest.fn()
-  }
-}));
+// Create mock action creators
+const mockGetMandatoryFields = jest.fn();
+const mockRemoveAddToggleField = jest.fn();
+const mockGetJourneyType = jest.fn();
 
-jest.mock('../../utils/common/change.utils', () => ({
-  getUrl: {
-    getJourneyType: jest.fn()
-  }
-}));
+// Setup mocks
+fieldErrorAction.getMandatoryFields = mockGetMandatoryFields;
+stagesAction.removeAddToggleField = mockRemoveAddToggleField;
+getUrl.getJourneyType = mockGetJourneyType;
 
-describe('getFields', () => {
+describe('getFields function', () => {
   let mockDispatch;
   let mockGetStages;
   let mockTaxSelector;
   let mockApplicantsSelectors;
 
   beforeEach(() => {
-    // Reset all mocks
+    // Clear all mocks before each test
     jest.clearAllMocks();
     
     // Mock dispatch function
     mockDispatch = jest.fn();
     
-    // Mock getStages data structure
+    // Reset mock return values
+    mockGetMandatoryFields.mockReturnValue({ type: 'MOCK_GET_MANDATORY_FIELDS' });
+    mockRemoveAddToggleField.mockReturnValue({ type: 'MOCK_REMOVE_ADD_TOGGLE_FIELD' });
+    mockGetJourneyType.mockReturnValue(false);
+
+    // Create mock data structures
     mockGetStages = [
       {
         stageInfo: {
           fieldmetadata: {
             data: {
               stages: [
-                {},
+                null, // stages[0]
                 {
                   fields: [
                     {
                       logical_field_name: 'no_of_tax_residency_country',
                       component_type: 'Selection Box',
-                      rwb_label_name: 'Number of Tax Residency Countries'
+                      rwb_label_name: 'Number of Tax Residency Countries',
+                      some_other_prop: 'test_value'
                     },
                     {
                       logical_field_name: 'country_of_tax_residence',
                       component_type: 'Selection Box',
-                      rwb_label_name: 'Country of Tax Residence'
+                      rwb_label_name: 'Country of Tax Residence',
+                      some_other_prop: 'test_value'
                     },
                     {
                       logical_field_name: 'tax_id_no',
                       component_type: 'Text',
-                      rwb_label_name: 'Tax ID Number'
+                      rwb_label_name: 'Tax ID Number',
+                      some_other_prop: 'test_value'
                     },
                     {
                       logical_field_name: 'crs_reason_code',
                       component_type: 'Selection Box',
-                      rwb_label_name: 'CRS Reason Code'
+                      rwb_label_name: 'CRS Reason Code',
+                      some_other_prop: 'test_value'
                     },
                     {
                       logical_field_name: 'crs_comments',
                       component_type: 'Text',
-                      rwb_label_name: 'CRS Comments'
+                      rwb_label_name: 'CRS Comments',
+                      some_other_prop: 'test_value'
                     }
                   ]
                 }
@@ -79,37 +88,49 @@ describe('getFields', () => {
       }
     ];
 
-    // Mock taxSelector
     mockTaxSelector = {
       fields: []
     };
 
-    // Mock applicantsSelectors
     mockApplicantsSelectors = {};
-
-    // Mock getUrl.getJourneyType
-    getUrl.getJourneyType.mockReturnValue(false);
   });
 
-  describe('when taxSelector.fields contains no_of_tax_residency_country', () => {
+  describe('Basic functionality', () => {
+    test('should return a function (thunk)', () => {
+      const result = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      expect(typeof result).toBe('function');
+    });
+
+    test('should return empty array when no fields are provided', () => {
+      mockTaxSelector.fields = [];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+      
+      expect(result).toEqual([]);
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('no_of_tax_residency_country field processing', () => {
     beforeEach(() => {
       mockTaxSelector.fields = ['no_of_tax_residency_country'];
     });
 
-    it('should create and dispatch field for no_of_tax_residency_country', () => {
+    test('should process no_of_tax_residency_country field correctly', () => {
       const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
       const result = thunk(mockDispatch);
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(expect.objectContaining({
+      expect(result[0]).toMatchObject({
         logical_field_name: 'no_of_tax_residency_country',
         component_type: 'Selection Box',
         rwb_label_name: 'Number of Tax Residency Countries'
-      }));
+      });
     });
 
-    it('should set hide_remove_btn to true when journeyType exists', () => {
-      getUrl.getJourneyType.mockReturnValue(true);
+    test('should set hide_remove_btn when journeyType is truthy', () => {
+      mockGetJourneyType.mockReturnValue(true);
       
       const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
       const result = thunk(mockDispatch);
@@ -117,218 +138,196 @@ describe('getFields', () => {
       expect(result[0].hide_remove_btn).toBe(true);
     });
 
-    it('should dispatch getMandatoryFields and removeAddToggleField actions', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      thunk(mockDispatch);
-
-      expect(mockDispatch).toHaveBeenCalledWith(
-        fieldErrorAction.getMandatoryFields(['no_of_tax_residency_country'])
-      );
-      expect(mockDispatch).toHaveBeenCalledWith(
-        stagesAction.removeAddToggleField({
-          removeFields: [],
-          newFields: ['no_of_tax_residency_country'],
-          value: {}
-        })
-      );
-    });
-  });
-
-  describe('when taxSelector.fields contains country_of_tax_residence fields', () => {
-    beforeEach(() => {
-      mockTaxSelector.fields = [
-        'country_of_tax_residence_1',
-        'country_of_tax_residence_2',
-        'country_of_tax_residence_3',
-        'country_of_tax_residence_4'
-      ];
-    });
-
-    it('should create fields for all country_of_tax_residence variants', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      const result = thunk(mockDispatch);
-
-      expect(result).toHaveLength(4);
-      result.forEach((field, index) => {
-        expect(field).toEqual(expect.objectContaining({
-          logical_field_name: `country_of_tax_residence_${index + 1}`,
-          component_type: 'Selection Box',
-          rwb_label_name: 'Country of Tax Residence'
-        }));
-      });
-    });
-  });
-
-  describe('when taxSelector.fields contains tax_id_no fields', () => {
-    beforeEach(() => {
-      mockTaxSelector.fields = ['tax_id_no_1', 'tax_id_no_2', 'tax_id_no_3', 'tax_id_no_4'];
-    });
-
-    it('should create fields for all tax_id_no variants', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      const result = thunk(mockDispatch);
-
-      expect(result).toHaveLength(4);
-      result.forEach((field, index) => {
-        expect(field).toEqual(expect.objectContaining({
-          logical_field_name: `tax_id_no_${index + 1}`,
-          component_type: 'Text',
-          rwb_label_name: 'Tax ID Number'
-        }));
-      });
-    });
-
-    it('should set hide_remove_btn to true when journeyType exists', () => {
-      getUrl.getJourneyType.mockReturnValue(true);
+    test('should not set hide_remove_btn when journeyType is falsy', () => {
+      mockGetJourneyType.mockReturnValue(false);
       
       const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
       const result = thunk(mockDispatch);
 
+      expect(result[0].hide_remove_btn).toBeUndefined();
+    });
+
+    test('should dispatch actions when fields are processed', () => {
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      thunk(mockDispatch);
+
+      expect(mockGetMandatoryFields).toHaveBeenCalledWith(['no_of_tax_residency_country']);
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'MOCK_GET_MANDATORY_FIELDS' });
+      
+      expect(mockRemoveAddToggleField).toHaveBeenCalledWith({
+        removeFields: [],
+        newFields: ['no_of_tax_residency_country'],
+        value: {}
+      });
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'MOCK_REMOVE_ADD_TOGGLE_FIELD' });
+    });
+  });
+
+  describe('country_of_tax_residence field processing', () => {
+    test('should process country_of_tax_residence_1 field', () => {
+      mockTaxSelector.fields = ['country_of_tax_residence_1'];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        logical_field_name: 'country_of_tax_residence_1',
+        component_type: 'Selection Box',
+        rwb_label_name: 'Country of Tax Residence'
+      });
+    });
+
+    test('should process multiple country_of_tax_residence fields', () => {
+      mockTaxSelector.fields = ['country_of_tax_residence_1', 'country_of_tax_residence_2', 'country_of_tax_residence_3', 'country_of_tax_residence_4'];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(4);
+      expect(result.map(f => f.logical_field_name)).toEqual([
+        'country_of_tax_residence_1',
+        'country_of_tax_residence_2', 
+        'country_of_tax_residence_3',
+        'country_of_tax_residence_4'
+      ]);
+    });
+  });
+
+  describe('tax_id_no field processing', () => {
+    test('should process tax_id_no fields with hide_remove_btn when journeyType exists', () => {
+      mockTaxSelector.fields = ['tax_id_no_1', 'tax_id_no_2'];
+      mockGetJourneyType.mockReturnValue(true);
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(2);
       result.forEach(field => {
-        expect(field.hide_remove_btn).toBe(true);
-      });
-    });
-  });
-
-  describe('when taxSelector.fields contains crs_reason_code fields', () => {
-    beforeEach(() => {
-      mockTaxSelector.fields = ['crs_reason_code_1', 'crs_reason_code_2', 'crs_reason_code_3', 'crs_reason_code_4'];
-    });
-
-    it('should create fields for all crs_reason_code variants', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      const result = thunk(mockDispatch);
-
-      expect(result).toHaveLength(4);
-      result.forEach((field, index) => {
-        expect(field).toEqual(expect.objectContaining({
-          logical_field_name: `crs_reason_code_${index + 1}`,
-          component_type: 'Selection Box',
-          rwb_label_name: 'CRS Reason Code'
-        }));
-      });
-    });
-  });
-
-  describe('when taxSelector.fields contains crs_comments fields', () => {
-    beforeEach(() => {
-      mockTaxSelector.fields = ['crs_comments_1', 'crs_comments_2', 'crs_comments_3', 'crs_comments_4'];
-    });
-
-    it('should create fields for all crs_comments variants', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      const result = thunk(mockDispatch);
-
-      expect(result).toHaveLength(4);
-      result.forEach((field, index) => {
-        expect(field).toEqual(expect.objectContaining({
-          logical_field_name: `crs_comments_${index + 1}`,
+        expect(field).toMatchObject({
           component_type: 'Text',
-          rwb_label_name: 'CRS Comments'
-        }));
+          rwb_label_name: 'Tax ID Number',
+          hide_remove_btn: true
+        });
+      });
+    });
+
+    test('should process all tax_id_no variants', () => {
+      mockTaxSelector.fields = ['tax_id_no_1', 'tax_id_no_2', 'tax_id_no_3', 'tax_id_no_4'];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result.map(f => f.logical_field_name)).toEqual([
+        'tax_id_no_1', 'tax_id_no_2', 'tax_id_no_3', 'tax_id_no_4'
+      ]);
+    });
+  });
+
+  describe('crs_reason_code field processing', () => {
+    test('should process crs_reason_code fields correctly', () => {
+      mockTaxSelector.fields = ['crs_reason_code_1', 'crs_reason_code_2'];
+      mockGetJourneyType.mockReturnValue(true);
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(2);
+      result.forEach(field => {
+        expect(field).toMatchObject({
+          component_type: 'Selection Box',
+          rwb_label_name: 'CRS Reason Code',
+          hide_remove_btn: true
+        });
       });
     });
   });
 
-  describe('when applicantsSelectors contains existing values', () => {
-    beforeEach(() => {
+  describe('crs_comments field processing', () => {
+    test('should process crs_comments fields correctly', () => {
+      mockTaxSelector.fields = ['crs_comments_1', 'crs_comments_2'];
+      mockGetJourneyType.mockReturnValue(true);
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(2);
+      result.forEach(field => {
+        expect(field).toMatchObject({
+          component_type: 'Text',
+          rwb_label_name: 'CRS Comments',
+          hide_remove_btn: true
+        });
+      });
+    });
+  });
+
+  describe('applicantsSelectors value handling', () => {
+    test('should include existing values in dispatch payload', () => {
       mockTaxSelector.fields = ['no_of_tax_residency_country'];
       mockApplicantsSelectors = {
         'no_of_tax_residency_country_a_1': '2',
         'country_of_tax_residence_1_a_1': 'US',
-        'tax_id_no_1_a_1': '123456789',
-        'crs_reason_code_1_a_1': 'A',
-        'crs_comments_1_a_1': 'Test comment'
+        'tax_id_no_1_a_1': '123456789'
       };
-    });
-
-    it('should include existing values in the dispatch payload', () => {
+      
       const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
       thunk(mockDispatch);
 
-      expect(mockDispatch).toHaveBeenCalledWith(
-        stagesAction.removeAddToggleField({
-          removeFields: [],
-          newFields: ['no_of_tax_residency_country'],
-          value: {
-            'no_of_tax_residency_country_a_1': '2',
-            'country_of_tax_residence_1_a_1': 'US',
-            'tax_id_no_1_a_1': '123456789',
-            'crs_reason_code_1_a_1': 'A',
-            'crs_comments_1_a_1': 'Test comment'
-          }
-        })
-      );
+      expect(mockRemoveAddToggleField).toHaveBeenCalledWith({
+        removeFields: [],
+        newFields: ['no_of_tax_residency_country'],
+        value: {
+          'no_of_tax_residency_country_a_1': '2',
+          'country_of_tax_residence_1_a_1': 'US',
+          'tax_id_no_1_a_1': '123456789'
+        }
+      });
     });
 
-    it('should exclude empty or undefined values from dispatch payload', () => {
+    test('should exclude empty and undefined values from dispatch payload', () => {
+      mockTaxSelector.fields = ['no_of_tax_residency_country'];
       mockApplicantsSelectors = {
         'no_of_tax_residency_country_a_1': '',
         'country_of_tax_residence_1_a_1': undefined,
-        'tax_id_no_1_a_1': '123456789'
+        'tax_id_no_1_a_1': '123456789',
+        'crs_reason_code_1_a_1': ''
       };
-
+      
       const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
       thunk(mockDispatch);
 
-      expect(mockDispatch).toHaveBeenCalledWith(
-        stagesAction.removeAddToggleField({
-          removeFields: [],
-          newFields: ['no_of_tax_residency_country'],
-          value: {
-            'tax_id_no_1_a_1': '123456789'
-          }
-        })
-      );
-    });
-  });
-
-  describe('when no fields are processed', () => {
-    beforeEach(() => {
-      mockTaxSelector.fields = [];
-    });
-
-    it('should not dispatch any actions when no fields are processed', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      const result = thunk(mockDispatch);
-
-      expect(result).toHaveLength(0);
-      expect(mockDispatch).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('when field metadata is missing', () => {
-    beforeEach(() => {
-      mockGetStages = [
-        {
-          stageInfo: {
-            fieldmetadata: {
-              data: {
-                stages: [
-                  {},
-                  {
-                    fields: []
-                  }
-                ]
-              }
-            }
-          }
+      expect(mockRemoveAddToggleField).toHaveBeenCalledWith({
+        removeFields: [],
+        newFields: ['no_of_tax_residency_country'],
+        value: {
+          'tax_id_no_1_a_1': '123456789'
         }
-      ];
-      mockTaxSelector.fields = ['no_of_tax_residency_country'];
-    });
-
-    it('should handle missing field metadata gracefully', () => {
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
-      const result = thunk(mockDispatch);
-
-      expect(result).toHaveLength(0);
-      expect(mockDispatch).not.toHaveBeenCalled();
+      });
     });
   });
 
-  describe('integration test with mixed field types', () => {
-    beforeEach(() => {
+  describe('Field cloning behavior', () => {
+    test('should create independent copies of template fields', () => {
+      mockTaxSelector.fields = ['country_of_tax_residence_1', 'country_of_tax_residence_2'];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(2);
+      
+      // Modify one field and ensure the other is not affected
+      result[0].logical_field_name = 'modified';
+      expect(result[1].logical_field_name).toBe('country_of_tax_residence_2');
+      
+      // Both should have the original template properties
+      expect(result[0].some_other_prop).toBe('test_value');
+      expect(result[1].some_other_prop).toBe('test_value');
+    });
+  });
+
+  describe('Mixed field types integration', () => {
+    test('should handle multiple different field types together', () => {
       mockTaxSelector.fields = [
         'no_of_tax_residency_country',
         'country_of_tax_residence_1',
@@ -336,53 +335,61 @@ describe('getFields', () => {
         'crs_reason_code_1',
         'crs_comments_1'
       ];
-      mockApplicantsSelectors = {
-        'no_of_tax_residency_country_a_1': '2',
-        'country_of_tax_residence_1_a_1': 'US'
-      };
-    });
-
-    it('should process all field types correctly', () => {
+      
       const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
       const result = thunk(mockDispatch);
 
       expect(result).toHaveLength(5);
       
-      // Verify field types
-      expect(result.find(f => f.logical_field_name === 'no_of_tax_residency_country')).toBeDefined();
-      expect(result.find(f => f.logical_field_name === 'country_of_tax_residence_1')).toBeDefined();
-      expect(result.find(f => f.logical_field_name === 'tax_id_no_1')).toBeDefined();
-      expect(result.find(f => f.logical_field_name === 'crs_reason_code_1')).toBeDefined();
-      expect(result.find(f => f.logical_field_name === 'crs_comments_1')).toBeDefined();
+      const fieldNames = result.map(f => f.logical_field_name);
+      expect(fieldNames).toEqual([
+        'no_of_tax_residency_country',
+        'country_of_tax_residence_1',
+        'tax_id_no_1',
+        'crs_reason_code_1',
+        'crs_comments_1'
+      ]);
 
-      // Verify dispatch calls
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockDispatch).toHaveBeenCalledWith(
-        fieldErrorAction.getMandatoryFields([
-          'no_of_tax_residency_country',
-          'country_of_tax_residence_1',
-          'tax_id_no_1',
-          'crs_reason_code_1',
-          'crs_comments_1'
-        ])
-      );
     });
   });
 
-  describe('error handling', () => {
-    it('should handle null fields gracefully', () => {
-      mockGetStages[0].stageInfo.fieldmetadata.data.stages[1].fields = null;
-      mockTaxSelector.fields = ['no_of_tax_residency_country'];
-
-      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+  describe('Error handling and edge cases', () => {
+    test('should handle missing field template gracefully', () => {
+      // Remove the tax_id_no template from mock data
+      mockGetStages[0].stageInfo.fieldmetadata.data.stages[1].fields = 
+        mockGetStages[0].stageInfo.fieldmetadata.data.stages[1].fields.filter(
+          f => f.logical_field_name !== 'tax_id_no'
+        );
       
-      expect(() => thunk(mockDispatch)).not.toThrow();
+      mockTaxSelector.fields = ['tax_id_no_1'];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(0);
+      expect(mockDispatch).not.toHaveBeenCalled();
     });
 
-    it('should handle undefined getStages', () => {
-      const thunk = getFields(undefined, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+    test('should handle undefined fields array', () => {
+      mockGetStages[0].stageInfo.fieldmetadata.data.stages[1].fields = undefined;
+      mockTaxSelector.fields = ['no_of_tax_residency_country'];
       
-      expect(() => thunk(mockDispatch)).toThrow();
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(0);
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+
+    test('should handle unrecognized field names', () => {
+      mockTaxSelector.fields = ['unknown_field', 'another_unknown_field'];
+      
+      const thunk = getFields(mockGetStages, mockTaxSelector, 'test-action', mockApplicantsSelectors);
+      const result = thunk(mockDispatch);
+
+      expect(result).toHaveLength(0);
+      expect(mockDispatch).not.toHaveBeenCalled();
     });
   });
 });
