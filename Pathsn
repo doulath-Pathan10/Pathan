@@ -1,327 +1,353 @@
-import { getFields } from './getFields';
-import { getUrl } from '../../utils/common/change.utils';
-import { fieldErrorAction, stagesAction } from '../../utils/store';
+import { AppDispatch } from "../../../services/common-service";
+import { FindIndex, getUrl, authenticateType } from "../../../utils/common/change.utils";
+import { KeyWithAnyModel, RadioDependecyModel, StageDetails} from "../../../utils/model/common-model";
+import { fieldErrorAction } from "../../../utils/store/field-error-slice";
+import { stagesAction } from "../../../utils/store/stages-slice";
+import { getProductCategory } from "../../../services/common-service";
 
-// Mock dependencies
-jest.mock('../../utils/common/change.utils', () => ({
-  getUrl: {
-    getJourneyType: jest.fn()
-  }
-}));
-
-jest.mock('../../utils/store', () => ({
-  fieldErrorAction: {
-    getMandatoryFields: jest.fn()
-  },
-  stagesAction: {
-    removeAddToggleField: jest.fn()
-  }
-}));
-
-describe('getFields', () => {
-  const mockGetStages = [
-    {
-      stageInfo: {
-        fieldmetadata: {
-          data: {
-            stages: [
-              {},
-              {
-                fields: [
-                  {
-                    logical_field_name: 'no_of_tax_residency_country',
-                    component_type: 'Text',
-                    rwb_label_name: 'Tax Residency Count',
-                    hide_remove_btn: false
-                  },
-                  {
-                    logical_field_name: 'country_of_tax_residence',
-                    component_type: 'Text',
-                    rwb_label_name: 'Tax Residence Country',
-                    hide_remove_btn: false
-                  },
-                  {
-                    logical_field_name: 'tax_id_no',
-                    component_type: 'Text',
-                    rwb_label_name: 'Tax ID',
-                    hide_remove_btn: false
-                  },
-                  {
-                    logical_field_name: 'crs_reason_code',
-                    component_type: 'Text',
-                    rwb_label_name: 'CRS Reason',
-                    hide_remove_btn: false
-                  },
-                  {
-                    logical_field_name: 'crs_comments',
-                    component_type: 'Text',
-                    rwb_label_name: 'CRS Comments',
-                    hide_remove_btn: false
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
-    }
-  ];
-
-  const mockTaxSelector = {
-    fields: [
-      'no_of_tax_residency_country',
-      'country_of_tax_residence_1',
-      'country_of_tax_residence_2',
-      'tax_id_no_1',
-      'tax_id_no_2',
-      'crs_reason_code_1',
-      'crs_comments_1',
-      'crs_comments_2'
-    ]
-  };
-
-  const mockApplicantsSelector = {
-    'country_of_tax_residence_1_a_1': 'US',
-    'tax_id_no_2_a_1': '12345',
-    'crs_comments_1_a_1': 'Test comment'
-  };
-
-  const mockDispatch = jest.fn();
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (getUrl.getJourneyType as jest.Mock).mockReturnValue('');
-  });
-
-  describe('Field Cloning and Transformation', () => {
-    it('should clone and transform no_of_tax_residency_country field', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: ['no_of_tax_residency_country'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result[0]).toEqual({
-        logical_field_name: 'no_of_tax_residency_country',
-        component_type: 'Selection Box',
-        rwb_label_name: 'Tax Residency Count',
-        hide_remove_btn: false
-      });
-    });
-
-    it('should clone and transform country_of_tax_residence field with index', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: ['country_of_tax_residence_1'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result[0]).toEqual({
-        logical_field_name: 'country_of_tax_residence_1',
-        component_type: 'Selection Box',
-        rwb_label_name: 'Tax Residence Country',
-        hide_remove_btn: false
-      });
-    });
-
-    it('should clone and transform tax_id_no field with index', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: ['tax_id_no_1'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result[0]).toEqual({
-        logical_field_name: 'tax_id_no_1',
-        component_type: 'Text',
-        rwb_label_name: 'Tax ID',
-        hide_remove_btn: false
-      });
-    });
-
-    it('should clone and transform crs_reason_code field with index', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: ['crs_reason_code_1'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result[0]).toEqual({
-        logical_field_name: 'crs_reason_code_1',
-        component_type: 'Selection Box',
-        rwb_label_name: 'CRS Reason',
-        hide_remove_btn: false
-      });
-    });
-
-    it('should clone and transform crs_comments field with index', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: ['crs_comments_1'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result[0]).toEqual({
-        logical_field_name: 'crs_comments_1',
-        component_type: 'Text',
-        rwb_label_name: 'CRS Comments',
-        hide_remove_btn: false
-      });
-    });
-  });
-
-  describe('Journey Type Handling', () => {
-    it('should set hide_remove_btn to true when journeyType exists', async () => {
-      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ECC');
-      
-      const action = getFields(
-        mockGetStages,
-        { fields: ['no_of_tax_residency_country'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result[0].hide_remove_btn).toBe(true);
-    });
-  });
-
-  describe('Dispatch Actions', () => {
-    it('should dispatch getMandatoryFields with correct fields', async () => {
-      const action = getFields(
-        mockGetStages,
-        mockTaxSelector,
-        'add',
-        {}
-      );
-      
-      await action(mockDispatch);
-      
-      expect(fieldErrorAction.getMandatoryFields).toHaveBeenCalledWith([
-        'no_of_tax_residency_country',
-        'country_of_tax_residence_1',
-        'country_of_tax_residence_2',
-        'tax_id_no_1',
-        'tax_id_no_2',
-        'crs_reason_code_1',
-        'crs_comments_1',
-        'crs_comments_2'
-      ]);
-    });
-
-    it('should dispatch removeAddToggleField with correct values', async () => {
-      const action = getFields(
-        mockGetStages,
-        mockTaxSelector,
-        'add',
-        mockApplicantsSelector
-      );
-      
-      await action(mockDispatch);
-      
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [],
-        newFields: [
-          'no_of_tax_residency_country',
-          'country_of_tax_residence_1',
-          'country_of_tax_residence_2',
-          'tax_id_no_1',
-          'tax_id_no_2',
-          'crs_reason_code_1',
-          'crs_comments_1',
-          'crs_comments_2'
-        ],
-        value: {
-          'country_of_tax_residence_1_a_1': 'US',
-          'tax_id_no_2_a_1': '12345',
-          'crs_comments_1_a_1': 'Test comment'
-        }
-      });
-    });
-
-    it('should not dispatch actions when no fields are processed', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: [] },
-        'add',
-        {}
-      );
-      
-      await action(mockDispatch);
-      
-      expect(fieldErrorAction.getMandatoryFields).not.toHaveBeenCalled();
-      expect(stagesAction.removeAddToggleField).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle missing fields in stageInfo', async () => {
-      const emptyStages = [{
-        stageInfo: {
-          fieldmetadata: {
-            data: {
-              stages: [{}, {}] // Empty fields array
+export const getFields = (getStages: Array<StageDetails>, radioResidency: RadioDependecyModel | null, employerOther?: any, userInputs?: any, bancaSelector?: KeyWithAnyModel): any => {
+    return (dispatch: AppDispatch) => {
+        let fields: Array<KeyWithAnyModel> | undefined;
+        let stageIndex : number | undefined;
+        if (getStages && getStages[0].stageInfo && getStages[0].stageInfo.fieldmetadata && getStages[0].stageInfo.fieldmetadata.data.stages) {
+            let stageId:any;
+            if(getStages[0].stageId === 'ad-2' && authenticateType() == "manual"){
+                stageId = "ad";  
+                stageIndex = 2;
             }
-          }
+            else if(getStages[0].stageId === 'ad-2' && authenticateType() == "myinfo"){
+                stageId = "ad";  
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if(getStages[0].stageId === 'ad-1' && (authenticateType() === "manual"|| authenticateType() === "myinfo")){
+                stageId = "ad";  
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if(getStages[0].stageId === 'bd-1' ){
+                stageId = "bd";  
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if(getStages[0].stageId === 'ssf-1' || getStages[0].stageId === "bd-2" || getStages[0].stageId === "ld-1" || getStages[0].stageId === "bd-3"  && authenticateType() == "manual"){
+                stageId = "bd";
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else if((getStages[0].stageId === 'ssf-1' || getStages[0].stageId === "bd-2" || getStages[0].stageId === 'bd-3') && authenticateType() == "myinfo"){
+                stageId = "bd";
+                stageIndex = FindIndex(getStages[0].stageInfo, stageId);
+            }
+            else{
+                stageId = getStages[0].stageId;
+                stageIndex =  getStages[0].stageInfo.fieldmetadata.data.stages.findIndex(
+                   (id: any) => id.stageId.toLowerCase() === stageId.toLowerCase()
+                 );
+               }
+            if(stageIndex !== undefined){
+             fields = getStages[0].stageInfo.fieldmetadata.data.stages[stageIndex].fields;
+            }
         }
-      }];
-      
-      const action = getFields(
-        emptyStages,
-        { fields: ['no_of_tax_residency_country'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result).toEqual([]);
-    });
 
-    it('should handle undefined field metadata', async () => {
-      const invalidStages = [{
-        stageInfo: {} // No fieldmetadata
-      }];
-      
-      const action = getFields(
-        invalidStages,
-        { fields: ['no_of_tax_residency_country'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result).toEqual([]);
-    });
+        let ssfStages: Array<string> | null = null;
+        
+        if (radioResidency) {
+           if (radioResidency.logical_field_name === 'residency_status') {
+                const foreigner = ["passport_no","pass_exp_dt"];
+                const singapore = ["NRIC"];
+                if (radioResidency.value === "CT" || radioResidency.value === "PR") {
+                    ssfStages = singapore;
+                    dispatch(fieldErrorAction.removeMandatoryFields(foreigner));
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: foreigner,
+                            newFields: singapore,
+                            value: getStages[0].stageInfo.applicants.NRIC_a_1 ? getStages[0].stageInfo.applicants.NRIC_a_1 : ''
+                        })
+                        
+                    );
+                } else if (radioResidency.value === "FR") {
+                    ssfStages = foreigner;
+                    dispatch(fieldErrorAction.removeMandatoryFields(singapore));
+                    const valObj:any = {
+                        'passport_no_a_1': '',
+                        'pass_exp_dt_a_1': '',
+                    }
+                    for(let key in valObj) {
+                        valObj[key] = getUrl.getUserInputs()[key] || '';
+                    }
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: singapore,
+                            newFields: foreigner,
+                            value: valObj
+                        })
+                    );
+                }
+            }
+            else if (radioResidency.logical_field_name === 'work_type') {
+                const earner = ["name_of_employer", "nature_of_employer", "job_title","office_phone_number"];
+                const selfEmployed = ["name_of_business", "nature_of_employer", "job_title","office_phone_number"];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name, 
+                    value: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                dispatch(stagesAction.resetNewAndOldFields());
+                if (radioResidency.value === 'O') {
+                    ssfStages = null;
+                    const mergedFields = earner.concat(selfEmployed.filter(item => earner.every(value => value !== item)));
+                    dispatch(fieldErrorAction.removeMandatoryFields(mergedFields));
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: mergedFields,
+                            newFields: [],
+                            value: ''
+                        })
+                    );
+                } else if (radioResidency.value === 'S' || radioResidency.value === 'C') {
+                    ssfStages = earner;
+                    dispatch(fieldErrorAction.removeMandatoryFields(selfEmployed));
+                    const valObj:any = {
+                        'nature_of_employer_a_1': '',
+                        'job_title_a_1': '',
+                        'name_of_employer_a_1': '',
+                        'office_phone_number_a_1': ''
+                    }
+                    for(let key in valObj) {
+                        valObj[key] = getUrl.getUserInputs()[key] || '';
+                    }
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: selfEmployed,
+                            newFields: earner,
+                            value: valObj
+                        })
+                    );
+                } else if (radioResidency.value === 'E') {
+                    ssfStages = selfEmployed;
+                    dispatch(fieldErrorAction.removeMandatoryFields(earner));
+                    const valObj:any = {
+                        'nature_of_employer_a_1': '',
+                        'job_title_a_1': '',
+                        'name_of_business_a_1': '',
+                        'office_phone_number_a_1': ''
+                    }
+                    for(let key in valObj) {
+                        valObj[key] = getUrl.getUserInputs()[key] || '';
+                    }
+                   dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: earner,
+                            newFields: selfEmployed,
+                            value: valObj
+                        })
+                    );
+                } else {
+                    dispatch(fieldErrorAction.removeMandatoryFields(["name_of_employer", "nature_of_employer", "job_title", "office_phone_number", "name_of_business"]));
+                    dispatch(
+                        stagesAction.removeAddToggleField({
+                            removeFields: ["name_of_employer", "nature_of_employer", "job_title", "office_phone_number", "name_of_business"],
+                            newFields: []
+                        })
+                    );
+                }
+            } 
+            
+            else if (radioResidency.logical_field_name === 'casa_fatca_declaration') {
 
-    it('should handle unknown field types', async () => {
-      const action = getFields(
-        mockGetStages,
-        { fields: ['unknown_field'] },
-        'add',
-        {}
-      );
-      
-      const result = await action(mockDispatch);
-      
-      expect(result).toEqual([]);
-    });
-  });
-});
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: [],
+                        newFields: ["casa_fatca_declaration"],
+                        value: radioResidency.value
+                    })
+                );
+            } else if (radioResidency.logical_field_name === "preferred_limit") {
+                 let showFields: Array<string> = ['credit_limit_consent_info_8'];
+                 let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if(!radioResidency.value) {
+                    radioResidency.value = '0'
+                }
+                if (radioResidency.value === '0') {
+                    showFields = ['credit_limit_consent_info_8'];
+                    removeFields = ['preferred_credit_limit','credit_limit_consent_info_5'];
+                } else if (radioResidency.value === '1') {
+                    showFields = ['preferred_credit_limit','credit_limit_consent_info_5'];
+                    removeFields = ['credit_limit_consent_info_8'];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            } //ETC CLI Changes
+            else if (radioResidency.logical_field_name === "credit_limit_consent") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === 'Y') {
+                    showFields = ['work_type'];
+                    removeFields = ['embossed_name','myinfo_data_cli'];
+                    if(bancaSelector && bancaSelector.eligible_banca_insurances)
+                    {
+                        bancaSelector.eligible_banca_insurances.forEach((eligibleBancaInsurance: any) => {
+                            removeFields.push("insurance_consent_" + eligibleBancaInsurance);
+                        });
+                    }
+                } else if (radioResidency.value === 'N') {
+                    const productCategory = getProductCategory(getStages[0].stageInfo.products);
+                    if (getStages[0].stageInfo.applicants['banca_product_applicable_a_1'] === "Y") {
+                        if (getUrl.getJourneyType() !== "ETC" || productCategory !== 'PL') {
+                            showFields = ['embossed_name'];
+                            if(bancaSelector && bancaSelector.eligible_banca_insurances)
+                            {
+                                bancaSelector.eligible_banca_insurances.forEach((eligibleBancaInsurance: any) => {
+                                    showFields.push("insurance_consent_" + eligibleBancaInsurance);
+                                });
+                            }
+                        } else {
+                            if(bancaSelector && bancaSelector.eligible_banca_insurances)
+                            {
+                                bancaSelector.eligible_banca_insurances.forEach((eligibleBancaInsurance: any) => {
+                                    showFields.push("insurance_consent_" + eligibleBancaInsurance);
+                                });
+                            }
+                        }
+                    }
+                    else {
+                        if (getUrl.getJourneyType() !== "ETC" || productCategory !== 'PL') {
+                            showFields = ['embossed_name'];
+                        }
+                    }
+                    removeFields = ['work_type','name_of_employer','name_of_employer_other','name_of_business','job_title','nature_of_employer','myinfo_data_cli','office_phone_number'];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            }else if (radioResidency.logical_field_name === "preferred_contact_per_email"){
+                if(!radioResidency.value) {
+                    radioResidency.value = "COL"
+                }
+            }else if (radioResidency.logical_field_name === "preferred_limit_etc") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === '0') {
+                    showFields = [];
+                    removeFields = ['preferred_credit_limit_etc'];
+                } else if (radioResidency.value === '1') {
+                    showFields = ['preferred_credit_limit_etc'];
+                    removeFields = [];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            } else if (radioResidency.logical_field_name === "deposit_loan_to" || radioResidency.logical_field_name === "Transfer_amount_to" || radioResidency.logical_field_name === "transfer_amount_to") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === 'SCB Account') {
+                    showFields = ['scb_account_no', 're_enter_scb_account_no', 'enter_account_info'];
+                    removeFields = ['other_bank_name', 'other_bank_account_bt', 'reenter_other_bank_account_bt', 'other_bank_credit_card_bt', 'reenter_other_bank_credit_card_bt'];
+                } else if (radioResidency.value === 'Other Bank Account') {
+                    showFields = ['other_bank_name', 'other_bank_account_bt', 'reenter_other_bank_account_bt'];
+                    removeFields = ['scb_account_no', 're_enter_scb_account_no', 'enter_account_info', 'other_bank_credit_card_bt', 'reenter_other_bank_credit_card_bt'];
+                } else if (radioResidency.value === 'Other Bank Credit Card') {
+                    showFields = ['other_bank_name', 'other_bank_credit_card_bt', 'reenter_other_bank_credit_card_bt'];
+                    removeFields = ['scb_account_no', 're_enter_scb_account_no', 'other_bank_account_bt', 'reenter_other_bank_account_bt', ];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields([...removeFields, "enter_account_info"]));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            } else if (radioResidency.logical_field_name === "Customer_Agree_for_Phoenix_Limit_porting") {
+                let showFields: Array<string> = [];
+                let removeFields: Array<string> = [];
+                const userSelection = {
+                    logical_field_name: radioResidency.logical_field_name,
+                    radioResidency: radioResidency.value
+                };
+                dispatch(stagesAction.resetDefaultValue(userSelection));
+                if (radioResidency.value === 'N') {
+                    showFields = [];
+                    removeFields = ['min_limit'];
+                } else if (radioResidency.value === 'Y') {
+                    showFields = ['min_limit'];
+                    removeFields = [];
+                }
+                ssfStages = showFields;
+                dispatch(fieldErrorAction.removeMandatoryFields(removeFields));
+                dispatch(
+                    stagesAction.removeAddToggleField({
+                        removeFields: removeFields,
+                        newFields: showFields,
+                        value: ''
+                    })
+                );
+            }
+        } else if (employerOther === 'name_of_employer_other') {
+            ssfStages = ['name_of_employer_other'];
+            dispatch(
+                stagesAction.removeAddToggleField({
+                    removeFields: [],
+                    newFields: ssfStages,
+                    value: ''
+                })
+            );
+        } else if (employerOther === 'fields') {
+            ssfStages = null;
+            dispatch(fieldErrorAction.removeMandatoryFields(['name_of_employer_other']));
+            dispatch(
+                stagesAction.removeAddToggleField({
+                    removeFields: ['name_of_employer_other'],
+                    newFields: [],
+                    value: ''
+                })
+            );
+        } 
+        if (ssfStages && fields) {
+            dispatch(fieldErrorAction.getMandatoryFields(ssfStages));
+            return fields.filter((field: KeyWithAnyModel) =>
+                ssfStages!.includes(field.logical_field_name)
+            );
+        }
+        return null;
+    }
+}
+Please write test cases using jest only for this method
