@@ -1,122 +1,386 @@
-import React, { useEffect, useState } from "react";
-import { KeyWithAnyModel } from "../../../utils/model/common-model";
-import "./slider-with-limit.scss";
-import Slider from "../slider/slider";
-import { store } from "../../../utils/store/store";
-import { useDispatch } from "react-redux";
-import { isFieldUpdate } from "../../../utils/common/change.utils";
-import trustBankConstant from "../../../assets/_json/trust-bank.json";
-import validateService from "../../../services/validation-service";
-import Model from "../model/model";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import '@testing-library/jest-dom';
+import SliderWithLimit from './SliderWithLimit';
+import { store } from '../../../utils/store/store';
+import trustBankConstant from '../../../assets/_json/trust-bank.json';
+import validateService from '../../../services/validation-service';
 
-const SliderWithLimit = (props: KeyWithAnyModel) => {
-  const dispatch = useDispatch();
-  const trustBank = store.getState().trustBank.trustBank;
-  const [showModel, setShowModel] = useState(false);
-  const [phoenixDetails, setPhoenixDetails] = useState({ minValue: 0, maxValue: 0, phoenixCustomerLimit: 0, offerApprovedAmount: 0 })
-  const [sliderValue, setsliderValue] = useState(0);
-  const [availableCredit, setAvailableCredit] = useState(0);
-
-  const updateSliderValue = (value: string) => {
-    props.handleFieldDispatch(props.data.logical_field_name, value);
-    dispatch(isFieldUpdate(props, value, props.data.logical_field_name));
-    setsliderValue(parseInt(value));
-    const amount = phoenixDetails.offerApprovedAmount !== 0 ? phoenixDetails.offerApprovedAmount : phoenixDetails.minValue
-    if(parseInt(value) <= amount){
-      props.handleCallback(props.data, "");
-    } else {
-      props.handleCallback(props.data, value);
-    }
-  };
-
-  useEffect(() => {
-    setAvailableCredit(phoenixDetails.phoenixCustomerLimit);
-    setsliderValue(phoenixDetails.minValue)
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[phoenixDetails.phoenixCustomerLimit, phoenixDetails.minValue])
-
-  useEffect(() => {
-    if(trustBank){
-      let approvedAmount = 0;
-      if (
-        trustBank.products &&
-        trustBank.products.length > 0 &&
-        trustBank.products[0].offer_details &&
-        trustBank.products[0].offer_details.length > 0
-      ) {
-        approvedAmount = trustBank.products[0].offer_details[0].approved_amount;
-      }
-      setAvailableCredit(phoenixDetails.phoenixCustomerLimit);
-      setsliderValue(phoenixDetails.minValue)
-      setPhoenixDetails({ 
-        minValue: parseFloat(trustBank.applicants.minimum_limit_amount_portable_a_1) || 0,
-        maxValue: parseFloat(trustBank.applicants.maximum_limit_amount_portable_a_1) || 0,
-        phoenixCustomerLimit: parseFloat(trustBank.applicants.phoenix_customer_limit_a_1) || 0,
-        offerApprovedAmount: approvedAmount || 0
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const phinixLimit =
-      phoenixDetails.phoenixCustomerLimit -
-      (sliderValue -
-        (phoenixDetails.offerApprovedAmount !== 0 ? phoenixDetails.offerApprovedAmount : phoenixDetails.minValue));
-    setAvailableCredit(phinixLimit);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sliderValue]);
-
-  const getMarks = () => {
-    let marks: { [key: string]: any } = {};
-    marks[phoenixDetails.minValue] = `S$${phoenixDetails.minValue}`;
-    marks[phoenixDetails.maxValue] = `S$${phoenixDetails.maxValue}`;
-    return marks;
-  };
-
-  const options = {
-    min: phoenixDetails.minValue,
-    max: phoenixDetails.maxValue,
-    step: 500,
-    dots: true,
-    marks: getMarks(),
-  };
-
-  const handlePopupBackButton = () =>{
-    setShowModel(false);
+// Mock dependencies
+jest.mock('../../../utils/store/store', () => ({
+  store: {
+    getState: jest.fn()
   }
+}));
 
-  const showInfo = () => {
-    setShowModel(true);
-  }
-  return (
-    <>
-    <div className="credit__limit__top">
-      <div className="credit__limit">
-        <div className="credit__limit__head">{trustBankConstant.sliderCreditLimitLabel}  <span className="infoIcon" onClick={showInfo}></span></div>
-        <div className="slider__amount">
-          S$ {validateService.formateCurrency(sliderValue.toFixed(2))}
-        </div>
-        <div className="availabe__credit">
-          S$ {validateService.formateCurrency(availableCredit.toFixed(2))}{" "}
-          <span>{trustBankConstant.sliderAvailabeCrdLmtLabel}</span>
-        </div>
+jest.mock('../../../utils/common/change.utils', () => ({
+  isFieldUpdate: jest.fn()
+}));
+
+jest.mock('../../../services/validation-service', () => ({
+  formateCurrency: jest.fn()
+}));
+
+jest.mock('../../../assets/_json/trust-bank.json', () => ({
+  sliderCreditLimitLabel: 'Credit Limit',
+  sliderAvailabeCrdLmtLabel: 'available credit',
+  sliderCreditLimitNote: 'Note: This is your credit limit',
+  findOutMoreLabel: 'Find out more'
+}));
+
+jest.mock('../slider/slider', () => {
+  return function MockSlider({ options, updateSliderValue }) {
+    return (
+      <div data-testid="mock-slider">
+        <input
+          type="range"
+          min={options.min}
+          max={options.max}
+          step={options.step}
+          onChange={(e) => updateSliderValue(e.target.value)}
+          data-testid="slider-input"
+        />
       </div>
-      <div className="rc-slider">
-        <Slider options={options} updateSliderValue={updateSliderValue} />
+    );
+  };
+});
+
+jest.mock('../model/model', () => {
+  return function MockModel({ handlebuttonClick }) {
+    return (
+      <div data-testid="mock-model">
+        <button onClick={handlebuttonClick} data-testid="model-back-button">
+          Back
+        </button>
       </div>
-      <div className="credit__limit__note">
-        {trustBankConstant.sliderCreditLimitNote}
-      </div>
-      <a rel="noreferrer" href={process.env.REACT_APP_TRUST_LIMIT_FIND_OUT_MORE} target="_blank" className="find-out-more" >{trustBankConstant.findOutMoreLabel}</a>
-      {showModel && (
-        <Model name="showTrustInfo" handlebuttonClick={handlePopupBackButton} />
-      )}
-      </div>
-    </>
+    );
+  };
+});
+
+// Mock environment variable
+process.env.REACT_APP_TRUST_LIMIT_FIND_OUT_MORE = 'https://example.com/find-out-more';
+
+describe('SliderWithLimit Component', () => {
+  let mockStore;
+  let mockProps;
+  let mockDispatch;
+
+  beforeEach(() => {
+    // Reset all mocks
+    jest.clearAllMocks();
     
-  );
-};
+    // Mock dispatch
+    mockDispatch = jest.fn();
+    jest.mock('react-redux', () => ({
+      ...jest.requireActual('react-redux'),
+      useDispatch: () => mockDispatch
+    }));
 
-export default SliderWithLimit;
-Please write test cases using jest with RTL
+    // Mock store state
+    const mockTrustBankData = {
+      trustBank: {
+        applicants: {
+          minimum_limit_amount_portable_a_1: '1000',
+          maximum_limit_amount_portable_a_1: '10000',
+          phoenix_customer_limit_a_1: '8000'
+        },
+        products: [{
+          offer_details: [{
+            approved_amount: 5000
+          }]
+        }]
+      }
+    };
+
+    store.getState.mockReturnValue(mockTrustBankData);
+
+    // Mock validateService
+    validateService.formateCurrency.mockImplementation((value) => 
+      parseFloat(value).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+    );
+
+    // Mock props
+    mockProps = {
+      data: {
+        logical_field_name: 'credit_limit'
+      },
+      handleFieldDispatch: jest.fn(),
+      handleCallback: jest.fn()
+    };
+
+    // Create mock store for Provider
+    mockStore = configureStore({
+      reducer: {
+        trustBank: (state = mockTrustBankData, action) => state
+      }
+    });
+  });
+
+  const renderComponent = (props = mockProps) => {
+    return render(
+      <Provider store={mockStore}>
+        <SliderWithLimit {...props} />
+      </Provider>
+    );
+  };
+
+  describe('Component Rendering', () => {
+    test('renders without crashing', () => {
+      renderComponent();
+      expect(screen.getByText('Credit Limit')).toBeInTheDocument();
+    });
+
+    test('displays initial credit limit amount', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText(/S\$ 1,000\.00/)).toBeInTheDocument();
+      });
+    });
+
+    test('displays available credit amount', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText(/available credit/)).toBeInTheDocument();
+      });
+    });
+
+    test('renders slider component', () => {
+      renderComponent();
+      expect(screen.getByTestId('mock-slider')).toBeInTheDocument();
+      expect(screen.getByTestId('slider-input')).toBeInTheDocument();
+    });
+
+    test('displays credit limit note', () => {
+      renderComponent();
+      expect(screen.getByText('Note: This is your credit limit')).toBeInTheDocument();
+    });
+
+    test('renders find out more link with correct href', () => {
+      renderComponent();
+      const link = screen.getByText('Find out more');
+      expect(link).toBeInTheDocument();
+      expect(link.getAttribute('href')).toBe('https://example.com/find-out-more');
+      expect(link.getAttribute('target')).toBe('_blank');
+    });
+
+    test('renders info icon', () => {
+      renderComponent();
+      const infoIcon = screen.getByRole('generic', { name: /infoIcon/i });
+      expect(infoIcon).toBeInTheDocument();
+    });
+  });
+
+  describe('Slider Functionality', () => {
+    test('updates slider value when slider changes', async () => {
+      renderComponent();
+      
+      const sliderInput = screen.getByTestId('slider-input');
+      fireEvent.change(sliderInput, { target: { value: '3000' } });
+
+      await waitFor(() => {
+        expect(mockProps.handleFieldDispatch).toHaveBeenCalledWith('credit_limit', '3000');
+      });
+    });
+
+    test('calls handleCallback with empty string when value is within approved amount', async () => {
+      renderComponent();
+      
+      const sliderInput = screen.getByTestId('slider-input');
+      fireEvent.change(sliderInput, { target: { value: '4000' } }); // Less than approved amount (5000)
+
+      await waitFor(() => {
+        expect(mockProps.handleCallback).toHaveBeenCalledWith(mockProps.data, '');
+      });
+    });
+
+    test('calls handleCallback with value when value exceeds approved amount', async () => {
+      renderComponent();
+      
+      const sliderInput = screen.getByTestId('slider-input');
+      fireEvent.change(sliderInput, { target: { value: '6000' } }); // Greater than approved amount (5000)
+
+      await waitFor(() => {
+        expect(mockProps.handleCallback).toHaveBeenCalledWith(mockProps.data, '6000');
+      });
+    });
+
+    test('updates available credit when slider value changes', async () => {
+      renderComponent();
+      
+      const sliderInput = screen.getByTestId('slider-input');
+      fireEvent.change(sliderInput, { target: { value: '3000' } });
+
+      await waitFor(() => {
+        // Available credit should be phoenixCustomerLimit - (sliderValue - offerApprovedAmount)
+        // 8000 - (3000 - 5000) = 8000 - (-2000) = 10000
+        expect(validateService.formateCurrency).toHaveBeenCalledWith('10000.00');
+      });
+    });
+  });
+
+  describe('Modal Functionality', () => {
+    test('does not show modal initially', () => {
+      renderComponent();
+      expect(screen.queryByTestId('mock-model')).not.toBeInTheDocument();
+    });
+
+    test('shows modal when info icon is clicked', () => {
+      renderComponent();
+      
+      const infoIcon = document.querySelector('.infoIcon');
+      fireEvent.click(infoIcon);
+
+      expect(screen.getByTestId('mock-model')).toBeInTheDocument();
+    });
+
+    test('hides modal when back button is clicked', () => {
+      renderComponent();
+      
+      // Show modal first
+      const infoIcon = document.querySelector('.infoIcon');
+      fireEvent.click(infoIcon);
+      expect(screen.getByTestId('mock-model')).toBeInTheDocument();
+
+      // Hide modal
+      const backButton = screen.getByTestId('model-back-button');
+      fireEvent.click(backButton);
+      expect(screen.queryByTestId('mock-model')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Data Handling', () => {
+    test('handles missing trust bank data gracefully', () => {
+      store.getState.mockReturnValue({
+        trustBank: { trustBank: null }
+      });
+
+      renderComponent();
+      expect(screen.getByText('Credit Limit')).toBeInTheDocument();
+    });
+
+    test('handles missing products data', () => {
+      store.getState.mockReturnValue({
+        trustBank: {
+          trustBank: {
+            applicants: {
+              minimum_limit_amount_portable_a_1: '1000',
+              maximum_limit_amount_portable_a_1: '10000',
+              phoenix_customer_limit_a_1: '8000'
+            },
+            products: []
+          }
+        }
+      });
+
+      renderComponent();
+      expect(screen.getByText('Credit Limit')).toBeInTheDocument();
+    });
+
+    test('handles missing offer details', () => {
+      store.getState.mockReturnValue({
+        trustBank: {
+          trustBank: {
+            applicants: {
+              minimum_limit_amount_portable_a_1: '1000',
+              maximum_limit_amount_portable_a_1: '10000',
+              phoenix_customer_limit_a_1: '8000'
+            },
+            products: [{
+              offer_details: []
+            }]
+          }
+        }
+      });
+
+      renderComponent();
+      expect(screen.getByText('Credit Limit')).toBeInTheDocument();
+    });
+
+    test('uses minimum value when approved amount is 0', async () => {
+      store.getState.mockReturnValue({
+        trustBank: {
+          trustBank: {
+            applicants: {
+              minimum_limit_amount_portable_a_1: '1000',
+              maximum_limit_amount_portable_a_1: '10000',
+              phoenix_customer_limit_a_1: '8000'
+            },
+            products: [{
+              offer_details: [{
+                approved_amount: 0
+              }]
+            }]
+          }
+        }
+      });
+
+      renderComponent();
+      
+      const sliderInput = screen.getByTestId('slider-input');
+      fireEvent.change(sliderInput, { target: { value: '1000' } }); // Equal to min value
+
+      await waitFor(() => {
+        expect(mockProps.handleCallback).toHaveBeenCalledWith(mockProps.data, '');
+      });
+    });
+  });
+
+  describe('Currency Formatting', () => {
+    test('formats currency values correctly', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(validateService.formateCurrency).toHaveBeenCalledWith('1000.00');
+        expect(validateService.formateCurrency).toHaveBeenCalledWith('8000.00');
+      });
+    });
+  });
+
+  describe('Slider Options', () => {
+    test('sets correct slider options', () => {
+      renderComponent();
+      
+      const sliderInput = screen.getByTestId('slider-input');
+      expect(sliderInput.getAttribute('min')).toBe('1000');
+      expect(sliderInput.getAttribute('max')).toBe('10000');
+      expect(sliderInput.getAttribute('step')).toBe('500');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    test('handles invalid numeric values in trust bank data', () => {
+      store.getState.mockReturnValue({
+        trustBank: {
+          trustBank: {
+            applicants: {
+              minimum_limit_amount_portable_a_1: 'invalid',
+              maximum_limit_amount_portable_a_1: 'invalid',
+              phoenix_customer_limit_a_1: 'invalid'
+            },
+            products: [{
+              offer_details: [{
+                approved_amount: 'invalid'
+              }]
+            }]
+          }
+        }
+      });
+
+      renderComponent();
+      expect(screen.getByText('Credit Limit')).toBeInTheDocument();
+    });
+
+    test('handles component unmounting during async operations', () => {
+      const { unmount } = renderComponent();
+      unmount();
+      // Should not throw any errors
+    });
+  });
+});
