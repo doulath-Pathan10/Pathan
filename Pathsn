@@ -1,99 +1,477 @@
-import { getUrl } from '../../utils/common/change.utils';
-import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import Rules_ad_1 from './Rules_ad_1';
 import rulesUtils from './rules.utils';
- 
-const Rules_bd_3 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
-    const validationObj: ValidationObjModel = {
-        nonEditable: [],
-        hidden: [],
-        modifyVisibility:[]
+
+// Mock the rulesUtils module
+jest.mock('./rules.utils');
+
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString();
+    },
+    clear: () => {
+      store = {};
+    },
+  };
+})();
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
+
+describe('Rules_ad_1 Utility Function', () => {
+  const baseProps = [
+    [
+      {
+        field_set_name: 'Additional Details',
+        fields: [
+          { logical_field_name: 'reason_for_account_rwb', component_type: 'Text' },
+          { logical_field_name: 'Initial_deposit_rwb', component_type: 'Text' },
+          { logical_field_name: 'source_of_fund_rwb', component_type: 'Text' },
+        ],
+      },
+      {
+        field_set_name: 'Banking Services',
+        fields: [
+          { logical_field_name: 'debit_card_request_rwb', component_type: 'Checkbox' },
+          { logical_field_name: 'issuance_type', component_type: 'SelectionBox' },
+          { logical_field_name: 'embossed_dc_name_rwb', component_type: 'Text' },
+          { logical_field_name: 'existing_account_no_dc', component_type: 'Text' },
+          { logical_field_name: 'cheque_book_request_rwb', component_type: 'Checkbox' },
+        ],
+      },
+      {
+        field_set_name: 'Time Deposit Details',
+        fields: [
+          { logical_field_name: 'td_product_currency_value', component_type: 'Text' },
+          { logical_field_name: 'td_depoist_amount', component_type: 'Text' },
+          { logical_field_name: 'td_term_type', component_type: 'SelectionBox' },
+          { logical_field_name: 'td_fund_account_etc_currency', component_type: 'Text' },
+          { logical_field_name: 'td_fund_account_new_currency', component_type: 'Text' },
+        ],
+      },
+    ],
+  ];
+
+  const baseStageInfo = {
+    applicants: {
+      no_of_accounts_rwb_a_1: 1,
+    },
+    products: [{ product_category: 'CA', product_type: '310' }],
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    (rulesUtils as jest.Mock).mockClear();
+  });
+
+  // Test case 1: Empty products array
+  it('should handle empty products array', () => {
+    localStorage.setItem('products', '[]');
+    Rules_ad_1(baseProps, baseStageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 2: Single product with no special conditions
+  it('should handle single product case', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    Rules_ad_1(baseProps, baseStageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 3: Multiple products with product type 307 and 318
+  it('should handle product types 307 and 318', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Current Account' },
+        { product_category_name: 'CA', name: 'Savings Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '307', product_category: 'CA' },
+        { product_type: '318', product_category: 'CA' },
+      ],
     };
-    let nonEditableFields: Array<string> = [];
-    let hiddenFields: Array<string> = [];
-    let defaultVisiblity:any= [];
-    let filteredFields:any = [];
-    filteredFields.push(props[0].filter((fields:any)=> fields.field_set_name === "Employment Details"));
-    const filteredOfficeAddressDetails = props[0].filter((fields:any)=> fields.field_set_name === "Office Address (Optional)");
-    /*istanbul ignore else*/
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Office Address (Optional)", fields: filteredOfficeAddressDetails[0].fields});
-    }
-    const filteredExistingContactDetails = props[0].filter((fields:any)=> fields.field_set_name === "Existing Contact Details");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Existing Contact Details", fields: filteredExistingContactDetails[0].fields});
-      defaultVisiblity.push("existing_personal_email_co1", "existing_office_email_em1", "existing_office_email_em2", "existing_mobile_mo1", "existing_mobile_mo2", 
-      "existing_overseas_mobile_mf1", "existing_overseas_mobile_mf2", "existing_office_telephone_ot1", "existing_office_telephone_ot2",
-      "existing_residential_telephone_rt2", "existing_overseas_office_telno_of1", "existing_overseas_office_telno_of2", "existing_overseas_residential_telno_rf1",
-      "existing_overseas_residential_telno_rf2");
-    }
-    const filteredAdditionalContactDetails = props[0].filter((fields:any)=> fields.field_set_name === "Additional Contact Details");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Additional Contact Details", fields: filteredAdditionalContactDetails[0].fields});
-      defaultVisiblity.push("per_email_2", "office_email_1", "office_email_2", "mobile_1", "mobile_2", "overseas_mobile1_contact_no", 
-      "overseas_mobile2_contact_no", "office_phone1_number", "office_phone2_number", "ohph1_number", "ohph2_number", "ofc1_number", "ofc2_number",
-      "home_phone2_number");
-    }
-    const filteredPreferedContactForEachClasification = props[0].filter((fields:any)=> fields.field_set_name === "Prefered Contact For Each Clasification");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Prefered Contact For Each Clasification", fields: filteredPreferedContactForEachClasification[0].fields});
-    }
-    const filteredSelectPrimaryContactunderMobilePhone = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Mobile Phone");
-     /*istanbul ignore else */
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Select Primary Contact under Mobile Phone", fields: filteredSelectPrimaryContactunderMobilePhone[0].fields});
-    }
-    const filteredSelectPrimaryContactunderemail = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under email");
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Select Primary Contact under email", fields: filteredSelectPrimaryContactunderemail[0].fields});
-    }
-    if(filteredFields[0].length > 0 && getUrl.getJourneyType()==="NTC" && stageInfo.products[0].product_category === 'CA'
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
 
-    ){
-      const filteredSelectPrimaryContactunderResidentialTelephoneNo = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Residential Telephone No.");
-      filteredFields[0].push({field_set_name: "Select Primary Contact under Residential Telephone No.", fields: filteredSelectPrimaryContactunderResidentialTelephoneNo[0].fields});
-      const filteredSelectPrimaryContactContactunderOfficeNo = props[0].filter((fields:any)=> fields.field_set_name === "Select Primary Contact under Office No.");
-      filteredFields[0].push({field_set_name: "Select Primary Contact under Office No.", fields: filteredSelectPrimaryContactContactunderOfficeNo[0].fields});
-    }
+  // Test case 4: Multiple products with product type 339 and 318
+  it('should handle product types 339 and 318', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Current Account' },
+        { product_category_name: 'CA', name: 'Premium Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '339', product_category: 'CA' },
+        { product_type: '318', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 5: Multiple products with product type 504 and 516
+  it('should handle product types 504 and 516', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Business Account' },
+        { product_category_name: 'CA', name: 'Corporate Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '504', product_category: 'CA' },
+        { product_type: '516', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 6: Multiple products with product type 504 and 507
+  it('should handle product types 504 and 507', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Business Account' },
+        { product_category_name: 'CA', name: 'Enterprise Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '504', product_category: 'CA' },
+        { product_type: '507', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 7: Repeat count with product type 310
+  it('should handle repeat count with product type 310', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      applicants: {
+        no_of_accounts_rwb_a_1: 3,
+      },
+      products: [{ product_type: '310', product_category: 'CA' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 8: Repeat count with product type 307
+  it('should handle repeat count with product type 307', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      applicants: {
+        no_of_accounts_rwb_a_1: 2,
+      },
+      products: [{ product_type: '307', product_category: 'CA' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 9: Repeat count with product type 324
+  it('should handle repeat count with product type 324', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      applicants: {
+        no_of_accounts_rwb_a_1: 4,
+      },
+      products: [{ product_type: '324', product_category: 'CA' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 10: Time Deposit product
+  it('should handle TD product category', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'TD', name: 'Time Deposit' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [{ product_category: 'TD' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 11: Multiple products including TD
+  it('should handle multiple products with TD', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Current Account' },
+        { product_category_name: 'TD', name: 'Time Deposit' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '307', product_category: 'CA' },
+        { product_category: 'TD' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 12: TD with product type 337
+  it('should handle TD with product type 337', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'TD', name: 'Premium Deposit' },
+        { product_category_name: 'CA', name: 'Current Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '337', product_category: 'TD' },
+        { product_type: '310', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 13: TD with product type 337 and 329
+  it('should handle TD with product types 337 and 329', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'TD', name: 'Premium Deposit' },
+        { product_category_name: 'CA', name: 'Business Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '337', product_category: 'TD' },
+        { product_type: '329', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 14: TD with product type 337 and 339
+  it('should handle TD with product types 337 and 339', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'TD', name: 'Premium Deposit' },
+        { product_category_name: 'CA', name: 'Enterprise Account' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '337', product_category: 'TD' },
+        { product_type: '339', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 15: Product types 514 and 504
+  it('should handle product types 514 and 504', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Corporate Account' },
+        { product_category_name: 'CA', name: 'Business Plus' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '514', product_category: 'CA' },
+        { product_type: '504', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 16: Product types 514 and 507
+  it('should handle product types 514 and 507', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Corporate Account' },
+        { product_category_name: 'CA', name: 'Enterprise Plus' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '514', product_category: 'CA' },
+        { product_type: '507', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 17: Product types 516 and 507
+  it('should handle product types 516 and 507', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Global Account' },
+        { product_category_name: 'CA', name: 'Enterprise Plus' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '516', product_category: 'CA' },
+        { product_type: '507', product_category: 'CA' },
+      ],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 18: CA product with type 317
+  it('should handle CA product with type 317', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Premium Account' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [{ product_type: '317', product_category: 'CA' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 19: CA product with type 314
+  it('should handle CA product with type 314', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Basic Account' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [{ product_type: '314', product_category: 'CA' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 20: Verify field modifications for TD products
+  it('should modify fields correctly for TD products', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'TD', name: 'Time Deposit' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [{ product_category: 'TD' }],
+    };
     
-    const filteredForInternalUse = props[0].filter((fields:any)=> fields.field_set_name === "For Internal Use");
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "For Internal Use", fields: filteredForInternalUse[0].fields});
-      defaultVisiblity.push("sourcing_id_2", "sales_id_2", "referral_id_2", "closing_id_2");
-    }
-    const filteredOriginalSighted = props[0].filter((fields:any)=> fields.field_set_name === "Original Sighted");
-    if(filteredFields[0].length > 0 && filteredOriginalSighted.length>0){
-      filteredFields[0].push({field_set_name: "Original Sighted", fields: filteredOriginalSighted[0].fields});
-    }
-    if((stageInfo.products[0].product_category === "CC" || stageInfo.products[0].product_category === "PL")){
-        if(stageInfo.application.journey_type ||getUrl.getJourneyType()  === 'NTC'){
-     
-             defaultVisiblity.push("year_of_assessment_fff_1","year_of_assessment_fff_2","annual_income_fff_1","annual_income_fff_2")
-            nonEditableFields.push("annual_income_fff_1","year_of_assessment_fff_1","residential_address");
-       }
-    }
+    Rules_ad_1(baseProps, stageInfo);
+    
+    const filteredFields = (rulesUtils as jest.Mock).mock.calls[0][0][0];
+    const validationObj = (rulesUtils as jest.Mock).mock.calls[0][1];
+    
+    // Verify field modification
+    const tdCurrencyField = filteredFields
+      .find((fs: any) => fs.field_set_name === 'Time Deposit Details')
+      ?.fields.find((f: any) => f.logical_field_name === 'td_product_currency_value');
+    expect(tdCurrencyField?.component_type).toBe('SelectionBox');
+    
+    // Verify hidden fields
+    expect(validationObj.hidden[0]).toContain('debit_card_request_rwb');
+    expect(validationObj.hidden[0]).toContain('existing_account_no_dc');
+    expect(validationObj.hidden[0]).toContain('issuance_type');
+    
+    // Verify modifyVisibility fields
+    expect(validationObj.modifyVisibility[0]).toContain('td_product_currency_value');
+    expect(validationObj.modifyVisibility[0]).toContain('td_depoist_amount');
+  });
 
-    if (getUrl.getJourneyType() === "ECC") {
-        const filteredCreditCardDetails = props[0].filter((fields:any)=> fields.field_set_name === 'Credit Card Details');
-        filteredFields[0].unshift({field_set_name: 'Credit Card Details', fields: filteredCreditCardDetails[0].fields});
-    }
-    else{
-        if(stageInfo.products[0].product_category  === "SA"){
-           hiddenFields.push("credit_limit_consent","myinfo_data_cli", "ofc_postal_other_code", "ofc_city", "ofc_state", "signature_crop_from_existing_ac", "existing_account_ccy", "existing_account_no");
-        }
-        if(stageInfo.products[0].product_category  === "PL" || stageInfo.products[0].product_category === "CC"){
-        
-            defaultVisiblity.push("year_of_assessment_fff_2","annual_income_fff_2")
-      }
-    }
-    hiddenFields.push("ofc_postal_other_code", "ofc_city", "ofc_state");
-    validationObj.modifyVisibility!.push(defaultVisiblity)
-    validationObj.nonEditable.push(nonEditableFields);
-    validationObj.hidden!.push(hiddenFields);
-    return rulesUtils(filteredFields, validationObj);
-}
- 
-export default Rules_bd_3;
-Please write test cases using jest with RTL
+  // Test case 21: Verify field modifications for multiple products with TD
+  it('should modify fields correctly for multiple products with TD', () => {
+    localStorage.setItem(
+      'products',
+      JSON.stringify([
+        { product_category_name: 'CA', name: 'Current Account' },
+        { product_category_name: 'TD', name: 'Time Deposit' },
+      ])
+    );
+    const stageInfo = {
+      ...baseStageInfo,
+      products: [
+        { product_type: '307', product_category: 'CA' },
+        { product_category: 'TD' },
+      ],
+    };
+    
+    Rules_ad_1(baseProps, stageInfo);
+    
+    const validationObj = (rulesUtils as jest.Mock).mock.calls[0][1];
+    expect(validationObj.hidden[0]).toContain('embossed_dc_name_rwb');
+  });
+
+  // Test case 22: Verify empty props handling
+  it('should handle empty props', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    Rules_ad_1([], baseStageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 23: Verify undefined no_of_accounts_rwb_a_1
+  it('should handle undefined no_of_accounts_rwb_a_1', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    const stageInfo = {
+      applicants: {},
+      products: [{ product_type: '310', product_category: 'CA' }],
+    };
+    Rules_ad_1(baseProps, stageInfo);
+    expect(rulesUtils).toHaveBeenCalled();
+  });
+
+  // Test case 24: Verify all possible hidden fields for product type 307
+  it('should hide all specified fields for product type 307', () => {
+    localStorage.setItem('products', JSON.stringify([{ product_category_name: 'CA', name: 'Current Account' }]));
+    const stageInfo = {
+      ...baseStageInfo,
+      applicants: {
+        no_of_accounts_rwb_a_1: 3,
+      },
+      products: [{ product_type: '307', product_category: 'CA' }],
+    };
+    
+    Rules_ad_1(baseProps, stageInfo);
+    
+    const validationObj = (rulesUtils as jest.Mock).mock.calls[0][1];
+    expect(validationObj.hidden[0]).toEqual(
+      expect.arrayContaining([
+        'reason_for_account_rwb',
+        'source_of_fund_rwb',
+        'reason_for_account_rwb_2',
+        'Initial_deposit_rwb_2',
+        'source_of_fund_rwb_2',
+        'reason_for_account_rwb_3',
+        'Initial_deposit_rwb_3',
+        'source_of_fund_rwb_3',
+      ])
+    );
+  });
+});
