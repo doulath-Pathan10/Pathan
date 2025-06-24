@@ -1,315 +1,114 @@
-import { getFields } from './getFields';
-import { authenticateType, getUrl } from '../../../utils/common/change.utils';
-import { fieldErrorAction, stagesAction } from '../../../utils/store';
-import { getProductCategory } from '../../../services/common-service';
+import React from "react";
+import "./model.scss";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import { useDispatch, useSelector } from "react-redux";
+import { errorAction } from "../../../utils/store/error-slice";
+import {
+  dispatchLoader,
+  redirectingToIbanking,
+} from "../../../services/common-service";
+import DOMPurify from "dompurify";
+import { getUrl } from "../../../utils/common/change.utils";
+import { Player } from "@lottiefiles/react-lottie-player";
+import lottieSrc from "../../../assets/_json/lottie/oops.json";
 
-// Mock dependencies
-jest.mock('../../../utils/common/change.utils', () => ({
-  authenticateType: jest.fn(),
-  getUrl: {
-    getJourneyType: jest.fn(),
-    getUserInputs: jest.fn(() => ({}))
-  },
-  FindIndex: jest.fn()
-}));
-
-jest.mock('../../../utils/store', () => ({
-  fieldErrorAction: {
-    removeMandatoryFields: jest.fn(),
-    getMandatoryFields: jest.fn()
-  },
-  stagesAction: {
-    removeAddToggleField: jest.fn(),
-    resetDefaultValue: jest.fn(),
-    resetNewAndOldFields: jest.fn()
-  }
-}));
-
-jest.mock('../../../services/common-service', () => ({
-  getProductCategory: jest.fn()
-}));
-
-describe('getFields', () => {
-  const mockDispatch = jest.fn();
-  const mockGetStages = [
-    {
-      stageId: 'ad-1',
-      stageInfo: {
-        fieldmetadata: {
-          data: {
-            stages: [
-              { stageId: 'ad', fields: [{ logical_field_name: 'test_field' }] },
-              { stageId: 'bd', fields: [{ logical_field_name: 'test_field2' }] }
-            ]
-          }
-        },
-        applicants: {
-          NRIC_a_1: 'S1234567A',
-          passport_no_a_1: '',
-          pass_exp_dt_a_1: ''
-        },
-        products: [{ product_category: 'CA' }]
+export const DynamicModel = (props: KeyWithAnyModel) => {
+  const modelData = props.errorList;
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const dispatch = useDispatch();
+  const handlebuttonClick = () => {
+    if (props.errorList.error_type === "CancelApplication" || props.errorList.error_type === "cancelResume") {
+      if (
+        (getUrl.getParameterByName("SSCode") || getUrl.getParameterByName('transfer-token') ||  getUrl.getUpdatedStage()?.ccplChannel=== "IBK" || getUrl.getUpdatedStage()?.ccplChannel=== "MBNK") || 
+        (stageSelector && stageSelector[0] && stageSelector[0].stageInfo  && 
+          stageSelector[0].stageInfo.applicants && (stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IX" || stageSelector[0].stageInfo.applicants["auth_mode_a_1"] === "IM"))
+      ) {
+        if (getUrl.getParameterByName("source") === "scm") {
+          //Ibanking redirection for app
+          window.location.href = `${process.env.REACT_APP_IBANKING_SC_MOBILE}`;
+        } else if(getUrl.getUpdatedStage()?.ccplChannel=== "MBNK" || getUrl.getParameterByName("channel") === "MBNK") {
+          const redirectUrl =  `${process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER}`;
+          window.location.href = redirectUrl;
+        } else {
+          redirectingToIbanking();
+        }
+      } else {
+        if(props.errorList.error_type === "cancelResume"){
+          window.location.href = `${process.env.REACT_APP_RESUME_URL}`;
+        }else{
+          window.location.href = `${process.env.REACT_APP_HOME_PAGE_URL}`;
+        }
       }
+    } else if (props.handlebuttonClick) {
+      props.handlebuttonClick();
+    } else {
+      dispatch(dispatchLoader(false));
+      dispatch(errorAction.getExceptionList([]));
     }
-  ];
+  };
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (authenticateType as jest.Mock).mockReturnValue('manual');
-    (getUrl.getJourneyType as jest.Mock).mockReturnValue('');
-    (getUrl.getUserInputs as jest.Mock).mockReturnValue({});
-    (getProductCategory as jest.Mock).mockReturnValue('CA');
-  });
+  const getMarkup = (content: any) => {
+    return {
+      __html: DOMPurify.sanitize(content),
+    };
+  };
 
-  describe('Stage Index Determination', () => {
-    it('should handle ad-2 stage with manual auth', () => {
-      const modifiedStages = [...mockGetStages];
-      modifiedStages[0].stageId = 'ad-2';
-      
-      const action = getFields(modifiedStages, null);
-      action(mockDispatch);
-      
-      expect(authenticateType).toHaveBeenCalled();
-    });
+  return (
+    <>
+      {modelData && modelData && (
+        <div className="popup">
+          <div className="popup__container">
+            <div className="waring__icon">
+              <Player src={lottieSrc} className="player" loop autoplay />
+            </div>
+            <div className="popup__info">
+              {modelData.error_header && (
+                <>
+                  {modelData.errorList &&
+                    modelData.errorList.application_reference && (
+                      <div className="app__ref">
+                        APPLICATION NO:{" "}
+                        {modelData.errorList.application_reference}
+                      </div>
+                    )}
+                  <div className="popup__info__head">
+                    {modelData.error_header}
+                  </div>
+                </>
+              )}
+              <div className="popup__info__desc">
+                {modelData.errorList.map(
+                  (content: KeyWithAnyModel, index: number) => {
+                    return (
+                      <p key={`${content}${index}`}>
+                        {content.detail ? (
+                          <span
+                            dangerouslySetInnerHTML={getMarkup(content.detail)}
+                          />
+                        ) : (
+                          "Something went wrong!"
+                        )}
+                      </p>
+                    );
+                  }
+                )}
+                {modelData.error_button && (
+                  <p
+                    className="btn"
+                    onClick={() => handlebuttonClick()}
+                    key={`${modelData.error_button}`}
+                  >
+                    {modelData.error_button}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
-    it('should handle ad-2 stage with myinfo auth', () => {
-      (authenticateType as jest.Mock).mockReturnValue('myinfo');
-      const modifiedStages = [...mockGetStages];
-      modifiedStages[0].stageId = 'ad-2';
-      
-      const action = getFields(modifiedStages, null);
-      action(mockDispatch);
-      
-      expect(authenticateType).toHaveBeenCalled();
-    });
-
-    it('should handle bd-1 stage', () => {
-      const modifiedStages = [...mockGetStages];
-      modifiedStages[0].stageId = 'bd-1';
-      
-      const action = getFields(modifiedStages, null);
-      action(mockDispatch);
-      
-      expect(authenticateType).toHaveBeenCalled();
-    });
-
-    it('should handle ssf-1 stage with manual auth', () => {
-      const modifiedStages = [...mockGetStages];
-      modifiedStages[0].stageId = 'ssf-1';
-      
-      const action = getFields(modifiedStages, null);
-      action(mockDispatch);
-      
-      expect(authenticateType).toHaveBeenCalled();
-    });
-
-    it('should handle default stage case', () => {
-      const modifiedStages = [...mockGetStages];
-      modifiedStages[0].stageId = 'unknown-stage';
-      
-      const action = getFields(modifiedStages, null);
-      action(mockDispatch);
-      
-      expect(authenticateType).toHaveBeenCalled();
-    });
-  });
-
-  describe('Radio Residency Handling', () => {
-    describe('residency_status', () => {
-      it('should handle CT/PR value (Singapore)', () => {
-        const radioResidency = {
-          logical_field_name: 'residency_status',
-          value: 'CT'
-        };
-        
-        const action = getFields(mockGetStages, radioResidency);
-        action(mockDispatch);
-        
-        expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(["passport_no","pass_exp_dt"]);
-        expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-          removeFields: ["passport_no","pass_exp_dt"],
-          newFields: ["NRIC"],
-          value: 'S1234567A'
-        });
-      });
-
-      it('should handle FR value (Foreigner)', () => {
-        const radioResidency = {
-          logical_field_name: 'residency_status',
-          value: 'FR'
-        };
-        
-        (getUrl.getUserInputs as jest.Mock).mockReturnValue({
-          'passport_no_a_1': 'P123456',
-          'pass_exp_dt_a_1': '2025-12-31'
-        });
-        
-        const action = getFields(mockGetStages, radioResidency);
-        action(mockDispatch);
-        
-        expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(["NRIC"]);
-        expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-          removeFields: ["NRIC"],
-          newFields: ["passport_no","pass_exp_dt"],
-          value: {
-            'passport_no_a_1': 'P123456',
-            'pass_exp_dt_a_1': '2025-12-31'
-          }
-        });
-      });
-    });
-
-    describe('work_type', () => {
-      it('should handle O value (Other)', () => {
-        const radioResidency = {
-          logical_field_name: 'work_type',
-          value: 'O'
-        };
-        
-        const action = getFields(mockGetStages, radioResidency);
-        action(mockDispatch);
-        
-        expect(stagesAction.resetDefaultValue).toHaveBeenCalled();
-        expect(stagesAction.resetNewAndOldFields).toHaveBeenCalled();
-        expect(fieldErrorAction.removeMandatoryFields).toHaveBeenCalledWith(
-          expect.arrayContaining(["name_of_employer", "name_of_business"])
-        );
-      });
-
-      it('should handle S/C value (Salaried/Contract)', () => {
-        const radioResidency = {
-          logical_field_name: 'work_type',
-          value: 'S'
-        };
-        
-        const action = getFields(mockGetStages, radioResidency);
-        action(mockDispatch);
-        
-        expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-          removeFields: ["name_of_business"],
-          newFields: ["name_of_employer", "nature_of_employer", "job_title","office_phone_number"],
-          value: {
-            'nature_of_employer_a_1': '',
-            'job_title_a_1': '',
-            'name_of_employer_a_1': '',
-            'office_phone_number_a_1': ''
-          }
-        });
-      });
-
-      it('should handle E value (Self-Employed)', () => {
-        const radioResidency = {
-          logical_field_name: 'work_type',
-          value: 'E'
-        };
-        
-        const action = getFields(mockGetStages, radioResidency);
-        action(mockDispatch);
-        
-        expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-          removeFields: ["name_of_employer"],
-          newFields: ["name_of_business", "nature_of_employer", "job_title","office_phone_number"],
-          value: {
-            'nature_of_employer_a_1': '',
-            'job_title_a_1': '',
-            'name_of_business_a_1': '',
-            'office_phone_number_a_1': ''
-          }
-        });
-      });
-    });
-
-    describe('credit_limit_consent', () => {
-      it('should handle Y value (Yes)', () => {
-        const radioResidency = {
-          logical_field_name: 'credit_limit_consent',
-          value: 'Y'
-        };
-        
-        const bancaSelector = {
-          eligible_banca_insurances: ['ins1', 'ins2']
-        };
-        
-        const action = getFields(mockGetStages, radioResidency, undefined, undefined, bancaSelector);
-        action(mockDispatch);
-        
-        expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-          removeFields: ['embossed_name','myinfo_data_cli','insurance_consent_ins1','insurance_consent_ins2'],
-          newFields: ['work_type'],
-          value: ''
-        });
-      });
-
-      it('should handle N value (No) with banca product', () => {
-        const radioResidency = {
-          logical_field_name: 'credit_limit_consent',
-          value: 'N'
-        };
-        
-        const modifiedStages = [...mockGetStages];
-        modifiedStages[0].stageInfo.applicants['banca_product_applicable_a_1'] = "Y";
-        
-        const bancaSelector = {
-          eligible_banca_insurances: ['ins1', 'ins2']
-        };
-        
-        const action = getFields(modifiedStages, radioResidency, undefined, undefined, bancaSelector);
-        action(mockDispatch);
-        
-        expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-          removeFields: expect.arrayContaining(['work_type','myinfo_data_cli']),
-          newFields: expect.arrayContaining(['embossed_name','insurance_consent_ins1','insurance_consent_ins2']),
-          value: ''
-        });
-      });
-    });
-
-    // Additional test cases for other radioResidency conditions...
-  });
-
-  describe('Employer Other Handling', () => {
-    it('should handle name_of_employer_other case', () => {
-      const action = getFields(mockGetStages, null, 'name_of_employer_other');
-      action(mockDispatch);
-      
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: [],
-        newFields: ['name_of_employer_other'],
-        value: ''
-      });
-    });
-
-    it('should handle fields case', () => {
-      const action = getFields(mockGetStages, null, 'fields');
-      action(mockDispatch);
-      
-      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
-        removeFields: ['name_of_employer_other'],
-        newFields: [],
-        value: ''
-      });
-    });
-  });
-
-  describe('Return Value', () => {
-    it('should return filtered fields when ssfStages exists', () => {
-      const radioResidency = {
-        logical_field_name: 'residency_status',
-        value: 'CT'
-      };
-      
-      const action = getFields(mockGetStages, radioResidency);
-      const result = action(mockDispatch);
-      
-      expect(result).toEqual([{ logical_field_name: 'test_field' }]);
-      expect(fieldErrorAction.getMandatoryFields).toHaveBeenCalledWith(["NRIC"]);
-    });
-
-    it('should return null when ssfStages does not exist', () => {
-      const action = getFields(mockGetStages, null);
-      const result = action(mockDispatch);
-      
-      expect(result).toBeNull();
-    });
-  });
-});
+export default DynamicModel;
+Please write test cases using jest only for this method
