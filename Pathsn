@@ -1,181 +1,123 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import { DynamicModel } from './DynamicModel';
-import { useDispatch, useSelector } from 'react-redux';
-import { getUrl } from '../../../utils/common/change.utils';
-import { dispatchLoader, redirectingToIbanking } from '../../../services/common-service';
-import { errorAction } from '../../../utils/store/error-slice';
-import { Player } from '@lottiefiles/react-lottie-player';
+import React, { useEffect, useState,useRef } from "react";
+import { useDispatch,useSelector } from "react-redux";
+import { BrowserRouter } from "react-router-dom";
+import "./utils/styles/App.scss";
+import Main from "./router/main";
+import Model from "./shared/components/model/model";
+import Spinner from "./shared/components/spinner/spinner";
+import { KeyWithAnyModel, StoreModel } from "./utils/model/common-model";
+import DynamicModel from "./shared/components/model/dynamic-model";
+import ActivityDetector from "react-activity-detector";
+import IdleTimeOutModel from "./shared/components/model/idle-time-out";
+import trackEvents from "./services/track-events";
+import { submitRequest } from "./modules/dashboard/fields/fields.utils";
+import { store } from "./utils/store/store";
 
-// Mock dependencies
-jest.mock('react-redux', () => ({
-  useDispatch: jest.fn(),
-  useSelector: jest.fn()
-}));
+export const App = () => {
+  const loaderSelector = useSelector((state: StoreModel) => state.loader);
+  const errorSelector = useSelector((state: StoreModel) => state.error);
+  const [loaderState, setLoaderState] = useState(null);
+  const [error, setError] = useState([]);
+  const [exceptionList, setExceptionList] = useState<KeyWithAnyModel>([]);
+  const [isIdle, setIsIdle] = useState(false);
+  const [openIdlePopUp, setOpenIdlePopUp] = useState(false);
+  const idleTimeoutRef=useRef<NodeJS.Timeout| null>(null);
+  const dispatch = useDispatch();
 
-jest.mock('../../../utils/common/change.utils', () => ({
-  getUrl: {
-    getParameterByName: jest.fn(),
-    getUpdatedStage: jest.fn()
-  }
-}));
+  /**
+   * Added to disabled right click options
+   */
+  /* istanbul ignore next */
+  useEffect(() => {
+    window.addEventListener('contextmenu', function (event) {
+      event.preventDefault();
+    });
+    return () => {
+      window.removeEventListener('contextmenu', function (event) {
+        event.preventDefault();
+      });
+    }
+  }, []);
+  useEffect(() => {
+    // to check whether loader is enabled
+    /*istanbul ignore else*/
+    if (loaderSelector && loaderSelector.isFetching) {
+      setLoaderState(loaderSelector.isFetching.isFetching);
+    }
+    // to check whether error is received from api request
+    /*istanbul ignore else*/
+    if (errorSelector && errorSelector.errors) {
+      setError(errorSelector.errors);
+    }
 
-jest.mock('../../../services/common-service', () => ({
-  dispatchLoader: jest.fn(),
-  redirectingToIbanking: jest.fn()
-}));
+    // To check exceptional handling
+    if (errorSelector && errorSelector.exceptionList) {
+      setExceptionList(errorSelector.exceptionList);
+    }
+    const exceptions:  KeyWithAnyModel = errorSelector.exceptionList;
+    /*istanbul ignore else*/
+    if(errorSelector.errors.length > 0 || (exceptions && exceptions.error_header)){
+      trackEvents.triggerAdobeEvent('formError');
+    }
+   
+    window.addEventListener("unload", function () {
+      trackEvents.triggerAdobeEvent('formAbandonment', 'BrowserClose')
+    })
+  }, [loaderSelector, errorSelector]);
+/* istanbul ignore next */
+  useEffect(()=>{
+    /*istanbul ignore else*/
+    if (isIdle) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      /*istanbul ignore else*/
+      if (!openIdlePopUp) {
+        setOpenIdlePopUp(true);
+      }
+    }
+  },[isIdle]);
 
-jest.mock('../../../utils/store/error-slice', () => ({
-  errorAction: {
-    getExceptionList: jest.fn()
-  }
-}));
-
-jest.mock('@lottiefiles/react-lottie-player', () => ({
-  Player: jest.fn(() => null)
-}));
-
-jest.mock('dompurify', () => ({
-  sanitize: jest.fn((content) => content)
-}));
-
-describe('DynamicModel', () => {
-  const mockDispatch = jest.fn();
-  const mockErrorList = {
-    error_type: 'CancelApplication',
-    error_header: 'Test Header',
-    errorList: [
-      { detail: 'Test error detail 1' },
-      { detail: 'Test error detail 2' }
-    ],
-    error_button: 'Test Button'
+  const onIdle = () => {   
+    loaderState === true ? onActive() : setIsIdle(true);
   };
+  const onActive = () => {
+    setIsIdle(false);
+  };
+  const handlePopUpClick = () => {
+    setOpenIdlePopUp(false);
+  };
+  const handleBtClick = () => {
+  };
+  return (
+    <>
+      {/* Idle time out */}
+      <ActivityDetector
+        enabled={true}
+        timeout={
+          Number(`${process.env.REACT_APP_RTOB_APP_IDLE_TIMEOUT_DURATION}`) *
+          10000
+        }
+        onIdle={onIdle}
+        onActive={onActive}
+        name="default"
+      />
 
-  beforeEach(() => {
-    (useDispatch as jest.Mock).mockReturnValue(mockDispatch);
-    (useSelector as jest.Mock).mockReturnValue([{ stageInfo: { applicants: {} } }]);
-    (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
-    (getUrl.getUpdatedStage as jest.Mock).mockReturnValue({});
-  });
+      {openIdlePopUp && (
+        <IdleTimeOutModel handlePopUpClick={handlePopUpClick} />
+      )}
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('renders without crashing', () => {
-    render(<DynamicModel errorList={mockErrorList} />);
-    expect(screen.getByText('Test Header')).toBeInTheDocument();
-  });
-
-  describe('handlebuttonClick', () => {
-    it('redirects to ibanking when error_type is CancelApplication and conditions met', () => {
-      (getUrl.getParameterByName as jest.Mock).mockImplementation((param) => 
-        param === 'SSCode' ? 'test' : null
-      );
-
-      render(<DynamicModel errorList={mockErrorList} />);
-      fireEvent.click(screen.getByText('Test Button'));
-      
-      expect(redirectingToIbanking).toHaveBeenCalled();
-    });
-
-    it('redirects to mobile ibanking when channel is MBNK', () => {
-      (getUrl.getUpdatedStage as jest.Mock).mockReturnValue({ ccplChannel: 'MBNK' });
-      delete window.location;
-      window.location = { href: '' } as any;
-
-      render(<DynamicModel errorList={mockErrorList} />);
-      fireEvent.click(screen.getByText('Test Button'));
-      
-      expect(window.location.href).toBe(process.env.REACT_APP_IBANKING_SC_MOBILE_TRANSFER);
-    });
-
-    it('redirects to home page when error_type is CancelApplication and no ibanking conditions', () => {
-      delete window.location;
-      window.location = { href: '' } as any;
-
-      render(<DynamicModel errorList={mockErrorList} />);
-      fireEvent.click(screen.getByText('Test Button'));
-      
-      expect(window.location.href).toBe(process.env.REACT_APP_HOME_PAGE_URL);
-    });
-
-    it('redirects to resume URL when error_type is cancelResume', () => {
-      delete window.location;
-      window.location = { href: '' } as any;
-      const resumeError = { ...mockErrorList, error_type: 'cancelResume' };
-
-      render(<DynamicModel errorList={resumeError} />);
-      fireEvent.click(screen.getByText('Test Button'));
-      
-      expect(window.location.href).toBe(process.env.REACT_APP_RESUME_URL);
-    });
-
-    it('calls props.handlebuttonClick when provided', () => {
-      const mockHandleClick = jest.fn();
-      render(<DynamicModel errorList={mockErrorList} handlebuttonClick={mockHandleClick} />);
-      fireEvent.click(screen.getByText('Test Button'));
-      
-      expect(mockHandleClick).toHaveBeenCalled();
-    });
-
-    it('dispatches loader and error list when no specific conditions met', () => {
-      const genericError = { ...mockErrorList, error_type: 'GenericError' };
-      render(<DynamicModel errorList={genericError} />);
-      fireEvent.click(screen.getByText('Test Button'));
-      
-      expect(dispatchLoader).toHaveBeenCalledWith(false);
-      expect(errorAction.getExceptionList).toHaveBeenCalledWith([]);
-    });
-  });
-
-  describe('Rendering Logic', () => {
-    it('displays application reference when present', () => {
-      const errorWithRef = {
-        ...mockErrorList,
-        errorList: [{ application_reference: 'APP123' }, ...mockErrorList.errorList]
-      };
-      render(<DynamicModel errorList={errorWithRef} />);
-      
-      expect(screen.getByText('APPLICATION NO: APP123')).toBeInTheDocument();
-    });
-
-    it('renders multiple error details', () => {
-      render(<DynamicModel errorList={mockErrorList} />);
-      
-      expect(screen.getByText('Test error detail 1')).toBeInTheDocument();
-      expect(screen.getByText('Test error detail 2')).toBeInTheDocument();
-    });
-
-    it('shows default message when no detail provided', () => {
-      const errorWithoutDetail = {
-        ...mockErrorList,
-        errorList: [{}]
-      };
-      render(<DynamicModel errorList={errorWithoutDetail} />);
-      
-      expect(screen.getByText('Something went wrong!')).toBeInTheDocument();
-    });
-
-    it('does not render when modelData is falsy', () => {
-      const { container } = render(<DynamicModel errorList={null} />);
-      expect(container.firstChild).toBeNull();
-    });
-  });
-
-  describe('Lottie Player', () => {
-    it('renders the Lottie Player component', () => {
-      render(<DynamicModel errorList={mockErrorList} />);
-      expect(Player).toHaveBeenCalledWith(
-        expect.objectContaining({
-          src: expect.any(Object),
-          className: 'player',
-          loop: true,
-          autoplay: true
-        }),
-        {}
-      );
-    });
-  });
-});
+      <BrowserRouter basename="/">
+        <Main />
+        {exceptionList.length !== 0 && (
+          <DynamicModel errorList={exceptionList} />
+        )}
+        {error.length > 0 ? (
+          <Model name="globalError"  handlebuttonClick={handleBtClick}/>
+        ) : (
+          loaderState && <Spinner />
+        )}
+      </BrowserRouter>
+    </>
+  );
+};
+export default App;
+Please write test cases using jest with RTL
