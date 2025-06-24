@@ -1,134 +1,327 @@
-import { AppDispatch } from "../../services/common-service";
-import { FindIndex } from "../../utils/common/change.utils";
-import { KeyWithAnyModel,StageDetails,StoreModel,taxStoreModel } from "../../utils/model/common-model";
-import { fieldErrorAction } from "../../utils/store/field-error-slice";
-import { stagesAction } from "../../utils/store/stages-slice";
-import { taxAction } from "../../utils/store/tax-slice";
-import { getUrl } from "../../utils/common/change.utils";
-import { useSelector } from "react-redux";
+import { getFields } from './getFields';
+import { getUrl } from '../../utils/common/change.utils';
+import { fieldErrorAction, stagesAction } from '../../utils/store';
 
-export const getFields = (
-  getStages: Array<StageDetails>,
-  taxSelector: taxStoreModel,
-  action: string,
-  applicantsSelectors:KeyWithAnyModel
-
-): any => {
-  return (dispatch: AppDispatch) => {
-    let fields: Array<KeyWithAnyModel> | undefined = getStages[0].stageInfo.fieldmetadata.data.stages[1].fields;
-    let newFileds: Array<KeyWithAnyModel> = [];
-    let newFieldsArray: Array<string> = [];
-    const journeyType = getUrl.getJourneyType();
-    const applicantsSelector = applicantsSelectors
-
-    let getClonedField = (logical_field_name: string) => {
-      if (fields) {
-        let field = fields.find(
-          fieldData => fieldData.logical_field_name === logical_field_name
-        );
-        if (field && field.logical_field_name) {
-          return { ...field };
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
-    };
-
-    taxSelector.fields.forEach((field: string) => {
-        
-      let no_of_tax_residency_country = getClonedField("no_of_tax_residency_country");
-      let country_of_tax_residence = getClonedField("country_of_tax_residence");
-      let tax_id_no =getClonedField("tax_id_no");
-      let crs_reason_code= getClonedField("crs_reason_code");
-      let crs_comments = getClonedField("crs_comments");
-      if (field ==="no_of_tax_residency_country"&& no_of_tax_residency_country) {
-        no_of_tax_residency_country.logical_field_name = field;
-        no_of_tax_residency_country.component_type = "Selection Box";
-        no_of_tax_residency_country.rwb_label_name = no_of_tax_residency_country.rwb_label_name;
-        if (journeyType) {
-            no_of_tax_residency_country.hide_remove_btn = true;
-        }
-        newFileds.push(no_of_tax_residency_country);
-        newFieldsArray.push(no_of_tax_residency_country.logical_field_name);
-      }
-      else if((field ==="country_of_tax_residence_1"||field ==="country_of_tax_residence_2"||field ==="country_of_tax_residence_3"||field ==="country_of_tax_residence_4")&& country_of_tax_residence){
-        country_of_tax_residence.logical_field_name=field;
-        country_of_tax_residence.component_type = "Selection Box";
-        country_of_tax_residence.rwb_label_name = country_of_tax_residence.rwb_label_name;
-      newFileds.push(country_of_tax_residence);
-      newFieldsArray.push(country_of_tax_residence.logical_field_name);
-
-      }
-      else if((field ==="tax_id_no_1"||field==="tax_id_no_2"||field==="tax_id_no_3"||field==="tax_id_no_4")&& tax_id_no){
-        tax_id_no.logical_field_name=field;
-        tax_id_no.component_type = "Text";
-        tax_id_no.rwb_label_name = tax_id_no.rwb_label_name;
-        if (journeyType) {
-          tax_id_no.hide_remove_btn = true;
-      }
-      newFileds.push(tax_id_no);
-      newFieldsArray.push(tax_id_no.logical_field_name);
-    }
-    else if((field ==="crs_reason_code_1"||field ==="crs_reason_code_2"||field ==="crs_reason_code_3"||field ==="crs_reason_code_4")&& crs_reason_code){
-      crs_reason_code.logical_field_name=field;
-      crs_reason_code.component_type = "Selection Box";
-      crs_reason_code.rwb_label_name = crs_reason_code.rwb_label_name;
-      if (journeyType) {
-        crs_reason_code.hide_remove_btn = true;
-    }
-    newFileds.push(crs_reason_code);
-    newFieldsArray.push(crs_reason_code.logical_field_name);
+// Mock dependencies
+jest.mock('../../utils/common/change.utils', () => ({
+  getUrl: {
+    getJourneyType: jest.fn()
   }
-  else if((field ==="crs_comments_1"||field ==="crs_comments_2"||field ==="crs_comments_3"||field ==="crs_comments_4")&& crs_comments){
-    crs_comments.logical_field_name=field;
-    crs_comments.component_type = "Text";
-    crs_comments.rwb_label_name = crs_comments.rwb_label_name;
-  if (journeyType) {
-      crs_comments.hide_remove_btn = true;
+}));
+
+jest.mock('../../utils/store', () => ({
+  fieldErrorAction: {
+    getMandatoryFields: jest.fn()
+  },
+  stagesAction: {
+    removeAddToggleField: jest.fn()
   }
-   newFileds.push(crs_comments);
-  newFieldsArray.push(crs_comments.logical_field_name);
-  
-}
-    });
-if (newFieldsArray.length > 0) {
-      dispatch(fieldErrorAction.getMandatoryFields(newFieldsArray));
-      const valObj:any={
-        "no_of_tax_residency_country_a_1": "",
-        "country_of_tax_residence_1_a_1": "",
-        "country_of_tax_residence_2_a_1": "",
-        "country_of_tax_residence_3_a_1": "",
-        "country_of_tax_residence_4_a_1": "",
-        "tax_id_no_1_a_1":"",
-        "tax_id_no_2_a_1":"",
-        "tax_id_no_3_a_1":"",
-        "tax_id_no_4_a_1":"",
-        "crs_reason_code_1_a_1":"",
-        "crs_reason_code_2_a_1":"",
-        "crs_reason_code_3_a_1":"",
-        "crs_reason_code_4_a_1":"",
-        "crs_comments_1_a_1":"",
-        "crs_comments_2_a_1":"",
-        "crs_comments_3_a_1":"",
-        "crs_comments_4_a_1":"",
-      }
-      for(let key in valObj) {
-        if(applicantsSelector[key]!==""&&applicantsSelector[key]!==undefined){
-             valObj[key] = applicantsSelector[key];
-        }else{
-          delete valObj[key]
+}));
+
+describe('getFields', () => {
+  const mockGetStages = [
+    {
+      stageInfo: {
+        fieldmetadata: {
+          data: {
+            stages: [
+              {},
+              {
+                fields: [
+                  {
+                    logical_field_name: 'no_of_tax_residency_country',
+                    component_type: 'Text',
+                    rwb_label_name: 'Tax Residency Count',
+                    hide_remove_btn: false
+                  },
+                  {
+                    logical_field_name: 'country_of_tax_residence',
+                    component_type: 'Text',
+                    rwb_label_name: 'Tax Residence Country',
+                    hide_remove_btn: false
+                  },
+                  {
+                    logical_field_name: 'tax_id_no',
+                    component_type: 'Text',
+                    rwb_label_name: 'Tax ID',
+                    hide_remove_btn: false
+                  },
+                  {
+                    logical_field_name: 'crs_reason_code',
+                    component_type: 'Text',
+                    rwb_label_name: 'CRS Reason',
+                    hide_remove_btn: false
+                  },
+                  {
+                    logical_field_name: 'crs_comments',
+                    component_type: 'Text',
+                    rwb_label_name: 'CRS Comments',
+                    hide_remove_btn: false
+                  }
+                ]
+              }
+            ]
+          }
         }
+      }
     }
-     dispatch(
-        stagesAction.removeAddToggleField({
-          removeFields: [],
-          newFields: newFieldsArray,
-          value: valObj
-        })
-      );
-    }
-  return newFileds;
+  ];
+
+  const mockTaxSelector = {
+    fields: [
+      'no_of_tax_residency_country',
+      'country_of_tax_residence_1',
+      'country_of_tax_residence_2',
+      'tax_id_no_1',
+      'tax_id_no_2',
+      'crs_reason_code_1',
+      'crs_comments_1',
+      'crs_comments_2'
+    ]
   };
-};
+
+  const mockApplicantsSelector = {
+    'country_of_tax_residence_1_a_1': 'US',
+    'tax_id_no_2_a_1': '12345',
+    'crs_comments_1_a_1': 'Test comment'
+  };
+
+  const mockDispatch = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getUrl.getJourneyType as jest.Mock).mockReturnValue('');
+  });
+
+  describe('Field Cloning and Transformation', () => {
+    it('should clone and transform no_of_tax_residency_country field', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: ['no_of_tax_residency_country'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result[0]).toEqual({
+        logical_field_name: 'no_of_tax_residency_country',
+        component_type: 'Selection Box',
+        rwb_label_name: 'Tax Residency Count',
+        hide_remove_btn: false
+      });
+    });
+
+    it('should clone and transform country_of_tax_residence field with index', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: ['country_of_tax_residence_1'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result[0]).toEqual({
+        logical_field_name: 'country_of_tax_residence_1',
+        component_type: 'Selection Box',
+        rwb_label_name: 'Tax Residence Country',
+        hide_remove_btn: false
+      });
+    });
+
+    it('should clone and transform tax_id_no field with index', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: ['tax_id_no_1'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result[0]).toEqual({
+        logical_field_name: 'tax_id_no_1',
+        component_type: 'Text',
+        rwb_label_name: 'Tax ID',
+        hide_remove_btn: false
+      });
+    });
+
+    it('should clone and transform crs_reason_code field with index', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: ['crs_reason_code_1'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result[0]).toEqual({
+        logical_field_name: 'crs_reason_code_1',
+        component_type: 'Selection Box',
+        rwb_label_name: 'CRS Reason',
+        hide_remove_btn: false
+      });
+    });
+
+    it('should clone and transform crs_comments field with index', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: ['crs_comments_1'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result[0]).toEqual({
+        logical_field_name: 'crs_comments_1',
+        component_type: 'Text',
+        rwb_label_name: 'CRS Comments',
+        hide_remove_btn: false
+      });
+    });
+  });
+
+  describe('Journey Type Handling', () => {
+    it('should set hide_remove_btn to true when journeyType exists', async () => {
+      (getUrl.getJourneyType as jest.Mock).mockReturnValue('ECC');
+      
+      const action = getFields(
+        mockGetStages,
+        { fields: ['no_of_tax_residency_country'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result[0].hide_remove_btn).toBe(true);
+    });
+  });
+
+  describe('Dispatch Actions', () => {
+    it('should dispatch getMandatoryFields with correct fields', async () => {
+      const action = getFields(
+        mockGetStages,
+        mockTaxSelector,
+        'add',
+        {}
+      );
+      
+      await action(mockDispatch);
+      
+      expect(fieldErrorAction.getMandatoryFields).toHaveBeenCalledWith([
+        'no_of_tax_residency_country',
+        'country_of_tax_residence_1',
+        'country_of_tax_residence_2',
+        'tax_id_no_1',
+        'tax_id_no_2',
+        'crs_reason_code_1',
+        'crs_comments_1',
+        'crs_comments_2'
+      ]);
+    });
+
+    it('should dispatch removeAddToggleField with correct values', async () => {
+      const action = getFields(
+        mockGetStages,
+        mockTaxSelector,
+        'add',
+        mockApplicantsSelector
+      );
+      
+      await action(mockDispatch);
+      
+      expect(stagesAction.removeAddToggleField).toHaveBeenCalledWith({
+        removeFields: [],
+        newFields: [
+          'no_of_tax_residency_country',
+          'country_of_tax_residence_1',
+          'country_of_tax_residence_2',
+          'tax_id_no_1',
+          'tax_id_no_2',
+          'crs_reason_code_1',
+          'crs_comments_1',
+          'crs_comments_2'
+        ],
+        value: {
+          'country_of_tax_residence_1_a_1': 'US',
+          'tax_id_no_2_a_1': '12345',
+          'crs_comments_1_a_1': 'Test comment'
+        }
+      });
+    });
+
+    it('should not dispatch actions when no fields are processed', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: [] },
+        'add',
+        {}
+      );
+      
+      await action(mockDispatch);
+      
+      expect(fieldErrorAction.getMandatoryFields).not.toHaveBeenCalled();
+      expect(stagesAction.removeAddToggleField).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle missing fields in stageInfo', async () => {
+      const emptyStages = [{
+        stageInfo: {
+          fieldmetadata: {
+            data: {
+              stages: [{}, {}] // Empty fields array
+            }
+          }
+        }
+      }];
+      
+      const action = getFields(
+        emptyStages,
+        { fields: ['no_of_tax_residency_country'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result).toEqual([]);
+    });
+
+    it('should handle undefined field metadata', async () => {
+      const invalidStages = [{
+        stageInfo: {} // No fieldmetadata
+      }];
+      
+      const action = getFields(
+        invalidStages,
+        { fields: ['no_of_tax_residency_country'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result).toEqual([]);
+    });
+
+    it('should handle unknown field types', async () => {
+      const action = getFields(
+        mockGetStages,
+        { fields: ['unknown_field'] },
+        'add',
+        {}
+      );
+      
+      const result = await action(mockDispatch);
+      
+      expect(result).toEqual([]);
+    });
+  });
+});
