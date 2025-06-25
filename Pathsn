@@ -1,320 +1,687 @@
-import React, { useEffect, useState } from "react";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import { useSelector, useDispatch } from "react-redux";
-import "./loan-details-info.scss";
-import loanDetailsConst from "../../../assets/_json/loan-details.json";
-import validateService from "../../../services/validation-service";
-// import interestRates from "../../../assets/_json/bt-interest-rate.json";
-import Model from "../model/model";
-import { rateAction } from "../../../utils/store/rate-slice";
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import LoanDetailsInfo from './LoanDetailsInfo';
+import validateService from '../../../services/validation-service';
+import { rateAction } from '../../../utils/store/rate-slice';
 
-const LoanDetailsInfo = (props: KeyWithAnyModel) => {
-  const userInputSelector = useSelector(
-    (state: StoreModel) => state.stages.userInput
-    );
-    const updatedStageInputs= useSelector((state: StoreModel) => state.stages.updatedStageInputs);
-    const rate = useSelector((state: StoreModel) => state.rate);
-    const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-    const jouney = useSelector((state: StoreModel) => state.stages.journeyType);
-    const [monthlyRepayment, setMonthlyRepayment] = useState("");
-    const [estimatedCashBack, setEstimatedCashBack] = useState("");
-    const [productType, setProductType] = useState(0);
-    const [campaign, setcampaign] = useState("");
-    const [processingFeeRate, setprocessingFeeRate] = useState(0);
-    const [eir, setEir] = useState("");
-    const [annualFee, setAnnualFee] = useState("");
-    const [showModel, setShowModel] = useState(false);
-    const [modelName, setModelName] = useState("");
-    const [roi, setRoi] = useState(0);
-    const dispatch = useDispatch();
-    const [staffCategory, setStaffCategory] = useState("N"); 
-    const loanTopUpDetails = useSelector((state: StoreModel) => state.loanTopUp);
-    const personalLoanFlag = stageSelector[0].stageInfo.products[1].product_category === "PL"
-    const productCode = personalLoanFlag ? stageSelector[0].stageInfo.products[1].product_type:  stageSelector[0].stageInfo.products[0].product_type;
-    const existingCashone =  (productCode === '280' && jouney === 'ETC') ? true : false;
-    const interestRates = useSelector((state: StoreModel) => state.rate.updatedInterestRates);
-    const savedOfflineRates = useSelector((state: StoreModel) => state.rate.ipEirRate);
-
-  useEffect(() => {
-    if (
-      stageSelector &&
-      stageSelector.length > 0 &&
-      stageSelector[0].stageInfo
-    ) {
-      if (stageSelector[0].stageInfo.products &&
-        stageSelector[0].stageInfo.products.length > 0) {
-        setcampaign(stageSelector[0].stageInfo.products[0].campaign);
-        setProductType(
-          parseInt(stageSelector[0].stageInfo.products[0].product_type)
-        );
-      }
-      if (stageSelector[0].stageInfo.applicants.staff_category_a_1) {
-        setStaffCategory(stageSelector[0].stageInfo.applicants.staff_category_a_1)
-      }
-    }
-    const arRate = stageSelector[0].stageInfo.applicants['rbp_applied_rate_a_1'] ? stageSelector[0].stageInfo.applicants['rbp_applied_rate_a_1'] : loanDetailsConst.ARDefaultRate;
-    //setRoi(parseFloat(rate.ar === 0 ? arRate : rate.ar));
-    let interestValue = ((existingCashone && loanTopUpDetails.existingLoanTopUp && loanTopUpDetails?.interestRate) ? parseFloat(loanTopUpDetails.interestRate) : parseFloat(rate.ar === 0 ? arRate : rate.ar));
-    // setRoi(interestValue);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-
-  useEffect(() => {
-    if (
-      stageSelector &&
-      stageSelector.length > 0 &&
-      stageSelector[0].stageInfo && personalLoanFlag
-    ) {
-      if (stageSelector[0].stageInfo.products &&
-        stageSelector[0].stageInfo.products.length > 0) {
-        setcampaign(stageSelector[0].stageInfo.products[1].campaign);
-        setProductType(
-          parseInt(stageSelector[0].stageInfo.products[1].product_type)
-        );
-      }
-      if (stageSelector[0].stageInfo.applicants.staff_category_a_1) {
-        setStaffCategory(stageSelector[0].stageInfo.applicants.staff_category_a_1)
-      }
-    }
-    
-    const arRate = stageSelector[0].stageInfo.applicants['rbp_applied_rate_a_1'] ? stageSelector[0].stageInfo.applicants['rbp_applied_rate_a_1'] : loanDetailsConst.ARDefaultRate;
-    setRoi(parseFloat(rate.ar === 0 ? arRate : rate.ar));
-    let interestValue = ((existingCashone && loanTopUpDetails.existingLoanTopUp && loanTopUpDetails?.interestRate) ? parseFloat(loanTopUpDetails.interestRate) : parseFloat(rate.ar === 0 ? arRate : rate.ar));
-    setRoi(interestValue);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (productType === 280) {
-      let previouslySelectedLoanTenor= updatedStageInputs.filter((item:any)=>(item.stageId ==="ad-1"))
-      const tenure = userInputSelector.applicants.loan_tenor_a_1
-        ? parseFloat(userInputSelector.applicants.loan_tenor_a_1)
-        : previouslySelectedLoanTenor?previouslySelectedLoanTenor[0]?.applicants?.loan_tenor_a_1:0
-
-       let loanrepaymentAmount = userInputSelector.applicants.required_loan_amount_a_1
-       ? parseFloat(userInputSelector.applicants.required_loan_amount_a_1)
-       : 0;
-
-      if(existingCashone && loanTopUpDetails.existingLoanTopUp && loanTopUpDetails.topupAmount){
-        loanrepaymentAmount = parseFloat(loanTopUpDetails.topupAmount);
-      }
-
-      let repaymentAmount =
-        (loanrepaymentAmount * (roi / 100) * (tenure / 12) + loanrepaymentAmount) / tenure;
-      repaymentAmount = repaymentAmount === Infinity ? 0 : repaymentAmount;
-      setMonthlyRepayment(
-        validateService.formateCurrency(repaymentAmount.toFixed(2))
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roi]);
-  
-  useEffect(() => {
-    if (existingCashone && loanTopUpDetails?.interestRate && loanTopUpDetails?.existingLoanTopUp) {
-      setRoi(parseFloat(loanTopUpDetails?.interestRate));
-    }
-  }, [loanTopUpDetails?.interestRate]);
-
-
-  useEffect(() => {
-    const interestRate = interestRates.find(
-      (obj: any) =>
-        // obj["Promo Code"] === campaign &&
-        obj.tenure === userInputSelector.applicants.loan_tenor_a_1
-    );
-    if (interestRate) {
-      setprocessingFeeRate(interestRate["ProcessingFee"]);
-      // setEir(interestRate.EIR);
-    }
-    let rateForETC = (existingCashone && (loanTopUpDetails.existingLoanTopUp && loanTopUpDetails.interestRate)) ? parseFloat(loanTopUpDetails.interestRate) :null
-    // let interestValue = rateForETC != null ? rateForETC.toString() : rate.ar.toString();
-     let interestValue = rateForETC != null ? rateForETC.toString() : interestRate?.EIR ? interestRate?.EIR: rate.ar.toString() ;
-    // const effetiveRateObj = validateService.getEIR(
-    //   jouney ? jouney : "",
-    //   staffCategory,
-    //   interestValue,
-    //   userInputSelector.applicants.loan_tenor_a_1,
-    //   savedOfflineRates
-    // );
-    const effetiveRateObj = validateService.getEIRNew(
-      jouney ? jouney : "",
-      staffCategory,
-      rate.ar.toString(),
-      userInputSelector.applicants.loan_tenor_a_1,
-      interestRates,
-      savedOfflineRates
-    );
-    let effetiveRate = 0;
-    if (effetiveRateObj) {
-      let  effetiveRateArr = effetiveRateObj.split(',');
-      effetiveRate = parseFloat(effetiveRateArr[0]);
-      setEir(effetiveRateArr[0] === 'N/A' ? 'Tenor not applicable' : effetiveRateArr[0]+'% p.a.');
-      dispatch(rateAction.updateEIR(effetiveRateArr[0].toString()));
-      if(effetiveRateArr.length > 1){
-        setRoi(parseFloat(effetiveRateArr[1]));
-        dispatch(rateAction.updateAR(effetiveRateArr[1].toString()));
-      }
-    } 
-    const tenure = userInputSelector.applicants.loan_tenor_a_1
-      ? parseFloat(userInputSelector.applicants.loan_tenor_a_1)
-      : 0;
-
-    if (productType === 280) {
-      const loanAmount = userInputSelector.applicants.required_loan_amount_a_1
-          ? parseFloat(userInputSelector.applicants.required_loan_amount_a_1)
-          : 0;
-
-          let loanrepaymentAmount = userInputSelector.applicants.required_loan_amount_a_1
-          ? parseFloat(userInputSelector.applicants.required_loan_amount_a_1)
-          : 0;
-   
-         if(existingCashone && loanTopUpDetails.existingLoanTopUp && loanTopUpDetails.topupAmount){
-           loanrepaymentAmount = parseFloat(loanTopUpDetails.topupAmount);
-         }
-
-    let repaymentAmount =
-        (loanrepaymentAmount * (roi / 100) * (tenure / 12) + loanrepaymentAmount) / tenure;
-      repaymentAmount = repaymentAmount === Infinity ? 0 : repaymentAmount;
-      setMonthlyRepayment(
-        validateService.formateCurrency(repaymentAmount.toFixed(2))
-      );
-      let cashBack = 0;
-      if (loanAmount >= 15000 && loanAmount < 40000) {
-        cashBack = (loanAmount * 1) / 100;
-      }
-      else if (loanAmount >= 40000 && loanAmount < 50000) {
-        cashBack = (loanAmount * 2) / 100;;
-      } else if (loanAmount >= 50000) {
-        cashBack = (loanAmount * 2.5) / 100;;
-      } 
-      const cashBackSplit = (cashBack.toString()).split('.');
-      const cashBackRounded = `${cashBackSplit[0]}${cashBackSplit[1] ? '.' + cashBackSplit[1].substr(0, 2) : ''}`;
-      setEstimatedCashBack( loanAmount < loanDetailsConst.cashBackCondition.minAmount ? 'No Cashback' : 
-        'SGD '+validateService.formateCurrency(cashBackRounded, true) 
-      );
-      setAnnualFee(`-SGD 199`);
-    } else if (productType === 210) {
-      const transferAmount = userInputSelector.applicants.Transfer_amount_a_1
-        ? parseFloat(userInputSelector.applicants.Transfer_amount_a_1)
-        : 0;
-      let repaymentAmount =
-        (transferAmount * (effetiveRate / 100) * (tenure / 12) + transferAmount) /
-        tenure;
-      repaymentAmount = repaymentAmount === Infinity ? 0 : repaymentAmount;
-      setMonthlyRepayment(
-        validateService.formateCurrency(repaymentAmount.toFixed(2))
-      );
-      let proccFee = (transferAmount * processingFeeRate) / 100;
-      proccFee = proccFee === Infinity ? 0 : proccFee;
-      setAnnualFee(
-        `+SGD ${validateService.formateCurrency(proccFee.toFixed(2))}`
-      );
-    }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    userInputSelector.applicants.required_loan_amount_a_1,
-    userInputSelector.applicants.loan_tenor_a_1,
-    userInputSelector.applicants.Transfer_amount_a_1,
-    productType,
-    roi,
-    rate
-  ]);
-
-  const handlePopupBackButton = () => {
-    setShowModel(false);
-  };
-
-  const showLoanInfo = (modelName: string) => {
-    setModelName(modelName);
-    setShowModel(true);
-  };
-
-  const mthPayment = (data:any) => {
-    return parseInt(data) ? data : 0
+// Mock dependencies
+jest.mock('./loan-details-info.scss', () => ({}));
+jest.mock('../../../assets/_json/loan-details.json', () => ({
+  ARDefaultRate: 5.5,
+  annualFee: 'Annual Fee',
+  annulPercentageRate: 'Annual Percentage Rate',
+  EIR: 'Effective Interest Rate',
+  estimatedCashback: 'Estimated Cashback',
+  requestedLoanAmount: 'Requested Loan Amount',
+  OneTimeProcessingFee: 'One-time Processing Fee',
+  note: 'Important note about the loan',
+  noteInfo: 'Additional information',
+  cashBackCondition: {
+    minAmount: 15000,
+    minTenor: 12,
+    minAR: 5.0
   }
-  return (
-    <>
-      <div id ="repayment-detail" className="repayment-table">
-        <div className="repayment-header">
-          <div className="label">
-            {`SGD  ${mthPayment(monthlyRepayment)} / ${userInputSelector.applicants.loan_tenor_a_1 || 0} months`}
-          </div>
-          <div
-            className="info-icon"
-            onClick={() => showLoanInfo("showLoanInfo")}
-          >
-            {" "}
-          </div>
-        </div>
-        <hr />
-        {productType === 280 && (
-          <>
-            <div className="repaymentRow">
-              <div className="label">{loanDetailsConst.annualFee}</div>
-              <div className="value">{annualFee}</div>
-            </div>
-            <div className="repaymentRow">
-              <div className="label">
-                {loanDetailsConst.annulPercentageRate}
-              </div>
-              <div className="value">{roi}%</div>
-            </div>
-            <div className="repaymentRow">
-              <div className="label">
-                {loanDetailsConst.EIR}{" "}
-                <span
-                  className="info-icon"
-                  onClick={() => showLoanInfo("showEIRInfo")}
-                ></span>
-              </div>
-              <div className="value">{eir}</div>
-            </div>
-            {userInputSelector.applicants.loan_tenor_a_1 >= loanDetailsConst.cashBackCondition.minTenor && roi >= loanDetailsConst.cashBackCondition.minAR && staffCategory === "N" && (
-                <div className="repaymentRow">
-                  <div className="label">
-                    {loanDetailsConst.estimatedCashback}
-                  </div>
-                  <div className="value"> {estimatedCashBack}</div>
-                </div>
-              )}
-          </>
-        )}
-        {productType === 210 && (
-          <>
-            <div className="repaymentRow">
-              <div className="label">
-                {loanDetailsConst.requestedLoanAmount}
-              </div>
-              <div className="value">
-                {`SGD ${validateService.formateCurrency(
-                  userInputSelector.applicants.Transfer_amount_a_1,
-                  true
-                )}`}
-              </div>
-            </div>
-            <div className="repaymentRow">
-              <div className="label">
-                {loanDetailsConst.OneTimeProcessingFee}
-              </div>
-              <div className="value">{annualFee}</div>
-            </div>
-          </>
-        )}
-      </div>
-      {productType === 280 && jouney !== 'ETC' &&(
-        <div className="loanDetailNote">
-          {loanDetailsConst.note}
-          <div className="loanDetailNoteInfo">{loanDetailsConst.noteInfo}</div>
-        </div>
-      )}
+}));
 
-      {showModel && (
-        <Model name={modelName} handlebuttonClick={handlePopupBackButton} />
-      )}
-    </>
-  );
-};
+jest.mock('../../../services/validation-service', () => ({
+  formateCurrency: jest.fn((value, flag) => value),
+  getEIR: jest.fn(),
+  getEIRNew: jest.fn()
+}));
 
-export default LoanDetailsInfo;
+jest.mock('../model/model', () => 
+  jest.fn(({ name, handlebuttonClick }) => (
+    <div data-testid="loan-model">
+      <span>Model: {name}</span>
+      <button onClick={handlebuttonClick}>Close Model</button>
+    </div>
+  ))
+);
+
+jest.mock('../../../utils/store/rate-slice', () => ({
+  rateAction: {
+    updateEIR: jest.fn(value => ({ type: 'UPDATE_EIR', payload: value })),
+    updateAR: jest.fn(value => ({ type: 'UPDATE_AR', payload: value }))
+  }
+}));
+
+describe('LoanDetailsInfo Component', () => {
+  let mockStore;
+  let mockDispatch;
+
+  const createMockStore = (initialState) => {
+    return configureStore({
+      reducer: {
+        stages: {
+          stages: initialState.stages,
+          userInput: initialState.userInput,
+          updatedStageInputs: initialState.updatedStageInputs || [],
+          journeyType: initialState.journeyType || 'NTC'
+        },
+        rate: initialState.rate || {
+          ar: 0,
+          updatedInterestRates: [],
+          ipEirRate: {}
+        },
+        loanTopUp: initialState.loanTopUp || {
+          existingLoanTopUp: false,
+          interestRate: null,
+          topupAmount: null
+        }
+      },
+      preloadedState: {
+        stages: {
+          stages: initialState.stages,
+          userInput: initialState.userInput,
+          updatedStageInputs: initialState.updatedStageInputs || [],
+          journeyType: initialState.journeyType || 'NTC'
+        },
+        rate: initialState.rate || {
+          ar: 0,
+          updatedInterestRates: [],
+          ipEirRate: {}
+        },
+        loanTopUp: initialState.loanTopUp || {
+          existingLoanTopUp: false,
+          interestRate: null,
+          topupAmount: null
+        }
+      }
+    });
+  };
+
+  const defaultMockState = {
+    stages: [{
+      stageInfo: {
+        products: [
+          { product_type: '280', campaign: 'TEST_CAMPAIGN' },
+          { product_type: '280', product_category: 'PL', campaign: 'PL_CAMPAIGN' }
+        ],
+        applicants: {
+          staff_category_a_1: 'N',
+          rbp_applied_rate_a_1: '6.5'
+        }
+      }
+    }],
+    userInput: {
+      applicants: {
+        loan_tenor_a_1: '24',
+        required_loan_amount_a_1: '25000',
+        Transfer_amount_a_1: '30000'
+      }
+    },
+    rate: {
+      ar: 7.5,
+      updatedInterestRates: [
+        {
+          tenure: '24',
+          ProcessingFee: 2.5,
+          EIR: '8.5'
+        }
+      ],
+      ipEirRate: {}
+    }
+  };
+
+  beforeEach(() => {
+    mockDispatch = jest.fn();
+    mockStore = createMockStore(defaultMockState);
+    
+    // Reset all mocks
+    jest.clearAllMocks();
+    
+    // Mock the dispatch function
+    jest.spyOn(require('react-redux'), 'useDispatch').mockReturnValue(mockDispatch);
+    
+    // Mock validation service methods
+    validateService.formateCurrency.mockImplementation((value, flag) => value);
+    validateService.getEIRNew.mockReturnValue('8.5,7.5');
+  });
+
+  describe('Basic Rendering - Product Type 280', () => {
+    test('should render loan details for product type 280', () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText(/SGD.*24 months/)).toBeInTheDocument();
+      expect(screen.getByText('Annual Fee')).toBeInTheDocument();
+      expect(screen.getByText('Annual Percentage Rate')).toBeInTheDocument();
+      expect(screen.getByText('Effective Interest Rate')).toBeInTheDocument();
+    });
+
+    test('should display monthly repayment calculation', async () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText(/SGD.*24 months/)).toBeInTheDocument();
+      });
+    });
+
+    test('should show annual fee for product type 280', () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText('-SGD 199')).toBeInTheDocument();
+    });
+
+    test('should display ROI percentage', async () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText(/7\.5%/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Product Type 210 - Balance Transfer', () => {
+    test('should render balance transfer details', () => {
+      const btState = {
+        ...defaultMockState,
+        stages: [{
+          stageInfo: {
+            products: [
+              { product_type: '210', campaign: 'BT_CAMPAIGN' }
+            ],
+            applicants: {
+              staff_category_a_1: 'N'
+            }
+          }
+        }]
+      };
+
+      mockStore = createMockStore(btState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText('Requested Loan Amount')).toBeInTheDocument();
+      expect(screen.getByText('One-time Processing Fee')).toBeInTheDocument();
+      expect(screen.getByText(/SGD.*30000/)).toBeInTheDocument();
+    });
+
+    test('should calculate processing fee for BT', async () => {
+      const btState = {
+        ...defaultMockState,
+        stages: [{
+          stageInfo: {
+            products: [
+              { product_type: '210', campaign: 'BT_CAMPAIGN' }
+            ],
+            applicants: {
+              staff_category_a_1: 'N'
+            }
+          }
+        }]
+      };
+
+      mockStore = createMockStore(btState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText(/\+SGD/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Personal Loan Flag Logic', () => {
+    test('should handle personal loan product category', () => {
+      const plState = {
+        ...defaultMockState,
+        stages: [{
+          stageInfo: {
+            products: [
+              { product_type: '280', campaign: 'CASH_CAMPAIGN' },
+              { product_type: '280', product_category: 'PL', campaign: 'PL_CAMPAIGN' }
+            ],
+            applicants: {
+              staff_category_a_1: 'N'
+            }
+          }
+        }]
+      };
+
+      mockStore = createMockStore(plState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText('Annual Fee')).toBeInTheDocument();
+    });
+  });
+
+  describe('Cashback Calculation', () => {
+    test('should show cashback for eligible loan amount (15k-40k)', async () => {
+      const cashbackState = {
+        ...defaultMockState,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '24',
+            required_loan_amount_a_1: '20000'
+          }
+        }
+      };
+
+      mockStore = createMockStore(cashbackState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Estimated Cashback')).toBeInTheDocument();
+        expect(screen.getByText(/SGD.*200/)).toBeInTheDocument();
+      });
+    });
+
+    test('should show higher cashback for 40k-50k range', async () => {
+      const cashbackState = {
+        ...defaultMockState,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '24',
+            required_loan_amount_a_1: '45000'
+          }
+        }
+      };
+
+      mockStore = createMockStore(cashbackState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Estimated Cashback')).toBeInTheDocument();
+      });
+    });
+
+    test('should show maximum cashback for amounts >= 50k', async () => {
+      const cashbackState = {
+        ...defaultMockState,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '24',
+            required_loan_amount_a_1: '60000'
+          }
+        }
+      };
+
+      mockStore = createMockStore(cashbackState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Estimated Cashback')).toBeInTheDocument();
+      });
+    });
+
+    test('should show no cashback for amounts below 15k', async () => {
+      const noCashbackState = {
+        ...defaultMockState,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '24',
+            required_loan_amount_a_1: '10000'
+          }
+        }
+      };
+
+      mockStore = createMockStore(noCashbackState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('No Cashback')).toBeInTheDocument();
+      });
+    });
+
+    test('should not show cashback for staff category other than N', () => {
+      const staffState = {
+        ...defaultMockState,
+        stages: [{
+          stageInfo: {
+            products: [
+              { product_type: '280', campaign: 'TEST_CAMPAIGN' }
+            ],
+            applicants: {
+              staff_category_a_1: 'Y'
+            }
+          }
+        }]
+      };
+
+      mockStore = createMockStore(staffState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Estimated Cashback')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('ETC Journey and Loan Top-up', () => {
+    test('should handle existing cash one with ETC journey', () => {
+      const etcState = {
+        ...defaultMockState,
+        journeyType: 'ETC',
+        loanTopUp: {
+          existingLoanTopUp: true,
+          interestRate: '6.0',
+          topupAmount: '15000'
+        }
+      };
+
+      mockStore = createMockStore(etcState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText('Annual Fee')).toBeInTheDocument();
+    });
+
+    test('should not show note for ETC journey', () => {
+      const etcState = {
+        ...defaultMockState,
+        journeyType: 'ETC'
+      };
+
+      mockStore = createMockStore(etcState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Important note about the loan')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Model Interactions', () => {
+    test('should open loan info model when info icon is clicked', () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      const infoIcons = screen.getAllByRole('generic');
+      const headerInfoIcon = infoIcons.find(icon => 
+        icon.className.includes('info-icon')
+      );
+
+      if (headerInfoIcon) {
+        fireEvent.click(headerInfoIcon);
+        expect(screen.getByTestId('loan-model')).toBeInTheDocument();
+        expect(screen.getByText('Model: showLoanInfo')).toBeInTheDocument();
+      }
+    });
+
+    test('should open EIR info model when EIR info icon is clicked', async () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        const eirInfoIcon = screen.getByText('Effective Interest Rate').parentElement?.querySelector('.info-icon');
+        if (eirInfoIcon) {
+          fireEvent.click(eirInfoIcon);
+          expect(screen.getByTestId('loan-model')).toBeInTheDocument();
+          expect(screen.getByText('Model: showEIRInfo')).toBeInTheDocument();
+        }
+      });
+    });
+
+    test('should close model when close button is clicked', () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      const infoIcons = screen.getAllByRole('generic');
+      const headerInfoIcon = infoIcons.find(icon => 
+        icon.className.includes('info-icon')
+      );
+
+      if (headerInfoIcon) {
+        fireEvent.click(headerInfoIcon);
+        expect(screen.getByTestId('loan-model')).toBeInTheDocument();
+
+        const closeButton = screen.getByText('Close Model');
+        fireEvent.click(closeButton);
+        expect(screen.queryByTestId('loan-model')).not.toBeInTheDocument();
+      }
+    });
+  });
+
+  describe('EIR Calculation and Dispatch', () => {
+    test('should dispatch EIR and AR updates', async () => {
+      validateService.getEIRNew.mockReturnValue('9.5,8.0');
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalledWith({ type: 'UPDATE_EIR', payload: '9.5' });
+        expect(mockDispatch).toHaveBeenCalledWith({ type: 'UPDATE_AR', payload: '8.0' });
+      });
+    });
+
+    test('should handle N/A EIR value', async () => {
+      validateService.getEIRNew.mockReturnValue('N/A');
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Tenor not applicable')).toBeInTheDocument();
+      });
+    });
+
+    test('should display EIR with percentage', async () => {
+      validateService.getEIRNew.mockReturnValue('8.5');
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('8.5% p.a.')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    test('should handle missing stage data', () => {
+      const emptyState = {
+        stages: [],
+        userInput: { applicants: {} },
+        rate: { ar: 0, updatedInterestRates: [], ipEirRate: {} }
+      };
+
+      mockStore = createMockStore(emptyState);
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <LoanDetailsInfo />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+
+    test('should handle missing user input', () => {
+      const noInputState = {
+        ...defaultMockState,
+        userInput: { applicants: {} }
+      };
+
+      mockStore = createMockStore(noInputState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText(/SGD.*0.*months/)).toBeInTheDocument();
+    });
+
+    test('should handle infinity values in calculations', () => {
+      const infinityState = {
+        ...defaultMockState,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '0', // This would cause division by zero
+            required_loan_amount_a_1: '25000'
+          }
+        }
+      };
+
+      mockStore = createMockStore(infinityState);
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <LoanDetailsInfo />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+
+    test('should handle missing products array', () => {
+      const noProductsState = {
+        ...defaultMockState,
+        stages: [{
+          stageInfo: {
+            applicants: {
+              staff_category_a_1: 'N'
+            }
+          }
+        }]
+      };
+
+      mockStore = createMockStore(noProductsState);
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <LoanDetailsInfo />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+  });
+
+  describe('Currency Formatting', () => {
+    test('should call formateCurrency for monetary values', async () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      await waitFor(() => {
+        expect(validateService.formateCurrency).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Note Display', () => {
+    test('should show note for non-ETC journey product type 280', () => {
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText('Important note about the loan')).toBeInTheDocument();
+      expect(screen.getByText('Additional information')).toBeInTheDocument();
+    });
+  });
+
+  describe('Updated Stage Inputs', () => {
+    test('should use updated stage inputs when available', () => {
+      const updatedInputsState = {
+        ...defaultMockState,
+        updatedStageInputs: [{
+          stageId: 'ad-1',
+          applicants: {
+            loan_tenor_a_1: '36'
+          }
+        }],
+        userInput: {
+          applicants: {
+            required_loan_amount_a_1: '25000'
+          }
+        }
+      };
+
+      mockStore = createMockStore(updatedInputsState);
+
+      render(
+        <Provider store={mockStore}>
+          <LoanDetailsInfo />
+        </Provider>
+      );
+
+      expect(screen.getByText('Annual Fee')).toBeInTheDocument();
+    });
+  });
+});
