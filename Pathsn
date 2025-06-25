@@ -1,169 +1,51 @@
-import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureMockStore from 'redux-mock-store';
-import Display from './Display';
-import { isFieldUpdate } from '../../../utils/common/change.utils';
-import { act } from 'react-dom/test-utils';
+import { useDispatch,useSelector } from "react-redux";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import "./display.scss";
+import { useEffect, useState } from "react";
+import { isFieldUpdate } from "../../../utils/common/change.utils";
+import { lastAction } from "../../../utils/store/last-accessed-slice";
 
-// Mock the change utils
-jest.mock('../../../utils/common/change.utils', () => ({
-  isFieldUpdate: jest.fn().mockImplementation(() => ({ type: 'MOCK_ACTION' }))
-}));
-
-// Mock store setup
-const mockStore = configureMockStore([]);
-
-describe('Display Component', () => {
-  const mockHandleCallback = jest.fn();
-
-  const baseProps = {
-    data: {
-      logical_field_name: 'mailing_address',
-      rwb_label_name: 'Mailing Address'
-    },
-    handleCallback: mockHandleCallback
-  };
-
-  const createTestStore = (overrides = {}) => {
-    return mockStore({
-      stages: {
-        stages: [
-          {
-            stageInfo: {
-              application: {
-                journey_type: 'NTC'
-              },
-              products: [
-                {
-                  product_category: 'CC',
-                  product_type: '100'
-                }
-              ],
-              applicants: {
-                mailing_address_a_1: '123 Test Street',
-                res_address_a_1: '456 Residential Ave'
-              },
-              ...overrides
+const Display = (props: KeyWithAnyModel) => {
+    const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+    const dispatch = useDispatch();
+    const [defaultValue, setDefaultValue] = useState("");
+ 
+      useEffect(() => {
+        let myInfoAddress :string = "";
+        /*istanbul ignore else*/
+        if (props.data.logical_field_name === "mailing_address" || props.data.logical_field_name === "residential_address" ) {
+            if(stageSelector[0].stageInfo.application.journey_type === 'NTC' 
+            && (stageSelector[0].stageInfo.products[0].product_category === 'CC' 
+            || stageSelector[0].stageInfo.products[0].product_type === '280')){
+             myInfoAddress = (props.data.logical_field_name === "mailing_address" 
+             && stageSelector[0].stageInfo.applicants["mailing_address_a_1"])?
+             stageSelector[0].stageInfo.applicants["mailing_address_a_1"] : 
+             (props.data.logical_field_name === "residential_address" 
+             && stageSelector[0].stageInfo.applicants["res_address_a_1"]) ?
+             stageSelector[0].stageInfo.applicants["res_address_a_1"] : null;
+            }
+            if(myInfoAddress){
+              setDefaultValue(myInfoAddress);
+             dispatch(
+              isFieldUpdate(props, myInfoAddress, props.data.logical_field_name)
+              );
             }
           }
-        ]
-      }
-    });
-  };
+          props.handleCallback(props.data, myInfoAddress);
+    }, []);
+    return (
+      <>
+        <div className="display_Info">
+             {(defaultValue && <label htmlFor={props.data.logical_field_name}>
+                {props.data.rwb_label_name}
+              </label>)}
+              {(defaultValue && <div className="display_input_field">
+                <span>{defaultValue}</span>
+              </div>)}
+        </div>
+      </>
+    );
+}
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should render mailing address for NTC journey with CC product', async () => {
-    const store = createTestStore();
-    
-    await act(async () => {
-      render(
-        <Provider store={store}>
-          <Display {...baseProps} />
-        </Provider>
-      );
-    });
-
-    expect(screen.getByText('Mailing Address')).toBeInTheDocument();
-    expect(screen.getByText('123 Test Street')).toBeInTheDocument();
-    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, '123 Test Street');
-    expect(isFieldUpdate).toHaveBeenCalledWith(baseProps, '123 Test Street', 'mailing_address');
-  });
-
-  it('should render residential address when logical_field_name is residential_address', async () => {
-    const store = createTestStore();
-    const residentialProps = {
-      ...baseProps,
-      data: {
-        logical_field_name: 'residential_address',
-        rwb_label_name: 'Residential Address'
-      }
-    };
-
-    await act(async () => {
-      render(
-        <Provider store={store}>
-          <Display {...residentialProps} />
-        </Provider>
-      );
-    });
-
-    expect(screen.getByText('Residential Address')).toBeInTheDocument();
-    expect(screen.getByText('456 Residential Ave')).toBeInTheDocument();
-  });
-
-  it('should not render when journey type is not NTC', async () => {
-    const store = createTestStore({
-      application: {
-        journey_type: 'NTB'
-      }
-    });
-
-    await act(async () => {
-      render(
-        <Provider store={store}>
-          <Display {...baseProps} />
-        </Provider>
-      );
-    });
-
-    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-  });
-
-  it('should not render when product is not CC or type 280', async () => {
-    const store = createTestStore({
-      products: [{
-        product_category: 'PL',
-        product_type: '100'
-      }]
-    });
-
-    await act(async () => {
-      render(
-        <Provider store={store}>
-          <Display {...baseProps} />
-        </Provider>
-      );
-    });
-
-    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-  });
-
-  it('should handle missing address data gracefully', async () => {
-    const store = createTestStore({
-      applicants: {
-        mailing_address_a_1: '',
-        res_address_a_1: ''
-      }
-    });
-
-    await act(async () => {
-      render(
-        <Provider store={store}>
-          <Display {...baseProps} />
-        </Provider>
-      );
-    });
-
-    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-  });
-
-  it('should handle undefined applicants data', async () => {
-    const store = createTestStore({
-      applicants: undefined
-    });
-
-    await act(async () => {
-      render(
-        <Provider store={store}>
-          <Display {...baseProps} />
-        </Provider>
-      );
-    });
-
-    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-  });
-});
+export default Display;
+Please write test cases using jest with RTL
