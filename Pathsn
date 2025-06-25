@@ -1,190 +1,304 @@
-import React, { useEffect, useState } from "react";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import "./button-group.scss";
-import { useDispatch, useSelector } from "react-redux";
-import {
-  fieldIdAppend,
-  isFieldUpdate,
-  getUrl,
-  isFieldValueUpdate,
-} from "../../../utils/common/change.utils";
-import LoanDetailsInfo from "../loan-details-info/loan-details-info";
-import loanDetailsConst from "../../../assets/_json/loan-details.json";
-import validateService from "../../../services/validation-service";
-import { loanTopUpAction } from "../../../utils/store/loan-topup-slice";
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import configureStore from 'redux-mock-store';
+import ButtonGroup from './ButtonGroup';
+import { loanTopUpAction } from '../../../utils/store/loan-topup-slice';
 
-const ButtonGroup = (props: KeyWithAnyModel) => {
-  const dispatch = useDispatch();
-  const [options, setOptions] = useState([{}]);
-  const userInputSelector = useSelector(
-    (state: StoreModel) => state.stages.userInput
-  );
-  const updatedStageInputs=useSelector((state: StoreModel) => state.stages.updatedStageInputs);
-  let previouslySelectedLoanTenor= updatedStageInputs.filter((item:any)=>(item.stageId ==="ad-1"))
-  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-  const lastStageSelector = useSelector((state: StoreModel) => state.stages.lastStageId);
-  const loanTopUpDetails =  useSelector((state: StoreModel) =>state.loanTopUp);
-  const [OSAValue, setOSAValue] = useState("");
-  const productCode = stageSelector[0].stageInfo.products[0].product_type;
-  const applicationJourney = useSelector((state: StoreModel) => state.stages.journeyType);
-  const existingCashone =  (productCode === '280' && applicationJourney === 'ETC') ? true : false;
+// Mock the Redux store
+const mockStore = configureStore([]);
 
-  useEffect(() =>{
-    if(existingCashone && loanTopUpDetails?.outstandingAmount){
-      setOSAValue(validateService.formateCurrency(loanTopUpDetails?.outstandingAmount));
-    }
-  },[loanTopUpDetails?.outstandingAmount]);
-
-  useEffect(() => {
-    if (props.data.logical_field_name === "loan_tenor") {
-      const tenureOptions  = stageSelector[0].stageInfo.products[0].product_type === '280' ? loanDetailsConst.tenureOptions : loanDetailsConst.tenureOptionsCCFT;
-      setOptions(tenureOptions);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const getStoreValue = () => {
-    if (
-      stageSelector &&
-      stageSelector[0] &&
-      stageSelector[0].stageInfo &&
-      stageSelector[0].stageInfo.applicants
-    ) {
-      const userInputResponse =
-        userInputSelector.applicants[fieldIdAppend(props)];
-      const stageIndex = getUrl
-        .getUpdatedStage()
-        .updatedStageInputs.findIndex(
-          (ref: any) => ref && ref.stageId === stageSelector[0].stageId
-        );
-      let updatedVal = null;
-      if (stageIndex > -1) {
-        updatedVal =
-          getUrl.getUpdatedStage().updatedStageInputs[stageIndex].applicants[
-            fieldIdAppend(props)
-          ];
-      }
-
-      let fieldValue = "";
-      if (updatedVal) {
-        fieldValue = updatedVal;
-      } else if (userInputResponse) {
-        fieldValue = userInputResponse;
-      } else if (
-        stageSelector[0].stageInfo.applicants[fieldIdAppend(props)] &&
-        updatedVal !== ""
-      ) {
-        fieldValue =
-          stageSelector[0].stageInfo.applicants[fieldIdAppend(props)];
-      }
-      return fieldValue;
-    }
-    return "";
+describe('ButtonGroup Component', () => {
+  const mockProps = {
+    data: {
+      logical_field_name: 'loan_tenor',
+      rwb_label_name: 'Loan Tenure',
+    },
+    handleCallback: jest.fn(),
+    handleFieldDispatch: jest.fn(),
   };
 
-  useEffect(() => {
-    if(props.data.logical_field_name === "loan_tenor" && userInputSelector.applicants.loan_tenor_a_1){
-      props.handleCallback(props.data, userInputSelector.applicants.loan_tenor_a_1);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[userInputSelector.applicants.loan_tenor_a_1])
-
-  useEffect(() => {
-    if (userInputSelector.applicants.required_annual_income_a_1|| stageSelector[0].stageInfo.applicants.annual_income_a_1 || (existingCashone && (loanTopUpDetails.existingLoanTopUp || loanTopUpDetails.newLoanTopUp))) {
-      if (props.data.logical_field_name === "loan_tenor") {
-        const tenureOptions = stageSelector[0].stageInfo.products[0].product_type === '280' ? loanDetailsConst.tenureOptions : loanDetailsConst.tenureOptionsCCFT;
-        const value = getStoreValue();
-        const defaultTenor = (existingCashone && (loanTopUpDetails.existingLoanTopUp || loanTopUpDetails.newLoanTopUp)) ? true : compareOldAnnualIncome();
-        if (value && defaultTenor) {
-          props.handleFieldDispatch(props.data.logical_field_name, value);
-          dispatch(isFieldUpdate(props, value, props.data.logical_field_name));
-          props.handleCallback(props.data, value);
-        } else {
-          props.handleFieldDispatch(props.data.logical_field_name, tenureOptions[0].value);
-          dispatch(isFieldUpdate(props, tenureOptions[0].value, props.data.logical_field_name));
-          props.handleCallback(props.data, tenureOptions[0].value);
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userInputSelector.applicants.required_annual_income_a_1, stageSelector[0].stageInfo.applicants.annual_income_a_1 ]);
-
-  const updateTenureValue = (value: string) => {
-    dispatch(isFieldUpdate(props, value, props.data.logical_field_name));
-    dispatch(isFieldValueUpdate(props, stageSelector, value));
-    props.handleCallback(props.data, value);
+  const initialState = {
+    stages: {
+      userInput: {
+        applicants: {
+          loan_tenor_a_1: '',
+          required_annual_income_a_1: '',
+          required_loan_amount_a_1: '',
+        },
+      },
+      updatedStageInputs: [],
+      stages: [
+        {
+          stageId: 'ad-1',
+          stageInfo: {
+            products: [{ product_type: '280' }],
+            applicants: {
+              annual_income_a_1: '',
+              required_annual_income_a_1: '',
+            },
+          },
+        },
+      ],
+      lastStageId: '',
+      journeyType: 'ETC',
+    },
+    loanTopUp: {
+      outstandingAmount: '',
+      existingLoanTopUp: false,
+      newLoanTopUp: false,
+      topupAmount: '',
+    },
   };
 
-  const compareOldAnnualIncome = () => {
-    if (lastStageSelector === "bd-3" || lastStageSelector === "doc" || lastStageSelector === "ad-2") {
-      if (stageSelector &&
-        stageSelector[0] &&
-        stageSelector[0].stageInfo &&
-        stageSelector[0].stageInfo.applicants) {
-          return (userInputSelector.applicants.required_annual_income_a_1 === stageSelector[0].stageInfo.applicants.required_annual_income_a_1);
-      }
-    } else if (lastStageSelector === "ssf-1" || lastStageSelector === "ssf-2" || lastStageSelector === "bd-1") {
-      const stageIndex = getUrl
-        .getUpdatedStage()
-        .updatedStageInputs.findIndex(
-          (ref: any) => ref && ref.stageId === stageSelector[0].stageId
-        );
-      let updatedVal = null;
-      if (stageIndex > -1) {
-        updatedVal =
-          getUrl.getUpdatedStage().updatedStageInputs[stageIndex].applicants['required_annual_income_a_1'];
-      }
-      return (userInputSelector.applicants.required_annual_income_a_1 === updatedVal);
-    } else {
-      return true
-    }
-  }
+  let store;
 
-  const topupAmount = () => {
-    const loanAmount = userInputSelector.applicants.required_loan_amount_a_1
-      ? parseFloat(userInputSelector.applicants.required_loan_amount_a_1)
-      : 0;     
-      let topup_Amount : any;
-    if (loanAmount && OSAValue) {
-      let finalAmnt = OSAValue.replaceAll(",", "");
-        topup_Amount = loanAmount + Number(finalAmnt);
-      }
-    if (topup_Amount > 0) {
-      dispatch(loanTopUpAction.settopupAmount(topup_Amount.toString()));
-      return validateService.formateCurrency(topup_Amount.toString());
-      }
-      else {
-        dispatch(loanTopUpAction.settopupAmount(0));
-        return 0.00;
-      }
-  };
-  return (
-    <>
-    <div>
-      <div className="button-group" id={fieldIdAppend(props)}>
-        <label className="label" htmlFor={props.data.logical_field_name}>
-          {props.data.rwb_label_name}
-        </label>
-          {existingCashone && loanTopUpDetails.existingLoanTopUp && (<div className="topup-banner">
-            <div className="topup-amount">
-              <div>Final Loan Amount</div>
-              SGD {topupAmount()}
-            </div>
-          </div>
-          )}
-        <div className="buttons">
-          {options.map(
-            (btn: KeyWithAnyModel) => {
-              return(
-                <div className={`tenure-button ${btn.value === (userInputSelector.applicants.loan_tenor_a_1|| previouslySelectedLoanTenor &&previouslySelectedLoanTenor[0]?.applicants?.loan_tenor_a_1) ? 'active' : ''}`}  onClick={()=> updateTenureValue(btn.value)}><span>{btn.label}</span></div>
-              )
-          })}
-         </div>
-      </div>
-      </div>
-      {props.data.logical_field_name === "loan_tenor" && <LoanDetailsInfo />}
-    </>
-  );
-};
-export default ButtonGroup;
-Please write test cases using jest with RTL
+  beforeEach(() => {
+    store = mockStore(initialState);
+    store.dispatch = jest.fn();
+  });
+
+  it('renders without crashing', () => {
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(screen.getByText('Loan Tenure')).toBeInTheDocument();
+  });
+
+  it('displays tenure buttons based on product type 280', () => {
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.length).toBeGreaterThan(0);
+  });
+
+  it('displays tenure buttons based on product type CCFT', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        stages: [
+          {
+            stageId: 'ad-1',
+            stageInfo: {
+              products: [{ product_type: 'CCFT' }],
+              applicants: {
+                annual_income_a_1: '',
+                required_annual_income_a_1: '',
+              },
+            },
+          },
+        ],
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.length).toBeGreaterThan(0);
+  });
+
+  it('calls updateTenureValue when a button is clicked', () => {
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    const firstButton = screen.getAllByRole('button')[0];
+    fireEvent.click(firstButton);
+    
+    expect(store.dispatch).toHaveBeenCalled();
+    expect(mockProps.handleCallback).toHaveBeenCalled();
+  });
+
+  it('displays active class on selected button', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '12',
+            required_annual_income_a_1: '',
+            required_loan_amount_a_1: '',
+          },
+        },
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    const activeButton = screen.getByText('12 months');
+    expect(activeButton).toHaveClass('active');
+  });
+
+  it('displays topup banner when existingCashone is true and existingLoanTopUp is true', () => {
+    const customState = {
+      ...initialState,
+      loanTopUp: {
+        outstandingAmount: '1000',
+        existingLoanTopUp: true,
+        newLoanTopUp: false,
+        topupAmount: '',
+      },
+      stages: {
+        ...initialState.stages,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '',
+            required_annual_income_a_1: '',
+            required_loan_amount_a_1: '2000',
+          },
+        },
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(screen.getByText('Final Loan Amount')).toBeInTheDocument();
+    expect(screen.getByText('SGD 3,000.00')).toBeInTheDocument();
+  });
+
+  it('dispatches topup amount when loan amount and OSA value are present', () => {
+    const customState = {
+      ...initialState,
+      loanTopUp: {
+        outstandingAmount: '1000',
+        existingLoanTopUp: true,
+        newLoanTopUp: false,
+        topupAmount: '',
+      },
+      stages: {
+        ...initialState.stages,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '',
+            required_annual_income_a_1: '',
+            required_loan_amount_a_1: '2000',
+          },
+        },
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(store.dispatch).toHaveBeenCalledWith(
+      loanTopUpAction.settopupAmount('3000')
+    );
+  });
+
+  it('renders LoanDetailsInfo when logical_field_name is loan_tenor', () => {
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(screen.getByTestId('loan-details-info')).toBeInTheDocument();
+  });
+
+  it('does not render LoanDetailsInfo when logical_field_name is not loan_tenor', () => {
+    const customProps = {
+      ...mockProps,
+      data: {
+        logical_field_name: 'other_field',
+        rwb_label_name: 'Other Field',
+      },
+    };
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...customProps} />
+      </Provider>
+    );
+    
+    expect(screen.queryByTestId('loan-details-info')).not.toBeInTheDocument();
+  });
+
+  it('sets default tenure when annual income changes', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '',
+            required_annual_income_a_1: '50000',
+            required_loan_amount_a_1: '',
+          },
+        },
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(store.dispatch).toHaveBeenCalled();
+    expect(mockProps.handleCallback).toHaveBeenCalled();
+  });
+
+  it('uses previously selected loan tenor if available', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        updatedStageInputs: [
+          {
+            stageId: 'ad-1',
+            applicants: {
+              loan_tenor_a_1: '24',
+            },
+          },
+        ],
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    const activeButton = screen.getByText('24 months');
+    expect(activeButton).toHaveClass('active');
+  });
+});
