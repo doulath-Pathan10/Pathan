@@ -1,55 +1,96 @@
-import { useDispatch, useSelector } from "react-redux";
-import "./loan-top-up.scss";
-import SelectionBox from "../selection-box/selection-box";
-import { loanTopUpAction } from "../../../utils/store/loan-topup-slice";
-import {  StoreModel } from "../../../utils/model/common-model";
-import validateService from "../../../services/validation-service";
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import configureMockStore from 'redux-mock-store';
+import LoanTopUp from './LoanTopUp';
+import { loanTopUpAction } from '../../../utils/store/loan-topup-slice';
 
-const LoanTopUp = (props: any) => {
-
- const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-
-  const loanForm = {
-    logical_field_name: "loan_account_list",
-    rwb_label_name: "Select an existing loan to top up"
-}
-const dispatch = useDispatch();
-
-  const choosingLoanTopUP = () => {    
-    dispatch(loanTopUpAction.setexistingLoanTopUp(true));
-    props.topUpClick();
-  }
-
-  const choosingNewLoan = () => {    
-    dispatch(loanTopUpAction.setnewLoanTopUp(true));
-    props.topUpClick();
-  }
-
-  return (
-    <>
-      <div className="topUp-modal">
-        <div className="topUp-modal-header">
-          <div className="loan_topup_head">You have existing loan(s) eligible for top up</div>
-          <div className="topUp-modal-desc">Top up your existing CashOne to enjoy the same interest rate as your existing CashOne.</div>
-        </div>
-        <div className="topUp-eligible-header">
-          <div>Your maximum eligible loan amount is</div>
-          <div className="topUp-eligible-amnt">{`SGD ${validateService.formateCurrency(stageSelector[0].stageInfo.applicants.max_eligible_amount)}`}</div>
-        </div>
-        <div key='topUp-selectBox'>
-          <SelectionBox 
-          data = {loanForm}
-          flowType = "ExistingTopForPL"
-          />
-        </div>
-        <button className="topUp-button" onClick={choosingLoanTopUP}>Top up loan</button>
-        <div className="topUp-newLoan" onClick={choosingNewLoan}>
-        <span className ='topUp-loan-desc'>I want to apply for a new loan instead</span>
-        <span className='topUp-loan'></span>
-        </div>
-      </div>
-    </>
-  );
+// Mock the store
+const mockStore = configureMockStore();
+const mockStages = {
+  stages: [
+    {
+      stageInfo: {
+        applicants: {
+          max_eligible_amount: 5000
+        }
+      }
+    }
+  ]
 };
-export default LoanTopUp;
-Please write test cases using jest with RTL
+
+// Mock the SelectionBox component
+jest.mock('../selection-box/selection-box', () => () => (
+  <div data-testid="selection-box">SelectionBox</div>
+));
+
+// Mock the validation service
+jest.mock('../../../services/validation-service', () => ({
+  formateCurrency: (amount: number) => amount.toLocaleString()
+}));
+
+describe('LoanTopUp Component', () => {
+  const mockTopUpClick = jest.fn();
+  const store = mockStore({
+    stages: mockStages
+  });
+
+  beforeEach(() => {
+    store.clearActions();
+    jest.clearAllMocks();
+  });
+
+  it('renders correctly with all elements', () => {
+    render(
+      <Provider store={store}>
+        <LoanTopUp topUpClick={mockTopUpClick} />
+      </Provider>
+    );
+
+    expect(screen.getByText('You have existing loan(s) eligible for top up')).toBeInTheDocument();
+    expect(screen.getByText('Top up your existing CashOne to enjoy the same interest rate as your existing CashOne.')).toBeInTheDocument();
+    expect(screen.getByText('Your maximum eligible loan amount is')).toBeInTheDocument();
+    expect(screen.getByText('SGD 5,000')).toBeInTheDocument();
+    expect(screen.getByTestId('selection-box')).toBeInTheDocument();
+    expect(screen.getByText('Top up loan')).toBeInTheDocument();
+    expect(screen.getByText('I want to apply for a new loan instead')).toBeInTheDocument();
+  });
+
+  it('dispatches setexistingLoanTopUp action when Top up loan button is clicked', () => {
+    render(
+      <Provider store={store}>
+        <LoanTopUp topUpClick={mockTopUpClick} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByText('Top up loan'));
+    
+    const actions = store.getActions();
+    expect(actions).toEqual([loanTopUpAction.setexistingLoanTopUp(true)]);
+    expect(mockTopUpClick).toHaveBeenCalled();
+  });
+
+  it('dispatches setnewLoanTopUp action when new loan link is clicked', () => {
+    render(
+      <Provider store={store}>
+        <LoanTopUp topUpClick={mockTopUpClick} />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByText('I want to apply for a new loan instead'));
+    
+    const actions = store.getActions();
+    expect(actions).toEqual([loanTopUpAction.setnewLoanTopUp(true)]);
+    expect(mockTopUpClick).toHaveBeenCalled();
+  });
+
+  it('formats currency correctly', () => {
+    render(
+      <Provider store={store}>
+        <LoanTopUp topUpClick={mockTopUpClick} />
+      </Provider>
+    );
+
+    expect(screen.getByText('SGD 5,000')).toBeInTheDocument();
+  });
+});
