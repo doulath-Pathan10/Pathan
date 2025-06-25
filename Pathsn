@@ -2,27 +2,33 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
+import ButtonGroup from './ButtonGroup';
 import LoanDetailsInfo from './LoanDetailsInfo';
-import { rateAction } from '../../../utils/store/rate-slice';
+import { loanTopUpAction } from '../../../utils/store/loan-topup-slice';
 
-// Mock the validateService and Model component
-jest.mock('../../../services/validation-service', () => ({
-  formateCurrency: jest.fn((value) => value),
-  getEIRNew: jest.fn(() => '6,5'),
-}));
+// Mock the LoanDetailsInfo component
+jest.mock('./LoanDetailsInfo', () => () => <div data-testid="loan-details-info">LoanDetailsInfo</div>);
 
-jest.mock('../model/model', () => () => <div data-testid="model">Model</div>);
-
+// Mock the Redux store
 const mockStore = configureStore([]);
 
-describe('LoanDetailsInfo Component', () => {
+describe('ButtonGroup Component', () => {
+  const mockProps = {
+    data: {
+      logical_field_name: 'loan_tenor',
+      rwb_label_name: 'Loan Tenure',
+    },
+    handleCallback: jest.fn(),
+    handleFieldDispatch: jest.fn(),
+  };
+
   const initialState = {
     stages: {
       userInput: {
         applicants: {
-          loan_tenor_a_1: '12',
-          required_loan_amount_a_1: '10000',
-          Transfer_amount_a_1: '5000',
+          loan_tenor_a_1: '',
+          required_annual_income_a_1: '',
+          required_loan_amount_a_1: '',
         },
       },
       updatedStageInputs: [],
@@ -31,30 +37,31 @@ describe('LoanDetailsInfo Component', () => {
           stageId: 'ad-1',
           stageInfo: {
             products: [
-              { product_type: '280', campaign: 'TEST', product_category: 'PL' },
-              { product_type: '210', campaign: 'TEST', product_category: 'CC' }
+              { product_type: '280', product_category: 'PL' },
+              { product_type: '210', product_category: 'CC' }
             ],
             applicants: {
+              annual_income_a_1: '',
+              required_annual_income_a_1: '',
               staff_category_a_1: 'N',
-              rbp_applied_rate_a_1: '5',
             },
           },
         },
       ],
+      lastStageId: '',
       journeyType: 'ETC',
     },
     loanTopUp: {
+      outstandingAmount: '',
       existingLoanTopUp: false,
+      newLoanTopUp: false,
       topupAmount: '',
-      interestRate: '5',
+      interestRate: '',
     },
     rate: {
       ar: '5',
       eir: '6',
-      updatedInterestRates: [
-        { tenure: '12', ProcessingFee: '1', EIR: '6' }
-      ],
-      ipEirRate: [],
+      updatedInterestRates: [],
     },
   };
 
@@ -65,30 +72,42 @@ describe('LoanDetailsInfo Component', () => {
     store.dispatch = jest.fn();
   });
 
-  it('renders without crashing for product type 280', () => {
+  it('renders without crashing', () => {
     render(
       <Provider store={store}>
-        <LoanDetailsInfo />
+        <ButtonGroup {...mockProps} />
       </Provider>
     );
     
-    expect(screen.getByText(/SGD 10000 \/ 12 months/)).toBeInTheDocument();
+    expect(screen.getByText('Loan Tenure')).toBeInTheDocument();
   });
 
-  it('displays correct repayment information for PL product', () => {
+  it('displays tenure buttons based on product type 280', () => {
     render(
       <Provider store={store}>
-        <LoanDetailsInfo />
+        <ButtonGroup {...mockProps} />
       </Provider>
     );
     
-    expect(screen.getByText('SGD 10000 / 12 months')).toBeInTheDocument();
-    expect(screen.getByText('-SGD 199')).toBeInTheDocument();
-    expect(screen.getByText('5%')).toBeInTheDocument();
-    expect(screen.getByText('6% p.a.')).toBeInTheDocument();
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.length).toBeGreaterThan(0);
   });
 
-  it('displays correct repayment information for CC product', () => {
+  it('calls updateTenureValue when a button is clicked', () => {
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    const firstButton = screen.getAllByRole('button')[0];
+    fireEvent.click(firstButton);
+    
+    expect(store.dispatch).toHaveBeenCalled();
+    expect(mockProps.handleCallback).toHaveBeenCalled();
+  });
+
+  it('displays active class on selected button', () => {
     const customState = {
       ...initialState,
       stages: {
@@ -96,7 +115,8 @@ describe('LoanDetailsInfo Component', () => {
         userInput: {
           applicants: {
             loan_tenor_a_1: '12',
-            Transfer_amount_a_1: '5000',
+            required_annual_income_a_1: '',
+            required_loan_amount_a_1: '',
           },
         },
       },
@@ -106,107 +126,30 @@ describe('LoanDetailsInfo Component', () => {
     
     render(
       <Provider store={store}>
-        <LoanDetailsInfo />
+        <ButtonGroup {...mockProps} />
       </Provider>
     );
     
-    expect(screen.getByText('SGD 5000')).toBeInTheDocument();
-    expect(screen.getByText('+SGD 50')).toBeInTheDocument();
+    const activeButton = screen.getByText('12 months');
+    expect(activeButton).toHaveClass('active');
   });
 
-  it('shows model when info icon is clicked', () => {
-    render(
-      <Provider store={store}>
-        <LoanDetailsInfo />
-      </Provider>
-    );
-    
-    const infoIcons = screen.getAllByRole('button');
-    fireEvent.click(infoIcons[0]);
-    
-    expect(screen.getByTestId('model')).toBeInTheDocument();
-  });
-
-  it('displays cashback when conditions are met', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            loan_tenor_a_1: '12',
-            required_loan_amount_a_1: '20000',
-          },
-        },
-      },
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <LoanDetailsInfo />
-      </Provider>
-    );
-    
-    expect(screen.getByText('SGD 200')).toBeInTheDocument();
-  });
-
-  it('updates EIR and AR rates when tenure changes', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            loan_tenor_a_1: '24',
-            required_loan_amount_a_1: '10000',
-          },
-        },
-      },
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <LoanDetailsInfo />
-      </Provider>
-    );
-    
-    expect(store.dispatch).toHaveBeenCalledWith(rateAction.updateEIR('6'));
-    expect(store.dispatch).toHaveBeenCalledWith(rateAction.updateAR('5'));
-  });
-
-  it('uses loanTopUp interest rate when existingLoanTopUp is true', () => {
+  it('displays topup banner when existingCashone is true and existingLoanTopUp is true', () => {
     const customState = {
       ...initialState,
       loanTopUp: {
+        outstandingAmount: '1000',
         existingLoanTopUp: true,
-        interestRate: '7',
+        newLoanTopUp: false,
+        topupAmount: '',
       },
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <LoanDetailsInfo />
-      </Provider>
-    );
-    
-    expect(screen.getByText('7%')).toBeInTheDocument();
-  });
-
-  it('shows "No Cashback" when loan amount is below threshold', () => {
-    const customState = {
-      ...initialState,
       stages: {
         ...initialState.stages,
         userInput: {
           applicants: {
-            loan_tenor_a_1: '12',
-            required_loan_amount_a_1: '5000',
+            loan_tenor_a_1: '',
+            required_annual_income_a_1: '',
+            required_loan_amount_a_1: '2000',
           },
         },
       },
@@ -216,10 +159,48 @@ describe('LoanDetailsInfo Component', () => {
     
     render(
       <Provider store={store}>
-        <LoanDetailsInfo />
+        <ButtonGroup {...mockProps} />
       </Provider>
     );
     
-    expect(screen.getByText('No Cashback')).toBeInTheDocument();
+    expect(screen.getByText('Final Loan Amount')).toBeInTheDocument();
+    expect(screen.getByText('SGD 3,000.00')).toBeInTheDocument();
+  });
+
+  it('renders LoanDetailsInfo when logical_field_name is loan_tenor', () => {
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(screen.getByTestId('loan-details-info')).toBeInTheDocument();
+  });
+
+  it('sets default tenure when annual income changes', () => {
+    const customState = {
+      ...initialState,
+      stages: {
+        ...initialState.stages,
+        userInput: {
+          applicants: {
+            loan_tenor_a_1: '',
+            required_annual_income_a_1: '50000',
+            required_loan_amount_a_1: '',
+          },
+        },
+      },
+    };
+    
+    store = mockStore(customState);
+    
+    render(
+      <Provider store={store}>
+        <ButtonGroup {...mockProps} />
+      </Provider>
+    );
+    
+    expect(store.dispatch).toHaveBeenCalled();
+    expect(mockProps.handleCallback).toHaveBeenCalled();
   });
 });
