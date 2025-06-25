@@ -1,96 +1,50 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureMockStore from 'redux-mock-store';
-import LoanTopUp from './LoanTopUp';
-import { loanTopUpAction } from '../../../utils/store/loan-topup-slice';
+import { useDispatch,useSelector } from "react-redux";
+import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
+import "./display.scss";
+import { useEffect, useState } from "react";
+import { isFieldUpdate } from "../../../utils/common/change.utils";
+import { lastAction } from "../../../utils/store/last-accessed-slice";
 
-// Mock the store
-const mockStore = configureMockStore();
-const mockStages = {
-  stages: [
-    {
-      stageInfo: {
-        applicants: {
-          max_eligible_amount: 5000
-        }
-      }
-    }
-  ]
-};
-
-// Mock the SelectionBox component
-jest.mock('../selection-box/selection-box', () => () => (
-  <div data-testid="selection-box">SelectionBox</div>
-));
-
-// Mock the validation service
-jest.mock('../../../services/validation-service', () => ({
-  formateCurrency: (amount: number) => amount.toLocaleString()
-}));
-
-describe('LoanTopUp Component', () => {
-  const mockTopUpClick = jest.fn();
-  const store = mockStore({
-    stages: mockStages
-  });
-
-  beforeEach(() => {
-    store.clearActions();
-    jest.clearAllMocks();
-  });
-
-  it('renders correctly with all elements', () => {
-    render(
-      <Provider store={store}>
-        <LoanTopUp topUpClick={mockTopUpClick} />
-      </Provider>
+const Display = (props: KeyWithAnyModel) => {
+    const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+    const dispatch = useDispatch();
+    const [defaultValue, setDefaultValue] = useState("");
+ 
+      useEffect(() => {
+        let myInfoAddress :string = "";
+        if (props.data.logical_field_name === "mailing_address" || props.data.logical_field_name === "residential_address" ) {
+            if(stageSelector[0].stageInfo.application.journey_type === 'NTC' 
+            && (stageSelector[0].stageInfo.products[0].product_category === 'CC' 
+            || stageSelector[0].stageInfo.products[0].product_type === '280')){
+             myInfoAddress = (props.data.logical_field_name === "mailing_address" 
+             && stageSelector[0].stageInfo.applicants["mailing_address_a_1"])?
+             stageSelector[0].stageInfo.applicants["mailing_address_a_1"] : 
+             (props.data.logical_field_name === "residential_address" 
+             && stageSelector[0].stageInfo.applicants["res_address_a_1"]) ?
+             stageSelector[0].stageInfo.applicants["res_address_a_1"] : null;
+            }
+            if(myInfoAddress){
+              setDefaultValue(myInfoAddress);
+             dispatch(
+              isFieldUpdate(props, myInfoAddress, props.data.logical_field_name)
+              );
+            }
+          }
+          props.handleCallback(props.data, myInfoAddress);
+    }, []);
+    return (
+      <>
+        <div className="display_Info">
+             {(defaultValue && <label htmlFor={props.data.logical_field_name}>
+                {props.data.rwb_label_name}
+              </label>)}
+              {(defaultValue && <div className="display_input_field">
+                <span>{defaultValue}</span>
+              </div>)}
+        </div>
+      </>
     );
+}
 
-    expect(screen.getByText('You have existing loan(s) eligible for top up')).toBeInTheDocument();
-    expect(screen.getByText('Top up your existing CashOne to enjoy the same interest rate as your existing CashOne.')).toBeInTheDocument();
-    expect(screen.getByText('Your maximum eligible loan amount is')).toBeInTheDocument();
-    expect(screen.getByText('SGD 5,000')).toBeInTheDocument();
-    expect(screen.getByTestId('selection-box')).toBeInTheDocument();
-    expect(screen.getByText('Top up loan')).toBeInTheDocument();
-    expect(screen.getByText('I want to apply for a new loan instead')).toBeInTheDocument();
-  });
-
-  it('dispatches setexistingLoanTopUp action when Top up loan button is clicked', () => {
-    render(
-      <Provider store={store}>
-        <LoanTopUp topUpClick={mockTopUpClick} />
-      </Provider>
-    );
-
-    fireEvent.click(screen.getByText('Top up loan'));
-    
-    const actions = store.getActions();
-    expect(actions).toEqual([loanTopUpAction.setexistingLoanTopUp(true)]);
-    expect(mockTopUpClick).toHaveBeenCalled();
-  });
-
-  it('dispatches setnewLoanTopUp action when new loan link is clicked', () => {
-    render(
-      <Provider store={store}>
-        <LoanTopUp topUpClick={mockTopUpClick} />
-      </Provider>
-    );
-
-    fireEvent.click(screen.getByText('I want to apply for a new loan instead'));
-    
-    const actions = store.getActions();
-    expect(actions).toEqual([loanTopUpAction.setnewLoanTopUp(true)]);
-    expect(mockTopUpClick).toHaveBeenCalled();
-  });
-
-  it('formats currency correctly', () => {
-    render(
-      <Provider store={store}>
-        <LoanTopUp topUpClick={mockTopUpClick} />
-      </Provider>
-    );
-
-    expect(screen.getByText('SGD 5,000')).toBeInTheDocument();
-  });
-});
+export default Display;
+Please write test cases using jest with RTL
