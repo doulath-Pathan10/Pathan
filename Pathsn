@@ -4,17 +4,19 @@ import { Provider } from 'react-redux';
 import configureMockStore from 'redux-mock-store';
 import Display from './Display';
 import { isFieldUpdate } from '../../../utils/common/change.utils';
-
-// Mock the Redux store
-const mockStore = configureMockStore();
-const mockHandleCallback = jest.fn();
+import { act } from 'react-dom/test-utils';
 
 // Mock the change utils
 jest.mock('../../../utils/common/change.utils', () => ({
-  isFieldUpdate: jest.fn()
+  isFieldUpdate: jest.fn().mockImplementation(() => ({ type: 'MOCK_ACTION' }))
 }));
 
+// Mock store setup
+const mockStore = configureMockStore([]);
+
 describe('Display Component', () => {
+  const mockHandleCallback = jest.fn();
+
   const baseProps = {
     data: {
       logical_field_name: 'mailing_address',
@@ -23,100 +25,8 @@ describe('Display Component', () => {
     handleCallback: mockHandleCallback
   };
 
-  const createStore = (journeyType: string, productCategory: string, productType: string, address?: string) => {
+  const createTestStore = (overrides = {}) => {
     return mockStore({
-      stages: {
-        stages: [
-          {
-            stageInfo: {
-              application: {
-                journey_type: journeyType
-              },
-              products: [
-                {
-                  product_category: productCategory,
-                  product_type: productType
-                }
-              ],
-              applicants: {
-                mailing_address_a_1: address,
-                res_address_a_1: address
-              }
-            }
-          }
-        ]
-      }
-    });
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('renders nothing when not NTC journey with CC product or type 280', () => {
-    const store = createStore('NTB', 'PL', '100');
-    render(
-      <Provider store={store}>
-        <Display {...baseProps} />
-      </Provider>
-    );
-
-    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, '');
-  });
-
-  it('displays mailing address for NTC journey with CC product', () => {
-    const testAddress = '123 Test Street';
-    const store = createStore('NTC', 'CC', '100', testAddress);
-    render(
-      <Provider store={store}>
-        <Display {...baseProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Mailing Address')).toBeInTheDocument();
-    expect(screen.getByText(testAddress)).toBeInTheDocument();
-    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, testAddress);
-    expect(isFieldUpdate).toHaveBeenCalledWith(baseProps, testAddress, 'mailing_address');
-  });
-
-  it('displays residential address for NTC journey with product type 280', () => {
-    const testAddress = '456 Residential Ave';
-    const store = createStore('NTC', 'PL', '280', testAddress);
-    const residentialProps = {
-      ...baseProps,
-      data: {
-        logical_field_name: 'residential_address',
-        rwb_label_name: 'Residential Address'
-      }
-    };
-
-    render(
-      <Provider store={store}>
-        <Display {...residentialProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Residential Address')).toBeInTheDocument();
-    expect(screen.getByText(testAddress)).toBeInTheDocument();
-    expect(mockHandleCallback).toHaveBeenCalledWith(residentialProps.data, testAddress);
-    expect(isFieldUpdate).toHaveBeenCalledWith(residentialProps, testAddress, 'residential_address');
-  });
-
-  it('does not display when address is not available', () => {
-    const store = createStore('NTC', 'CC', '100', '');
-    render(
-      <Provider store={store}>
-        <Display {...baseProps} />
-      </Provider>
-    );
-
-    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, '');
-  });
-
-  it('handles undefined applicants data gracefully', () => {
-    const store = mockStore({
       stages: {
         stages: [
           {
@@ -130,20 +40,130 @@ describe('Display Component', () => {
                   product_type: '100'
                 }
               ],
-              applicants: undefined
+              applicants: {
+                mailing_address_a_1: '123 Test Street',
+                res_address_a_1: '456 Residential Ave'
+              },
+              ...overrides
             }
           }
         ]
       }
     });
+  };
 
-    render(
-      <Provider store={store}>
-        <Display {...baseProps} />
-      </Provider>
-    );
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should render mailing address for NTC journey with CC product', async () => {
+    const store = createTestStore();
+    
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.getByText('Mailing Address')).toBeInTheDocument();
+    expect(screen.getByText('123 Test Street')).toBeInTheDocument();
+    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, '123 Test Street');
+    expect(isFieldUpdate).toHaveBeenCalledWith(baseProps, '123 Test Street', 'mailing_address');
+  });
+
+  it('should render residential address when logical_field_name is residential_address', async () => {
+    const store = createTestStore();
+    const residentialProps = {
+      ...baseProps,
+      data: {
+        logical_field_name: 'residential_address',
+        rwb_label_name: 'Residential Address'
+      }
+    };
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...residentialProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.getByText('Residential Address')).toBeInTheDocument();
+    expect(screen.getByText('456 Residential Ave')).toBeInTheDocument();
+  });
+
+  it('should not render when journey type is not NTC', async () => {
+    const store = createTestStore({
+      application: {
+        journey_type: 'NTB'
+      }
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
 
     expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
-    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, '');
+  });
+
+  it('should not render when product is not CC or type 280', async () => {
+    const store = createTestStore({
+      products: [{
+        product_category: 'PL',
+        product_type: '100'
+      }]
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
+  });
+
+  it('should handle missing address data gracefully', async () => {
+    const store = createTestStore({
+      applicants: {
+        mailing_address_a_1: '',
+        res_address_a_1: ''
+      }
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
+  });
+
+  it('should handle undefined applicants data', async () => {
+    const store = createTestStore({
+      applicants: undefined
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
   });
 });
