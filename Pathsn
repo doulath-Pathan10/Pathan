@@ -1,304 +1,133 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider } from 'react-redux';
-import configureMockStore from 'redux-mock-store';
-import thunk from 'redux-thunk';
-import DropDownModel from './DropDownModel';
-import { getFields } from '../selection-box/selection-box.util';
-import renderComponent from '../../../modules/dashboard/fields/renderer';
+import React, { useEffect, useState } from "react";
+import "./dropdown-model.scss";
+import {
+  KeyWithAnyModel,
+  LovInputValModel,
+  StoreModel,
+} from "../../../utils/model/common-model";
+import { AccountList } from "../selection-box/selection-box.utils";
+import { useDispatch, useSelector } from "react-redux";
+import renderComponent from "../../../modules/dashboard/fields/renderer";
+import { getFields } from "../selection-box/selection-box.util";
+import { isFieldUpdate } from "../../../utils/common/change.utils";
 
-// Mock dependencies with proper TypeScript typing
-jest.mock('../selection-box/selection-box.util', () => ({
-  getFields: jest.fn(() => []),
-}));
+const DropDownModel = (props: KeyWithAnyModel) => {
+  const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
+  const applicantsSelector = useSelector(
+    (state: StoreModel) => state.stages.userInput.applicants
+  );
+  const [isEligible, setIsEligible] = useState(false);
+  const [isLabelVisible, setIsLabelVisible] = useState(false);
+  const [field, setField] = useState([]);
+  const [otherBankradiodisplay, setotherBankradiodisplay] = useState('');
+  const dispatch = useDispatch();
 
-jest.mock('../../../modules/dashboard/fields/renderer', () => ({
-  __esModule: true,
-  default: jest.fn(() => <div data-testid="mocked-render-component">Mocked Component</div>),
-}));
+  useEffect(() => {
+    if (props.logicalFieldName === 'credit_into' && props.selectedOption.length <= 1) {
+      setotherBankradiodisplay('radio-hidden');
+    }
+  }, []);
+  useEffect(() => {
+    if (props.logicalFieldName === 'credit_into') {
+      const stageComponents = dispatch(
+        getFields(stageSelector, props.selectedValue[0].CODE_VALUE, props.logicalFieldName)
+      );
+      setField(stageComponents);
+    }
+  }, [props.selectedValue]);
 
-jest.mock('../selection-box/selection-box.utils', () => ({
-  AccountList: jest.fn(({ item }) => <div data-testid="account-list">{item.CODE_DESC}</div>),
-}));
 
-// Create mock store with thunk middleware
-const middlewares = [thunk];
-const mockStore = configureMockStore(middlewares);
+  useEffect(() => {
+    /*istanbul ignore else*/
+    if (stageSelector && stageSelector.length > 0) {
+      const prouctCode = stageSelector[0].stageInfo.products[0].product_type;
+      setIsLabelVisible(prouctCode === '601');
+    }
+  }, []);
 
-describe('DropDownModel Component', () => {
-  const mockAddUserInput = jest.fn();
-  const mockClose = jest.fn();
-  const mockHandleCallback = jest.fn();
-  const mockHandleFieldDispatch = jest.fn();
+  const itemList = (item: any, index: number) => {
+    if (props.logicalFieldName === "loan_account_list") {
+      return <AccountList show={'true'} addUserInputFun={props.addUserInput} item={item} logical_field_name={props.logicalFieldName} />;
+    }
+    else {
+      return (
+        <div>
+          {props.logicalFieldName !== 'credit_into' && <div key={index} className="dropdown-select__item">
+            <input
+              type="radio"
+              checked={item.checked}
+              onClick={() => props.addUserInput(item)}
+              onChange={() => {
+                //do nothing
+              }}
+              value={item.CODE_VALUE}
+              id={item.CODE_VALUE}
+            />
+            <label htmlFor={item.CODE_VALUE}>{item.CODE_DESC}</label>
+          </div>}
+          {props.logicalFieldName === 'credit_into' && <div key={index} className={`dropdown-select__item credit_into_dropdown ${otherBankradiodisplay}`}>
+            <input
+              type="radio"
+              checked={item.checked}
+              onClick={() => props.addUserInput(item)}
+              onChange={() => {
+                //do nothing
+              }}
+              value={item.CODE_VALUE}
+              id={item.CODE_VALUE}
+            />
+            <div className="label-content">
+              <label htmlFor={item.CODE_VALUE}>
+                {item.CODE_DESC}
+              </label>
+              {props.logicalFieldName === 'credit_into' && item.CODE_VALUE !== 'Other Bank Account' &&
+                <div className="for-credit-into">{item.CODE_VALUE}
+                </div>}
+            </div>
+          </div>}
 
-  const baseProps = {
-    logicalFieldName: 'loan_account_list',
-    label: 'Test Dropdown',
-    close: mockClose,
-    addUserInput: mockAddUserInput,
-    selectedOption: [
-      {
-        CODE_VALUE: 'val1',
-        CODE_DESC: 'Value 1',
-        checked: false,
-      },
-      {
-        CODE_VALUE: 'val2',
-        CODE_DESC: 'Value 2',
-        checked: true,
-      },
-    ],
-    selectedValue: [{ CODE_VALUE: 'test' }],
-    handleCallback: mockHandleCallback,
-    handleFieldDispatch: mockHandleFieldDispatch,
-    value: {},
+        </div>
+      );
+    }
   };
 
-  const createTestStore = (overrides = {}) => {
-    return mockStore({
-      stages: {
-        stages: [
-          {
-            stageInfo: {
-              products: [
-                {
-                  product_type: '601',
-                },
-              ],
-            },
-          },
-        ],
-        userInput: {
-          applicants: {},
-        },
-        ...overrides,
-      },
-    });
-  };
+  return (
+    <div>
+      <div className="dropdown-select__background">
+        <div className="dropdown-select__bg-curve"></div>
+        <div
+          className={`dropdown-select__popup ${props.logicalFieldName === "maturity_amount" ? "dropdown-select--tenor" : ""
+            }`}
+        >
+          <div className="dropdown-select__header">
+            <div>{props.label}</div>
+            <div className="close" onClick={props.close}></div>
+          </div>
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (getFields as jest.Mock).mockClear();
-    (renderComponent as jest.Mock).mockClear();
-  });
+          <div className="dropdown-select__expand">
+            <>
+              {props.selectedOption.map(
+                (item: LovInputValModel, index: number) => {
+                  return <>{itemList(item, index)}</>;
+                }
+              )}
+            </>
+            {props.logicalFieldName === 'credit_into' && field &&
+              field.map((currentSection: KeyWithAnyModel, index: number) => {
+                return renderComponent(
+                  currentSection,
+                  index,
+                  props.handleCallback,
+                  props.handleFieldDispatch,
+                  props.value
+                );
+              })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-  it('1. Renders basic dropdown structure', () => {
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...baseProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Test Dropdown')).toBeInTheDocument();
-    expect(screen.getByRole('presentation')).toHaveClass('dropdown-select__background');
-    expect(screen.getByTestId('dropdown-select__popup')).toBeInTheDocument();
-  });
-
-  it('2. Renders loan account list items correctly', () => {
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...baseProps} />
-      </Provider>
-    );
-
-    expect(screen.getAllByTestId('account-list').length).toBe(2);
-    expect(screen.getByText('Value 1')).toBeInTheDocument();
-    expect(screen.getByText('Value 2')).toBeInTheDocument();
-  });
-
-  it('3. Handles credit_into type with radio buttons', () => {
-    const creditProps = {
-      ...baseProps,
-      logicalFieldName: 'credit_into',
-      selectedOption: [
-        {
-          CODE_VALUE: 'bank1',
-          CODE_DESC: 'Bank 1',
-          checked: false,
-        },
-        {
-          CODE_VALUE: 'Other Bank Account',
-          CODE_DESC: 'Other Bank',
-          checked: false,
-        },
-      ],
-    };
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...creditProps} />
-      </Provider>
-    );
-
-    const radios = screen.getAllByRole('radio');
-    expect(radios.length).toBe(2);
-    expect(screen.getByText('Bank 1')).toBeInTheDocument();
-    expect(screen.getByText('Other Bank')).toBeInTheDocument();
-  });
-
-  it('4. Hides other bank radio when credit_into has <= 1 options', () => {
-    const creditProps = {
-      ...baseProps,
-      logicalFieldName: 'credit_into',
-      selectedOption: [
-        {
-          CODE_VALUE: 'bank1',
-          CODE_DESC: 'Bank 1',
-          checked: false,
-        },
-      ],
-    };
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...creditProps} />
-      </Provider>
-    );
-
-    expect(screen.getByTestId('dropdown-select__popup')).toHaveClass('dropdown-select__popup');
-    expect(screen.getByText('Bank 1')).toBeInTheDocument();
-  });
-
-  it('5. Dispatches getFields for credit_into type', () => {
-    const creditProps = {
-      ...baseProps,
-      logicalFieldName: 'credit_into',
-    };
-    const store = createTestStore();
-    
-    (getFields as jest.Mock).mockReturnValueOnce([{ type: 'test', props: {} }]);
-    
-    render(
-      <Provider store={store}>
-        <DropDownModel {...creditProps} />
-      </Provider>
-    );
-
-    expect(getFields).toHaveBeenCalledWith(
-      store.getState().stages.stages,
-      'test',
-      'credit_into'
-    );
-    expect(screen.getByTestId('mocked-render-component')).toBeInTheDocument();
-  });
-
-  it('6. Applies special class for maturity_amount type', () => {
-    const maturityProps = {
-      ...baseProps,
-      logicalFieldName: 'maturity_amount',
-    };
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...maturityProps} />
-      </Provider>
-    );
-
-    expect(screen.getByTestId('dropdown-select__popup')).toHaveClass('dropdown-select--tenor');
-  });
-
-  it('7. Handles radio button selection', () => {
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...baseProps} />
-      </Provider>
-    );
-
-    const radioButton = screen.getByLabelText('Value 1');
-    fireEvent.click(radioButton);
-    expect(mockAddUserInput).toHaveBeenCalledWith(baseProps.selectedOption[0]);
-  });
-
-  it('8. Shows label only for product_type 601', () => {
-    const store = createTestStore({
-      stages: {
-        stages: [
-          {
-            stageInfo: {
-              products: [
-                {
-                  product_type: '601',
-                },
-              ],
-            },
-          },
-        ],
-      },
-    });
-    render(
-      <Provider store={store}>
-        <DropDownModel {...baseProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Test Dropdown')).toBeInTheDocument();
-  });
-
-  it('9. Handles close button click', () => {
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...baseProps} />
-      </Provider>
-    );
-
-    const closeButton = screen.getByTestId('close-button');
-    fireEvent.click(closeButton);
-    expect(mockClose).toHaveBeenCalled();
-  });
-
-  it('10. Renders nothing when selectedOption is empty', () => {
-    const emptyProps = {
-      ...baseProps,
-      selectedOption: [],
-    };
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...emptyProps} />
-      </Provider>
-    );
-
-    expect(screen.queryByText('Value 1')).not.toBeInTheDocument();
-  });
-
-  it('11. Handles undefined selectedValue gracefully', () => {
-    const undefinedProps = {
-      ...baseProps,
-      selectedValue: undefined,
-    };
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...undefinedProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('Value 1')).toBeInTheDocument();
-  });
-
-  it('12. Shows bank code value for credit_into items', () => {
-    const creditProps = {
-      ...baseProps,
-      logicalFieldName: 'credit_into',
-      selectedOption: [
-        {
-          CODE_VALUE: 'BANK123',
-          CODE_DESC: 'My Bank',
-          checked: false,
-        },
-      ],
-    };
-    const store = createTestStore();
-    render(
-      <Provider store={store}>
-        <DropDownModel {...creditProps} />
-      </Provider>
-    );
-
-    expect(screen.getByText('BANK123')).toBeInTheDocument();
-  });
-});
+export default DropDownModel;
+Please write test cases using jest with RTL
