@@ -1,51 +1,495 @@
-import { useDispatch,useSelector } from "react-redux";
-import { KeyWithAnyModel, StoreModel } from "../../../utils/model/common-model";
-import "./display.scss";
-import { useEffect, useState } from "react";
-import { isFieldUpdate } from "../../../utils/common/change.utils";
-import { lastAction } from "../../../utils/store/last-accessed-slice";
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import Display from './Display';
+import { isFieldUpdate } from '../../../utils/common/change.utils';
+import { lastAction } from '../../../utils/store/last-accessed-slice';
 
-const Display = (props: KeyWithAnyModel) => {
-    const stageSelector = useSelector((state: StoreModel) => state.stages.stages);
-    const dispatch = useDispatch();
-    const [defaultValue, setDefaultValue] = useState("");
- 
-      useEffect(() => {
-        let myInfoAddress :string = "";
-        /*istanbul ignore else*/
-        if (props.data.logical_field_name === "mailing_address" || props.data.logical_field_name === "residential_address" ) {
-            if(stageSelector[0].stageInfo.application.journey_type === 'NTC' 
-            && (stageSelector[0].stageInfo.products[0].product_category === 'CC' 
-            || stageSelector[0].stageInfo.products[0].product_type === '280')){
-             myInfoAddress = (props.data.logical_field_name === "mailing_address" 
-             && stageSelector[0].stageInfo.applicants["mailing_address_a_1"])?
-             stageSelector[0].stageInfo.applicants["mailing_address_a_1"] : 
-             (props.data.logical_field_name === "residential_address" 
-             && stageSelector[0].stageInfo.applicants["res_address_a_1"]) ?
-             stageSelector[0].stageInfo.applicants["res_address_a_1"] : null;
-            }
-            if(myInfoAddress){
-              setDefaultValue(myInfoAddress);
-             dispatch(
-              isFieldUpdate(props, myInfoAddress, props.data.logical_field_name)
-              );
-            }
+// Mock the utility functions
+jest.mock('../../../utils/common/change.utils', () => ({
+  isFieldUpdate: jest.fn()
+}));
+
+jest.mock('../../../utils/store/last-accessed-slice', () => ({
+  lastAction: jest.fn()
+}));
+
+// Mock SCSS import
+jest.mock('./display.scss', () => ({}));
+
+describe('Display Component', () => {
+  let mockStore;
+  let mockDispatch;
+  let mockHandleCallback;
+
+  const createMockStore = (stageData) => {
+    return configureStore({
+      reducer: {
+        stages: {
+          stages: stageData
+        }
+      },
+      preloadedState: {
+        stages: {
+          stages: stageData
+        }
+      }
+    });
+  };
+
+  const mockProps = {
+    data: {
+      logical_field_name: 'mailing_address',
+      rwb_label_name: 'Mailing Address'
+    },
+    handleCallback: jest.fn()
+  };
+
+  beforeEach(() => {
+    mockHandleCallback = jest.fn();
+    mockDispatch = jest.fn();
+    
+    // Reset all mocks
+    jest.clearAllMocks();
+  });
+
+  describe('Mailing Address - NTC Journey with CC Product', () => {
+    const mockStageData = [{
+      stageInfo: {
+        application: {
+          journey_type: 'NTC'
+        },
+        products: [{
+          product_category: 'CC',
+          product_type: 'some_type'
+        }],
+        applicants: {
+          mailing_address_a_1: '123 Main St, City, State, 12345'
+        }
+      }
+    }];
+
+    beforeEach(() => {
+      mockStore = createMockStore(mockStageData);
+    });
+
+    test('should render mailing address when all conditions are met', () => {
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.getByText('Mailing Address')).toBeInTheDocument();
+      expect(screen.getByText('123 Main St, City, State, 12345')).toBeInTheDocument();
+    });
+
+    test('should call handleCallback with correct parameters', () => {
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(mockHandleCallback).toHaveBeenCalledWith(
+        props.data,
+        '123 Main St, City, State, 12345'
+      );
+    });
+
+    test('should dispatch isFieldUpdate when address exists', () => {
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(isFieldUpdate).toHaveBeenCalledWith(
+        props,
+        '123 Main St, City, State, 12345',
+        'mailing_address'
+      );
+    });
+  });
+
+  describe('Residential Address - NTC Journey with Product Type 280', () => {
+    const mockStageData = [{
+      stageInfo: {
+        application: {
+          journey_type: 'NTC'
+        },
+        products: [{
+          product_category: 'some_category',
+          product_type: '280'
+        }],
+        applicants: {
+          res_address_a_1: '456 Oak Ave, Town, State, 67890'
+        }
+      }
+    }];
+
+    beforeEach(() => {
+      mockStore = createMockStore(mockStageData);
+    });
+
+    test('should render residential address when conditions are met', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          logical_field_name: 'residential_address',
+          rwb_label_name: 'Residential Address'
+        },
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.getByText('Residential Address')).toBeInTheDocument();
+      expect(screen.getByText('456 Oak Ave, Town, State, 67890')).toBeInTheDocument();
+    });
+
+    test('should call handleCallback with residential address', () => {
+      const props = {
+        ...mockProps,
+        data: {
+          logical_field_name: 'residential_address',
+          rwb_label_name: 'Residential Address'
+        },
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(mockHandleCallback).toHaveBeenCalledWith(
+        props.data,
+        '456 Oak Ave, Town, State, 67890'
+      );
+    });
+  });
+
+  describe('No Address Available Scenarios', () => {
+    test('should not render when mailing address is not available', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          products: [{
+            product_category: 'CC'
+          }],
+          applicants: {}
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
+      expect(mockHandleCallback).toHaveBeenCalledWith(props.data, '');
+    });
+
+    test('should not render when residential address is not available', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          products: [{
+            product_type: '280'
+          }],
+          applicants: {}
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        data: {
+          logical_field_name: 'residential_address',
+          rwb_label_name: 'Residential Address'
+        },
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Residential Address')).not.toBeInTheDocument();
+      expect(mockHandleCallback).toHaveBeenCalledWith(props.data, '');
+    });
+  });
+
+  describe('Journey Type and Product Conditions', () => {
+    test('should not render when journey type is not NTC', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'OTHER'
+          },
+          products: [{
+            product_category: 'CC'
+          }],
+          applicants: {
+            mailing_address_a_1: '123 Main St, City, State, 12345'
           }
-          props.handleCallback(props.data, myInfoAddress);
-    }, []);
-    return (
-      <>
-        <div className="display_Info">
-             {(defaultValue && <label htmlFor={props.data.logical_field_name}>
-                {props.data.rwb_label_name}
-              </label>)}
-              {(defaultValue && <div className="display_input_field">
-                <span>{defaultValue}</span>
-              </div>)}
-        </div>
-      </>
-    );
-}
+        }
+      }];
 
-export default Display;
-Please write test cases using jest with RTL
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
+      expect(mockHandleCallback).toHaveBeenCalledWith(props.data, '');
+    });
+
+    test('should not render when product conditions are not met', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          products: [{
+            product_category: 'OTHER',
+            product_type: 'OTHER'
+          }],
+          applicants: {
+            mailing_address_a_1: '123 Main St, City, State, 12345'
+          }
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
+      expect(mockHandleCallback).toHaveBeenCalledWith(props.data, '');
+    });
+  });
+
+  describe('Non-Address Fields', () => {
+    test('should not render anything for non-address fields', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          products: [{
+            product_category: 'CC'
+          }],
+          applicants: {
+            mailing_address_a_1: '123 Main St, City, State, 12345'
+          }
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        data: {
+          logical_field_name: 'some_other_field',
+          rwb_label_name: 'Other Field'
+        },
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(screen.queryByText('Other Field')).not.toBeInTheDocument();
+      expect(mockHandleCallback).toHaveBeenCalledWith(props.data, '');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    test('should handle empty stage selector', () => {
+      mockStore = createMockStore([]);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <Display {...props} />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+
+    test('should handle missing stageInfo', () => {
+      const mockStageData = [{}];
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <Display {...props} />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+
+    test('should handle missing products array', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          applicants: {
+            mailing_address_a_1: '123 Main St, City, State, 12345'
+          }
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      expect(() => {
+        render(
+          <Provider store={mockStore}>
+            <Display {...props} />
+          </Provider>
+        );
+      }).not.toThrow();
+    });
+  });
+
+  describe('Component Structure', () => {
+    test('should render with correct CSS classes', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          products: [{
+            product_category: 'CC'
+          }],
+          applicants: {
+            mailing_address_a_1: '123 Main St, City, State, 12345'
+          }
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      const { container } = render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      expect(container.querySelector('.display_Info')).toBeInTheDocument();
+      expect(container.querySelector('.display_input_field')).toBeInTheDocument();
+    });
+
+    test('should render label with correct htmlFor attribute', () => {
+      const mockStageData = [{
+        stageInfo: {
+          application: {
+            journey_type: 'NTC'
+          },
+          products: [{
+            product_category: 'CC'
+          }],
+          applicants: {
+            mailing_address_a_1: '123 Main St, City, State, 12345'
+          }
+        }
+      }];
+
+      mockStore = createMockStore(mockStageData);
+      
+      const props = {
+        ...mockProps,
+        handleCallback: mockHandleCallback
+      };
+
+      render(
+        <Provider store={mockStore}>
+          <Display {...props} />
+        </Provider>
+      );
+
+      const label = screen.getByText('Mailing Address');
+      expect(label.getAttribute('for')).toBe('mailing_address');
+    });
+  });
+});
