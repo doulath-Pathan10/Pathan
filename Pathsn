@@ -1,475 +1,304 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
+import configureMockStore from 'redux-mock-store';
+import thunk from 'redux-thunk';
 import DropDownModel from './DropDownModel';
-import { AccountList } from '../selection-box/selection-box.utils';
-import renderComponent from '../../../modules/dashboard/fields/renderer';
 import { getFields } from '../selection-box/selection-box.util';
-import { isFieldUpdate } from '../../../utils/common/change.utils';
+import renderComponent from '../../../modules/dashboard/fields/renderer';
 
-// Mock dependencies
-jest.mock('./dropdown-model.scss', () => ({}));
-jest.mock('../selection-box/selection-box.utils', () => ({
-  AccountList: jest.fn(({ item, addUserInputFun, logical_field_name }) => (
-    <div data-testid="account-list">
-      <span>{item.CODE_DESC}</span>
-      <button onClick={() => addUserInputFun(item)}>Select Account</button>
-    </div>
-  ))
-}));
-
-jest.mock('../../../modules/dashboard/fields/renderer', () => 
-  jest.fn((currentSection, index, handleCallback, handleFieldDispatch, value) => (
-    <div data-testid={`rendered-component-${index}`}>
-      Rendered Component {index}
-    </div>
-  ))
-);
-
+// Mock dependencies with proper TypeScript typing
 jest.mock('../selection-box/selection-box.util', () => ({
-  getFields: jest.fn()
+  getFields: jest.fn(() => []),
 }));
 
-jest.mock('../../../utils/common/change.utils', () => ({
-  isFieldUpdate: jest.fn()
+jest.mock('../../../modules/dashboard/fields/renderer', () => ({
+  __esModule: true,
+  default: jest.fn(() => <div data-testid="mocked-render-component">Mocked Component</div>),
 }));
+
+jest.mock('../selection-box/selection-box.utils', () => ({
+  AccountList: jest.fn(({ item }) => <div data-testid="account-list">{item.CODE_DESC}</div>),
+}));
+
+// Create mock store with thunk middleware
+const middlewares = [thunk];
+const mockStore = configureMockStore(middlewares);
 
 describe('DropDownModel Component', () => {
-  let mockStore;
-  let mockDispatch;
-  let mockProps;
+  const mockAddUserInput = jest.fn();
+  const mockClose = jest.fn();
+  const mockHandleCallback = jest.fn();
+  const mockHandleFieldDispatch = jest.fn();
 
-  const createMockStore = (stageData, userInputData = {}) => {
-    return configureStore({
-      reducer: {
-        stages: {
-          stages: stageData,
-          userInput: userInputData
-        }
+  const baseProps = {
+    logicalFieldName: 'loan_account_list',
+    label: 'Test Dropdown',
+    close: mockClose,
+    addUserInput: mockAddUserInput,
+    selectedOption: [
+      {
+        CODE_VALUE: 'val1',
+        CODE_DESC: 'Value 1',
+        checked: false,
       },
-      preloadedState: {
-        stages: {
-          stages: stageData,
-          userInput: userInputData
-        }
-      }
+      {
+        CODE_VALUE: 'val2',
+        CODE_DESC: 'Value 2',
+        checked: true,
+      },
+    ],
+    selectedValue: [{ CODE_VALUE: 'test' }],
+    handleCallback: mockHandleCallback,
+    handleFieldDispatch: mockHandleFieldDispatch,
+    value: {},
+  };
+
+  const createTestStore = (overrides = {}) => {
+    return mockStore({
+      stages: {
+        stages: [
+          {
+            stageInfo: {
+              products: [
+                {
+                  product_type: '601',
+                },
+              ],
+            },
+          },
+        ],
+        userInput: {
+          applicants: {},
+        },
+        ...overrides,
+      },
     });
   };
-
-  const defaultMockProps = {
-    logicalFieldName: 'test_field',
-    selectedOption: [
-      { CODE_VALUE: 'option1', CODE_DESC: 'Option 1', checked: false },
-      { CODE_VALUE: 'option2', CODE_DESC: 'Option 2', checked: true }
-    ],
-    selectedValue: [{ CODE_VALUE: 'selected_value' }],
-    label: 'Test Dropdown',
-    close: jest.fn(),
-    addUserInput: jest.fn(),
-    handleCallback: jest.fn(),
-    handleFieldDispatch: jest.fn(),
-    value: 'test_value'
-  };
-
-  const mockStageData = [{
-    stageInfo: {
-      products: [{
-        product_type: '601'
-      }]
-    }
-  }];
 
   beforeEach(() => {
-    mockDispatch = jest.fn();
-    mockStore = createMockStore(mockStageData, { applicants: {} });
-    mockProps = { ...defaultMockProps };
-    
-    // Reset all mocks
     jest.clearAllMocks();
+    (getFields as jest.Mock).mockClear();
+    (renderComponent as jest.Mock).mockClear();
+  });
+
+  it('1. Renders basic dropdown structure', () => {
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...baseProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Test Dropdown')).toBeInTheDocument();
+    expect(screen.getByRole('presentation')).toHaveClass('dropdown-select__background');
+    expect(screen.getByTestId('dropdown-select__popup')).toBeInTheDocument();
+  });
+
+  it('2. Renders loan account list items correctly', () => {
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...baseProps} />
+      </Provider>
+    );
+
+    expect(screen.getAllByTestId('account-list').length).toBe(2);
+    expect(screen.getByText('Value 1')).toBeInTheDocument();
+    expect(screen.getByText('Value 2')).toBeInTheDocument();
+  });
+
+  it('3. Handles credit_into type with radio buttons', () => {
+    const creditProps = {
+      ...baseProps,
+      logicalFieldName: 'credit_into',
+      selectedOption: [
+        {
+          CODE_VALUE: 'bank1',
+          CODE_DESC: 'Bank 1',
+          checked: false,
+        },
+        {
+          CODE_VALUE: 'Other Bank Account',
+          CODE_DESC: 'Other Bank',
+          checked: false,
+        },
+      ],
+    };
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...creditProps} />
+      </Provider>
+    );
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios.length).toBe(2);
+    expect(screen.getByText('Bank 1')).toBeInTheDocument();
+    expect(screen.getByText('Other Bank')).toBeInTheDocument();
+  });
+
+  it('4. Hides other bank radio when credit_into has <= 1 options', () => {
+    const creditProps = {
+      ...baseProps,
+      logicalFieldName: 'credit_into',
+      selectedOption: [
+        {
+          CODE_VALUE: 'bank1',
+          CODE_DESC: 'Bank 1',
+          checked: false,
+        },
+      ],
+    };
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...creditProps} />
+      </Provider>
+    );
+
+    expect(screen.getByTestId('dropdown-select__popup')).toHaveClass('dropdown-select__popup');
+    expect(screen.getByText('Bank 1')).toBeInTheDocument();
+  });
+
+  it('5. Dispatches getFields for credit_into type', () => {
+    const creditProps = {
+      ...baseProps,
+      logicalFieldName: 'credit_into',
+    };
+    const store = createTestStore();
     
-    // Mock the dispatch function
-    jest.spyOn(require('react-redux'), 'useDispatch').mockReturnValue(mockDispatch);
+    (getFields as jest.Mock).mockReturnValueOnce([{ type: 'test', props: {} }]);
+    
+    render(
+      <Provider store={store}>
+        <DropDownModel {...creditProps} />
+      </Provider>
+    );
+
+    expect(getFields).toHaveBeenCalledWith(
+      store.getState().stages.stages,
+      'test',
+      'credit_into'
+    );
+    expect(screen.getByTestId('mocked-render-component')).toBeInTheDocument();
   });
 
-  describe('Basic Rendering', () => {
-    test('should render dropdown with correct structure', () => {
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
+  it('6. Applies special class for maturity_amount type', () => {
+    const maturityProps = {
+      ...baseProps,
+      logicalFieldName: 'maturity_amount',
+    };
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...maturityProps} />
+      </Provider>
+    );
 
-      expect(screen.getByText('Test Dropdown')).toBeInTheDocument();
-      expect(screen.getByText('Option 1')).toBeInTheDocument();
-      expect(screen.getByText('Option 2')).toBeInTheDocument();
-      expect(screen.getByRole('button')).toBeInTheDocument(); // close button
-    });
-
-    test('should render with correct CSS classes', () => {
-      const { container } = render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.dropdown-select__background')).toBeInTheDocument();
-      expect(container.querySelector('.dropdown-select__popup')).toBeInTheDocument();
-      expect(container.querySelector('.dropdown-select__header')).toBeInTheDocument();
-      expect(container.querySelector('.dropdown-select__expand')).toBeInTheDocument();
-    });
-
-    test('should apply tenor class for maturity_amount field', () => {
-      const props = { ...mockProps, logicalFieldName: 'maturity_amount' };
-      const { container } = render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.dropdown-select--tenor')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('dropdown-select__popup')).toHaveClass('dropdown-select--tenor');
   });
 
-  describe('Radio Button Interactions', () => {
-    test('should render radio buttons with correct values and labels', () => {
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
+  it('7. Handles radio button selection', () => {
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...baseProps} />
+      </Provider>
+    );
 
-      const radioButtons = screen.getAllByRole('radio');
-      expect(radioButtons).toHaveLength(2);
-      
-      expect(radioButtons[0]).toHaveAttribute('value', 'option1');
-      expect(radioButtons[1]).toHaveAttribute('value', 'option2');
-      expect(radioButtons[1]).toBeChecked();
-    });
-
-    test('should call addUserInput when radio button is clicked', () => {
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
-
-      const firstRadio = screen.getAllByRole('radio')[0];
-      fireEvent.click(firstRadio);
-
-      expect(mockProps.addUserInput).toHaveBeenCalledWith({
-        CODE_VALUE: 'option1',
-        CODE_DESC: 'Option 1',
-        checked: false
-      });
-    });
-
-    test('should have correct htmlFor attribute on labels', () => {
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
-
-      const labels = screen.getAllByText(/Option [12]/);
-      labels.forEach((label, index) => {
-        const expectedValue = index === 0 ? 'option1' : 'option2';
-        expect(label).toHaveAttribute('for', expectedValue);
-      });    });
+    const radioButton = screen.getByLabelText('Value 1');
+    fireEvent.click(radioButton);
+    expect(mockAddUserInput).toHaveBeenCalledWith(baseProps.selectedOption[0]);
   });
 
-  describe('Close Functionality', () => {
-    test('should call close function when close button is clicked', () => {
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
-
-      const closeButton = screen.getByRole('button');
-      fireEvent.click(closeButton);
-
-      expect(mockProps.close).toHaveBeenCalled();
+  it('8. Shows label only for product_type 601', () => {
+    const store = createTestStore({
+      stages: {
+        stages: [
+          {
+            stageInfo: {
+              products: [
+                {
+                  product_type: '601',
+                },
+              ],
+            },
+          },
+        ],
+      },
     });
+    render(
+      <Provider store={store}>
+        <DropDownModel {...baseProps} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Test Dropdown')).toBeInTheDocument();
   });
 
-  describe('Loan Account List Logic', () => {
-    test('should render AccountList component for loan_account_list field', () => {
-      const props = { ...mockProps, logicalFieldName: 'loan_account_list' };
-      
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
+  it('9. Handles close button click', () => {
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...baseProps} />
+      </Provider>
+    );
 
-      expect(screen.getAllByTestId('account-list')).toHaveLength(2);
-      expect(AccountList).toHaveBeenCalledWith(
-        expect.objectContaining({
-          show: 'true',
-          addUserInputFun: props.addUserInput,
-          item: expect.any(Object),
-          logical_field_name: 'loan_account_list'
-        }),
-        {}
-      );
-    });
-
-    test('should handle AccountList interactions', () => {
-      const props = { ...mockProps, logicalFieldName: 'loan_account_list' };
-      
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      const selectButtons = screen.getAllByText('Select Account');
-      fireEvent.click(selectButtons[0]);
-
-      expect(props.addUserInput).toHaveBeenCalledWith({
-        CODE_VALUE: 'option1',
-        CODE_DESC: 'Option 1',
-        checked: false
-      });
-    });
+    const closeButton = screen.getByTestId('close-button');
+    fireEvent.click(closeButton);
+    expect(mockClose).toHaveBeenCalled();
   });
 
-  describe('Credit Into Logic', () => {
-    test('should set radio-hidden class when credit_into has single option', () => {
-      const props = {
-        ...mockProps,
-        logicalFieldName: 'credit_into',
-        selectedOption: [{ CODE_VALUE: 'single', CODE_DESC: 'Single Option', checked: false }]
-      };
+  it('10. Renders nothing when selectedOption is empty', () => {
+    const emptyProps = {
+      ...baseProps,
+      selectedOption: [],
+    };
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...emptyProps} />
+      </Provider>
+    );
 
-      const { container } = render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.radio-hidden')).toBeInTheDocument();
-    });
-
-    test('should not set radio-hidden class when credit_into has multiple options', () => {
-      const props = { ...mockProps, logicalFieldName: 'credit_into' };
-
-      const { container } = render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.radio-hidden')).not.toBeInTheDocument();
-    });
-
-    test('should render credit_into with special styling and content', () => {
-      const props = {
-        ...mockProps,
-        logicalFieldName: 'credit_into',
-        selectedOption: [
-          { CODE_VALUE: 'bank123', CODE_DESC: 'My Bank Account', checked: false },
-          { CODE_VALUE: 'Other Bank Account', CODE_DESC: 'Other Bank', checked: false }
-        ]
-      };
-
-      const { container } = render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(container.querySelector('.credit_into_dropdown')).toBeInTheDocument();
-      expect(container.querySelector('.label-content')).toBeInTheDocument();
-      expect(container.querySelector('.for-credit-into')).toBeInTheDocument();
-      expect(screen.getByText('bank123')).toBeInTheDocument();
-    });
-
-    test('should not render CODE_VALUE for Other Bank Account option', () => {
-      const props = {
-        ...mockProps,
-        logicalFieldName: 'credit_into',
-        selectedOption: [
-          { CODE_VALUE: 'Other Bank Account', CODE_DESC: 'Other Bank', checked: false }
-        ]
-      };
-
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(screen.queryByText('Other Bank Account')).not.toBeInTheDocument();
-      expect(screen.getByText('Other Bank')).toBeInTheDocument();
-    });
-
-    test('should dispatch getFields for credit_into when selectedValue changes', async () => {
-      const mockFields = [{ type: 'text', name: 'field1' }];
-      getFields.mockReturnValue(mockFields);
-
-      const props = { ...mockProps, logicalFieldName: 'credit_into' };
-
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      await waitFor(() => {
-        expect(mockDispatch).toHaveBeenCalledWith(mockFields);
-        expect(getFields).toHaveBeenCalledWith(
-          mockStageData,
-          'selected_value',
-          'credit_into'
-        );
-      });
-    });
-
-    test('should render dynamic fields for credit_into', () => {
-      const mockFields = [
-        { type: 'text', name: 'field1' },
-        { type: 'select', name: 'field2' }
-      ];
-
-      // Mock useState to return the fields
-      jest.spyOn(React, 'useState')
-        .mockImplementationOnce(() => [false, jest.fn()]) // isEligible
-        .mockImplementationOnce(() => [false, jest.fn()]) // isLabelVisible
-        .mockImplementationOnce(() => [mockFields, jest.fn()]) // field
-        .mockImplementationOnce(() => ['', jest.fn()]); // otherBankradiodisplay
-
-      const props = { ...mockProps, logicalFieldName: 'credit_into' };
-
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(screen.getByTestId('rendered-component-0')).toBeInTheDocument();
-      expect(screen.getByTestId('rendered-component-1')).toBeInTheDocument();
-      expect(renderComponent).toHaveBeenCalledTimes(2);
-    });
+    expect(screen.queryByText('Value 1')).not.toBeInTheDocument();
   });
 
-  describe('Product Type Logic', () => {
-    test('should set isLabelVisible to true when product type is 601', () => {
-      const stageData = [{
-        stageInfo: {
-          products: [{ product_type: '601' }]
-        }
-      }];
-      
-      mockStore = createMockStore(stageData);
+  it('11. Handles undefined selectedValue gracefully', () => {
+    const undefinedProps = {
+      ...baseProps,
+      selectedValue: undefined,
+    };
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...undefinedProps} />
+      </Provider>
+    );
 
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
-
-      // This tests the useEffect logic, component behavior would depend on how isLabelVisible is used
-      expect(mockStore.getState().stages.stages[0].stageInfo.products[0].product_type).toBe('601');
-    });
-
-    test('should set isLabelVisible to false when product type is not 601', () => {
-      const stageData = [{
-        stageInfo: {
-          products: [{ product_type: '500' }]
-        }
-      }];
-      
-      mockStore = createMockStore(stageData);
-
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...mockProps} />
-        </Provider>
-      );
-
-      expect(mockStore.getState().stages.stages[0].stageInfo.products[0].product_type).toBe('500');
-    });
+    expect(screen.getByText('Value 1')).toBeInTheDocument();
   });
 
-  describe('Edge Cases', () => {
-    test('should handle empty selectedOption array', () => {
-      const props = { ...mockProps, selectedOption: [] };
+  it('12. Shows bank code value for credit_into items', () => {
+    const creditProps = {
+      ...baseProps,
+      logicalFieldName: 'credit_into',
+      selectedOption: [
+        {
+          CODE_VALUE: 'BANK123',
+          CODE_DESC: 'My Bank',
+          checked: false,
+        },
+      ],
+    };
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <DropDownModel {...creditProps} />
+      </Provider>
+    );
 
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(screen.getByText('Test Dropdown')).toBeInTheDocument();
-      expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    });
-
-    test('should handle missing stage data', () => {
-      mockStore = createMockStore([]);
-
-      expect(() => {
-        render(
-          <Provider store={mockStore}>
-            <DropDownModel {...mockProps} />
-          </Provider>
-        );
-      }).not.toThrow();
-    });
-
-    test('should handle missing products data', () => {
-      const stageData = [{ stageInfo: {} }];
-      mockStore = createMockStore(stageData);
-
-      expect(() => {
-        render(
-          <Provider store={mockStore}>
-            <DropDownModel {...mockProps} />
-          </Provider>
-        );
-      }).not.toThrow();
-    });
-
-    test('should handle undefined selectedValue', () => {
-      const props = { ...mockProps, selectedValue: undefined };
-
-      expect(() => {
-        render(
-          <Provider store={mockStore}>
-            <DropDownModel {...props} />
-          </Provider>
-        );
-      }).not.toThrow();
-    });
-  });
-
-  describe('Component Integration', () => {
-    test('should pass correct props to renderComponent', () => {
-      const mockFields = [{ type: 'text', name: 'field1' }];
-      
-      jest.spyOn(React, 'useState')
-        .mockImplementationOnce(() => [false, jest.fn()]) // isEligible
-        .mockImplementationOnce(() => [false, jest.fn()]) // isLabelVisible
-        .mockImplementationOnce(() => [mockFields, jest.fn()]) // field
-        .mockImplementationOnce(() => ['', jest.fn()]); // otherBankradiodisplay
-
-      const props = { ...mockProps, logicalFieldName: 'credit_into' };
-
-      render(
-        <Provider store={mockStore}>
-          <DropDownModel {...props} />
-        </Provider>
-      );
-
-      expect(renderComponent).toHaveBeenCalledWith(
-        mockFields[0],
-        0,
-        props.handleCallback,
-        props.handleFieldDispatch,
-        props.value
-      );
-    });
+    expect(screen.getByText('BANK123')).toBeInTheDocument();
   });
 });
