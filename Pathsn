@@ -1,142 +1,171 @@
-import "./thank-you.scss";
-import { KeyWithAnyModel } from "../../../utils/model/common-model";
-import ThankYouTimeline from "./thankyou-timeline";
-import ThankYouBanner from "./thankyou-banner";
-import ThankYouSurvey from "./thankyou-survey"
-const ThankYouCC = (props: KeyWithAnyModel) => {
-  const applicationDetails = props.applicationDetails;
-  const thankyou = props.thankyou;
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import ThankYouCC from './ThankYouCC';
+import '@testing-library/jest-dom';
 
-  const getTimelineData = () => {
-    /*istanbul ignore else */
-    if (!applicationDetails.isStp) {
-      return thankyou[applicationDetails.thankyouProp].CCPL.timeLine;
-    }
-
-    return thankyou.CCSTP;
+describe('ThankYouCC Component', () => {
+  const mockProps = {
+    applicationDetails: {
+      isStp: false,
+      thankyouProp: 'standard',
+      thankyouText: 'standard',
+      productName: ['Credit Card', 'Personal Loan'],
+      cardNumber: '1234 5678 9012 3456'
+    },
+    thankyou: {
+      standard: {
+        CCPL: {
+          banner_header: 'Thank you for your application!',
+          banner_body_2: 'We will process your application shortly.',
+          resumeUrl: '/resume',
+          title: 'What happens next?',
+          content: 'Here are the next steps in your application process.',
+          timeLine: [
+            { title: 'Step 1', description: 'Application received', completed: true },
+            { title: 'Step 2', description: 'Under review', completed: false }
+          ],
+          note_title: 'Important Notes',
+          note_content_1: 'Note content 1',
+          note_content_2: 'Note content 2',
+          note_content_3: 'Note content 3',
+          note_content_4: 'Click here for more info',
+          note_link: 'https://example.com/info',
+          refId_lbl: 'Reference Number:'
+        },
+        timeLine: 'Application Timeline'
+      },
+      STPCCBanner: {
+        banner_header: 'STP Application Complete',
+        banner_body_1: 'Your ',
+        banner_body_2: ' application is complete.'
+      },
+      CCPL: {
+        note_title: 'General Notes',
+        note_content_1: 'General note 1',
+        note_content_2: 'General note 2',
+        note_content_3: 'General note 3',
+        note_content_4: 'General link',
+        note_link: 'https://example.com/general'
+      }
+    },
+    applicationReferenceNo: 'APP12345678',
+    showOTPPopup: jest.fn(),
+    showContinuePopup: jest.fn(),
+    submitForm: jest.fn()
   };
-  return (
-    <>
-      <ThankYouBanner
-        banner_header={
-          !applicationDetails.isStp
-            ? thankyou[applicationDetails.thankyouProp].CCPL.banner_header
-            : thankyou.STPCCBanner.banner_header
-        }
-        banner_content={true}
-        // banner_body_1={
-        //   !applicationDetails.isStp
-        //     ? thankyou[applicationDetails.thankyouProp].CCPL.banner_body_1
-        //     : ""
-        // }
-        productName={applicationDetails.productName.join(" and ")}
-        banner_body_2={
-          !applicationDetails.isStp
-            ? thankyou[applicationDetails.thankyouProp].CCPL.banner_body_2
-            : ""
-        }
-        resumeUrl={
-          !applicationDetails.isStp
-            ? thankyou[applicationDetails.thankyouProp].CCPL.resumeUrl
-            : ""
-        }
-      />
-      <div className="thankyou__body__outer">
-        <div className="thankyou__body">
-          {!applicationDetails.isStp && (
-            <>
-              <div className="thankyou__title">
-                <label>
-                  {thankyou[applicationDetails.thankyouProp].CCPL.title}
-                </label>
-              </div>
-              <div className="thankyou__content">
-                <label>
-                  {thankyou[applicationDetails.thankyouProp].CCPL.content}
-                </label>
-              </div>
-            </>
-          )}
-          {applicationDetails.isStp && (
-            <div className="thankyou__title">
-              <div>
-                {thankyou.STPCCBanner.banner_body_1}
-                {applicationDetails.productName}
-                {thankyou.STPCCBanner.banner_body_2}
-              </div>
-              <div>{applicationDetails.productName}</div>
-              <div>{applicationDetails.cardNumber}</div>
-            </div>
-          )}
-          <ThankYouTimeline
-            title={thankyou[applicationDetails.thankyouText].timeLine}
-            data={getTimelineData()}
-            checkCompletedStatus={true}
-            handleLink={props.showOTPPopup}
-          />
-          {applicationDetails.isStp && (
-            <div>
-              <div>
-                {thankyou[applicationDetails.thankyouText].timeline_header}
-              </div>
-              <div>
-                {thankyou[applicationDetails.thankyouText].timeline_desc}
-              </div>
-            </div>
-          )}
-          {!applicationDetails.isStp && (
-            <div>
-              <div className="thankyou__note__content">
-                <label>{thankyou?.CCPL?.note_title}</label>
-              </div>
-              <div className="thankyou__note__content">
-                <div>{thankyou.CCPL?.note_content_1}</div>
-                <div>{thankyou.CCPL?.note_content_2}</div>
-              </div>
-              <div className="thankyou__note__content">
-                <div>{thankyou.CCPL?.note_content_3}</div>
-                <div>
-                  <a
-                    target="_blank"
-                    rel="feedback noreferrer"
-                    href={thankyou.CCPL?.note_link}
-                  >
-                    {thankyou.CCPL?.note_content_4}
-                  </a>
-                </div>
-              </div>
-            </div>
-          )}
 
-          <div className="body__app-details">
-            <label>{thankyou.CCPL?.refId_lbl}</label>
-            {props.applicationReferenceNo!}
-          </div>
-          <div className="body__refno">
-            {applicationDetails.isStp ? (
-              <>
-                <button
-                  onClick={(e) => props.showContinuePopup(e)}
-                  className="thankyou__continue"
-                >
-                  {thankyou[applicationDetails.thankyouText].continueButton}
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={(e) => props.submitForm(e)}
-                className="thankyou__continue"
-              >
-                {thankyou[applicationDetails.thankyouText].doneButton}
-              </button>
-            )}
-          </div>
-          <ThankYouSurvey/>
-        </div>
-      </div>   
-    </>
-  );
-};
+  const mockSTPProps = {
+    ...mockProps,
+    applicationDetails: {
+      ...mockProps.applicationDetails,
+      isStp: true
+    }
+  };
 
-export default ThankYouCC;
-Please write test cases using jest with RTL
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders without crashing', () => {
+    render(<ThankYouCC {...mockProps} />);
+    expect(screen.getByText('Thank you for your application!')).toBeInTheDocument();
+  });
+
+  describe('Non-STP Application', () => {
+    it('displays the correct banner header', () => {
+      render(<ThankYouCC {...mockProps} />);
+      expect(screen.getByText('Thank you for your application!')).toBeInTheDocument();
+    });
+
+    it('displays the product name in banner', () => {
+      render(<ThankYouCC {...mockProps} />);
+      expect(screen.getByText('Credit Card and Personal Loan')).toBeInTheDocument();
+    });
+
+    it('displays the timeline section', () => {
+      render(<ThankYouCC {...mockProps} />);
+      expect(screen.getByText('What happens next?')).toBeInTheDocument();
+      expect(screen.getByText('Application received')).toBeInTheDocument();
+    });
+
+    it('displays the notes section', () => {
+      render(<ThankYouCC {...mockProps} />);
+      expect(screen.getByText('Important Notes')).toBeInTheDocument();
+      expect(screen.getByText('Note content 1')).toBeInTheDocument();
+    });
+
+    it('displays the reference number', () => {
+      render(<ThankYouCC {...mockProps} />);
+      expect(screen.getByText('Reference Number:')).toBeInTheDocument();
+      expect(screen.getByText('APP12345678')).toBeInTheDocument();
+    });
+
+    it('shows the Done button for non-STP applications', () => {
+      render(<ThankYouCC {...mockProps} />);
+      const button = screen.getByRole('button', { name: /done/i });
+      expect(button).toBeInTheDocument();
+    });
+
+    it('calls submitForm when Done button is clicked', () => {
+      render(<ThankYouCC {...mockProps} />);
+      const button = screen.getByRole('button', { name: /done/i });
+      fireEvent.click(button);
+      expect(mockProps.submitForm).toHaveBeenCalled();
+    });
+  });
+
+  describe('STP Application', () => {
+    it('displays the STP banner header', () => {
+      render(<ThankYouCC {...mockSTPProps} />);
+      expect(screen.getByText('STP Application Complete')).toBeInTheDocument();
+    });
+
+    it('displays the product name in STP format', () => {
+      render(<ThankYouCC {...mockSTPProps} />);
+      expect(screen.getByText('Your Credit Card and Personal Loan application is complete.')).toBeInTheDocument();
+    });
+
+    it('displays the card number for STP applications', () => {
+      render(<ThankYouCC {...mockSTPProps} />);
+      expect(screen.getByText('1234 5678 9012 3456')).toBeInTheDocument();
+    });
+
+    it('shows the Continue button for STP applications', () => {
+      render(<ThankYouCC {...mockSTPProps} />);
+      const button = screen.getByRole('button', { name: /continue/i });
+      expect(button).toBeInTheDocument();
+    });
+
+    it('calls showContinuePopup when Continue button is clicked', () => {
+      render(<ThankYouCC {...mockSTPProps} />);
+      const button = screen.getByRole('button', { name: /continue/i });
+      fireEvent.click(button);
+      expect(mockProps.showContinuePopup).toHaveBeenCalled();
+    });
+
+    it('does not display the notes section for STP applications', () => {
+      render(<ThankYouCC {...mockSTPProps} />);
+      expect(screen.queryByText('Important Notes')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders the ThankYouSurvey component', () => {
+    render(<ThankYouCC {...mockProps} />);
+    expect(screen.getByTestId('thank-you-survey')).toBeInTheDocument();
+  });
+
+  it('handles timeline link clicks', () => {
+    render(<ThankYouCC {...mockProps} />);
+    const timelineItem = screen.getByText('Application received');
+    fireEvent.click(timelineItem);
+    expect(mockProps.showOTPPopup).toHaveBeenCalled();
+  });
+
+  it('renders the correct link in notes', () => {
+    render(<ThankYouCC {...mockProps} />);
+    const link = screen.getByText('Click here for more info');
+    expect(link).toHaveAttribute('href', 'https://example.com/info');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'feedback noreferrer');
+  });
+});
