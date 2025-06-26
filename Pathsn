@@ -1,424 +1,142 @@
-import Rules_bd_1 from './Rules_bd_1';
-import { authenticateType, getUrl } from "../../utils/common/change.utils";
-import rulesUtils from "./rules.utils";
+import "./thank-you.scss";
+import { KeyWithAnyModel } from "../../../utils/model/common-model";
+import ThankYouTimeline from "./thankyou-timeline";
+import ThankYouBanner from "./thankyou-banner";
+import ThankYouSurvey from "./thankyou-survey"
+const ThankYouCC = (props: KeyWithAnyModel) => {
+  const applicationDetails = props.applicationDetails;
+  const thankyou = props.thankyou;
 
-// Mock the dependencies
-jest.mock("../../utils/common/change.utils", () => ({
-  authenticateType: jest.fn(),
-  getUrl: {
-    getParameterByName: jest.fn(),
-    getStageInfo: jest.fn(),
-  },
-}));
-
-jest.mock("./rules.utils", () => jest.fn());
-
-describe('Rules_bd_1', () => {
-  // Mock data setup
-  const mockFieldSet = [
-    {
-      field_set_name: 'Basic Information',
-      fields: [
-        { logical_field_name: 'full_name' },
-        { logical_field_name: 'email' },
-        { logical_field_name: 'mobile_number' },
-        { logical_field_name: 'date_of_birth' },
-        { logical_field_name: 'NRIC' },
-        { logical_field_name: 'nationality' },
-        { logical_field_name: 'gender' },
-        { logical_field_name: 'marital_status' },
-        { logical_field_name: 'account_currency_9' },
-        { logical_field_name: 'account_currency' },
-        { logical_field_name: 'contact_preference_casa' },
-        { logical_field_name: 'dsa_code' },
-        { logical_field_name: 'country_of_birth' },
-        { logical_field_name: 'contact_preference' },
-        { logical_field_name: 'nationality_add' },
-        { logical_field_name: 'other_name_or_alias' },
-        { logical_field_name: 'education_level' },
-        { logical_field_name: 'residency_status' },
-        { logical_field_name: 'residential_address' },
-        { logical_field_name: 'see_other_myInfo_details' },
-        { logical_field_name: 'see_other_myInfo_details_consent' },
-        { logical_field_name: 'ownership_status' },
-        { logical_field_name: 'passport_no' },
-      ]
+  const getTimelineData = () => {
+    /*istanbul ignore else */
+    if (!applicationDetails.isStp) {
+      return thankyou[applicationDetails.thankyouProp].CCPL.timeLine;
     }
-  ];
 
-  const mockProps = [mockFieldSet];
-
-  const mockApplication = {
-    application: {
-      source_system_name: "3"
-    },
-    products: [
-      { product_category: "CC" },
-      { product_category: "CA" }
-    ]
+    return thankyou.CCSTP;
   };
-
-  const mockStageInfo = {
-    stageId: 'bd-1',
-    stageInfo: {
-      applicants: {
-        'auth_mode_a_1': 'IX',
-        'account_currency_9_a_1': '',
-        'account_currency_a_1': ''
-      }
-    }
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (getUrl.getStageInfo as jest.Mock).mockReturnValue([mockStageInfo]);
-    (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
-    (rulesUtils as jest.Mock).mockReturnValue({ mockResult: true });
-  });
-
-  describe('iBanking authentication (IX)', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('IX');
-      (getUrl.getStageInfo as jest.Mock).mockReturnValue([{
-        ...mockStageInfo,
-        stageInfo: {
-          applicants: {
-            'auth_mode_a_1': 'IX'
-          }
+  return (
+    <>
+      <ThankYouBanner
+        banner_header={
+          !applicationDetails.isStp
+            ? thankyou[applicationDetails.thankyouProp].CCPL.banner_header
+            : thankyou.STPCCBanner.banner_header
         }
-      }]);
-    });
-
-    it('should set correct nonEditable fields for iBanking', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          nonEditable: [
-            [
-              "full_name",
-              "email",
-              "mobile_number",
-              "account_currency_9",
-              "account_currency",
-              "contact_preference_casa"
-            ]
-          ]
-        })
-      );
-    });
-
-    it('should hide all fields except iBanking fields', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      const expectedHiddenFields = [
-        'date_of_birth',
-        'NRIC',
-        'nationality',
-        'gender',
-        'marital_status',
-        'dsa_code',
-        'country_of_birth',
-        'contact_preference',
-        'nationality_add',
-        'other_name_or_alias',
-        'education_level',
-        'residency_status',
-        'residential_address',
-        'see_other_myInfo_details',
-        'see_other_myInfo_details_consent',
-        'ownership_status',
-        'passport_no'
-      ];
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expectedHiddenFields]
-        })
-      );
-    });
-  });
-
-  describe('MyInfo authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('myinfo');
-    });
-
-    it('should handle myinfo authentication with source system 3', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      const expectedHiddenFields = [
-        "dsa_code",
-        "nationality",
-        "country_of_birth",
-        "contact_preference",
-        "gender",
-        "marital_status",
-        "nationality_add",
-        "other_name_or_alias",
-        "education_level",
-        "account_currency_9",
-        "account_currency"
-      ];
-
-      const expectedNonEditableFields = [
-        "full_name",
-        "email",
-        "date_of_birth",
-        "mobile_number",
-        "residency_status",
-        "NRIC",
-        "residential_address",
-        "see_other_myInfo_details",
-        "see_other_myInfo_details_consent",
-        "ownership_status",
-        "account_currency_9",
-        "account_currency"
-      ];
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expectedHiddenFields],
-          nonEditable: [expectedNonEditableFields]
-        })
-      );
-    });
-
-    it('should handle myinfo virtual parameter', () => {
-      (authenticateType as jest.Mock).mockReturnValue('other');
-      (getUrl.getParameterByName as jest.Mock).mockReturnValue('true');
-
-      Rules_bd_1(mockProps, mockApplication);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expect.any(Array)],
-          nonEditable: [expect.any(Array)]
-        })
-      );
-    });
-
-    it('should handle resume authentication', () => {
-      (authenticateType as jest.Mock).mockReturnValue('resume');
-
-      Rules_bd_1(mockProps, mockApplication);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expect.any(Array)],
-          nonEditable: [expect.any(Array)]
-        })
-      );
-    });
-
-    it('should include account currency fields in hidden when stage conditions are met', () => {
-      (getUrl.getStageInfo as jest.Mock).mockReturnValue([{
-        stageId: 'bd-1',
-        stageInfo: {
-          applicants: {
-            'account_currency_9_a_1': '',
-            'account_currency_a_1': ''
-          }
+        banner_content={true}
+        // banner_body_1={
+        //   !applicationDetails.isStp
+        //     ? thankyou[applicationDetails.thankyouProp].CCPL.banner_body_1
+        //     : ""
+        // }
+        productName={applicationDetails.productName.join(" and ")}
+        banner_body_2={
+          !applicationDetails.isStp
+            ? thankyou[applicationDetails.thankyouProp].CCPL.banner_body_2
+            : ""
         }
-      }]);
+        resumeUrl={
+          !applicationDetails.isStp
+            ? thankyou[applicationDetails.thankyouProp].CCPL.resumeUrl
+            : ""
+        }
+      />
+      <div className="thankyou__body__outer">
+        <div className="thankyou__body">
+          {!applicationDetails.isStp && (
+            <>
+              <div className="thankyou__title">
+                <label>
+                  {thankyou[applicationDetails.thankyouProp].CCPL.title}
+                </label>
+              </div>
+              <div className="thankyou__content">
+                <label>
+                  {thankyou[applicationDetails.thankyouProp].CCPL.content}
+                </label>
+              </div>
+            </>
+          )}
+          {applicationDetails.isStp && (
+            <div className="thankyou__title">
+              <div>
+                {thankyou.STPCCBanner.banner_body_1}
+                {applicationDetails.productName}
+                {thankyou.STPCCBanner.banner_body_2}
+              </div>
+              <div>{applicationDetails.productName}</div>
+              <div>{applicationDetails.cardNumber}</div>
+            </div>
+          )}
+          <ThankYouTimeline
+            title={thankyou[applicationDetails.thankyouText].timeLine}
+            data={getTimelineData()}
+            checkCompletedStatus={true}
+            handleLink={props.showOTPPopup}
+          />
+          {applicationDetails.isStp && (
+            <div>
+              <div>
+                {thankyou[applicationDetails.thankyouText].timeline_header}
+              </div>
+              <div>
+                {thankyou[applicationDetails.thankyouText].timeline_desc}
+              </div>
+            </div>
+          )}
+          {!applicationDetails.isStp && (
+            <div>
+              <div className="thankyou__note__content">
+                <label>{thankyou?.CCPL?.note_title}</label>
+              </div>
+              <div className="thankyou__note__content">
+                <div>{thankyou.CCPL?.note_content_1}</div>
+                <div>{thankyou.CCPL?.note_content_2}</div>
+              </div>
+              <div className="thankyou__note__content">
+                <div>{thankyou.CCPL?.note_content_3}</div>
+                <div>
+                  <a
+                    target="_blank"
+                    rel="feedback noreferrer"
+                    href={thankyou.CCPL?.note_link}
+                  >
+                    {thankyou.CCPL?.note_content_4}
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
 
-      Rules_bd_1(mockProps, mockApplication);
+          <div className="body__app-details">
+            <label>{thankyou.CCPL?.refId_lbl}</label>
+            {props.applicationReferenceNo!}
+          </div>
+          <div className="body__refno">
+            {applicationDetails.isStp ? (
+              <>
+                <button
+                  onClick={(e) => props.showContinuePopup(e)}
+                  className="thankyou__continue"
+                >
+                  {thankyou[applicationDetails.thankyouText].continueButton}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={(e) => props.submitForm(e)}
+                className="thankyou__continue"
+              >
+                {thankyou[applicationDetails.thankyouText].doneButton}
+              </button>
+            )}
+          </div>
+          <ThankYouSurvey/>
+        </div>
+      </div>   
+    </>
+  );
+};
 
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expect.arrayContaining(['account_currency_9', 'account_currency'])]
-        })
-      );
-    });
-  });
-
-  describe('Manual authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('manual');
-    });
-
-    it('should set correct fields for manual authentication', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      const expectedHiddenFields = [
-        "ownership_status",
-        "education_level",
-        "nationality",
-        "nationality_add",
-        "country_of_birth",
-        "contact_preference",
-        "other_name_or_alias",
-        "education_level",
-        "gender",
-        "marital_status",
-        "residential_address",
-        "see_other_myInfo_details",
-        "see_other_myInfo_details_consent",
-      ];
-
-      const expectedNonEditableFields = [
-        "full_name",
-        "email",
-        "mobile_number",
-        "residential_status",
-        "account_currency_9",
-        "account_currency",
-        "residency_status",
-        "NRIC",
-        "passport_no"
-      ];
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expectedHiddenFields],
-          nonEditable: [expectedNonEditableFields]
-        })
-      );
-    });
-  });
-
-  describe('Default authentication', () => {
-    beforeEach(() => {
-      (authenticateType as jest.Mock).mockReturnValue('other');
-    });
-
-    it('should hide only myInfo consent fields for default case', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      const expectedHiddenFields = [
-        "see_other_myInfo_details",
-        "see_other_myInfo_details_consent",
-      ];
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.objectContaining({
-          hidden: [expectedHiddenFields]
-        })
-      );
-    });
-  });
-
-  describe('Product category handling', () => {
-    it('should modify fieldSet for CC and CA product categories', () => {
-      const mockPropsWithCurrency = [
-        [
-          {
-            field_set_name: 'Basic Information',
-            fields: [
-              { logical_field_name: 'full_name' },
-              { logical_field_name: 'account_currency_9' }
-            ]
-          },
-          {
-            field_set_name: '   ',
-            fields: [
-              { logical_field_name: 'some_other_field' }
-            ]
-          }
-        ]
-      ];
-
-      Rules_bd_1(mockPropsWithCurrency, mockApplication);
-
-      // Verify that rulesUtils was called with modified fieldSet
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            field_set_name: 'Basic Information',
-            fields: expect.not.arrayContaining([
-              expect.objectContaining({ logical_field_name: 'account_currency_9' })
-            ])
-          })
-        ]),
-        expect.any(Object)
-      );
-    });
-
-    it('should not modify fieldSet for other product categories', () => {
-      const mockApplicationOther = {
-        application: {
-          source_system_name: "3"
-        },
-        products: [
-          { product_category: "OTHER" },
-          { product_category: "DIFFERENT" }
-        ]
-      };
-
-      Rules_bd_1(mockProps, mockApplicationOther);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        [mockFieldSet],
-        expect.any(Object)
-      );
-    });
-  });
-
-  describe('Edge cases', () => {
-    it('should handle empty fieldSet', () => {
-      const emptyProps = [[]];
-      
-      expect(() => {
-        Rules_bd_1(emptyProps, mockApplication);
-      }).not.toThrow();
-    });
-
-    it('should handle missing Basic Information fieldSet', () => {
-      const mockPropsWithoutBasicInfo = [
-        [
-          {
-            field_set_name: 'Other Information',
-            fields: [{ logical_field_name: 'some_field' }]
-          }
-        ]
-      ];
-
-      expect(() => {
-        Rules_bd_1(mockPropsWithoutBasicInfo, mockApplication);
-      }).not.toThrow();
-    });
-
-    it('should handle null getParameterByName return', () => {
-      (getUrl.getParameterByName as jest.Mock).mockReturnValue(null);
-      (authenticateType as jest.Mock).mockReturnValue('other');
-
-      expect(() => {
-        Rules_bd_1(mockProps, mockApplication);
-      }).not.toThrow();
-    });
-  });
-
-  describe('Validation object structure', () => {
-    it('should always include modifyVisibility in validation object', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          modifyVisibility: [expect.any(Array)]
-        })
-      );
-    });
-
-    it('should initialize validation object with correct structure', () => {
-      Rules_bd_1(mockProps, mockApplication);
-
-      expect(rulesUtils).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.objectContaining({
-          nonEditable: expect.any(Array),
-          hidden: expect.any(Array),
-          modifyVisibility: expect.any(Array)
-        })
-      );
-    });
-  });
-});
+export default ThankYouCC;
+Please write test cases using jest with RTL
