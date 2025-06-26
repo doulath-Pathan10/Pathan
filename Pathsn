@@ -1,136 +1,136 @@
-import Rules_bd_2 from './Rules_bd_2';
-import rulesUtils from './rules.utils';
+import { authenticateType, getUrl } from "../../utils/common/change.utils";
+import {
+  KeyWithAnyModel,
+  ValidationObjModel,
+} from "../../utils/model/common-model";
+import rulesUtils from "./rules.utils";
 
-// Mock the rulesUtils function since we want to test Rules_bd_2 in isolation
-jest.mock('./rules.utils');
-
-describe('Rules_bd_2 Utility Function', () => {
-  const mockProps = [
-    [
-      {
-        field_set_name: "Personal Details",
-        fields: [
-          { field_name: "nationality" },
-          { field_name: "marital_status" },
-          { field_name: "residential_address" }
-        ]
-      },
-      {
-        field_set_name: "Residential Address In Singapore",
-        fields: [
-          { field_name: "building_name" },
-          { field_name: "block" },
-          { field_name: "postal_code" },
-          { field_name: "street_name" },
-          { field_name: "unit_no" }
-        ]
-      }
-    ]
-  ];
-
-  const mockStageInfo = {}; // Empty as it's not used in the function
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should correctly filter and structure the fields', () => {
-    Rules_bd_2(mockProps, mockStageInfo);
-
-    // Verify rulesUtils was called with the expected filteredFields
-    expect(rulesUtils).toHaveBeenCalled();
-    const [filteredFieldsArg] = (rulesUtils as jest.Mock).mock.calls[0];
-    
-    expect(filteredFieldsArg[0]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field_set_name: "Personal Details",
-          fields: expect.arrayContaining([
-            { field_name: "nationality" },
-            { field_name: "marital_status" },
-            { field_name: "residential_address" }
-          ])
-        }),
-        expect.objectContaining({
-          field_set_name: "Residential Address In Singapore",
-          fields: expect.arrayContaining([
-            { field_name: "building_name" },
-            { field_name: "block" },
-            { field_name: "postal_code" },
-            { field_name: "street_name" },
-            { field_name: "unit_no" }
-          ])
-        })
-      ])
-    );
-  });
-
-  it('should create correct validation object with nonEditable fields', () => {
-    Rules_bd_2(mockProps, mockStageInfo);
-    const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-    
-    expect(validationObj.nonEditable).toContainEqual(
-      expect.arrayContaining(["marital_status", "residential_address", "nationality"])
-    );
-  });
-
-  it('should create correct validation object with hidden fields', () => {
-    Rules_bd_2(mockProps, mockStageInfo);
-    const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-    
-    expect(validationObj.hidden).toContainEqual(
-      expect.arrayContaining([
-        "building_name", 
-        "block", 
-        "postal_code", 
-        "street_name", 
-        "unit_no"
-      ])
-    );
-  });
-
-  it('should create correct validation object with modifyVisibility fields', () => {
-    Rules_bd_2(mockProps, mockStageInfo);
-    const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-    
-    expect(validationObj.modifyVisibility).toContainEqual(
-      expect.arrayContaining(["nationality", "residential_address"])
-    );
-  });
-
-  it('should handle empty input props gracefully', () => {
-    const emptyProps = [[]];
-    Rules_bd_2(emptyProps, mockStageInfo);
-    
-    // Should still call rulesUtils with empty arrays
-    expect(rulesUtils).toHaveBeenCalledWith([[]], expect.any(Object));
-  });
-
-  it('should maintain the structure when field sets are missing', () => {
-    const partialProps = [
-      [
-        {
-          field_set_name: "Personal Details",
-          fields: [
-            { field_name: "nationality" }
-          ]
-        }
-      ]
+const Rules_bd_1 = (props: KeyWithAnyModel, application: KeyWithAnyModel): KeyWithAnyModel => {
+  const auth = authenticateType();
+  const isMyInfoVirtual = getUrl.getParameterByName("isMyInfoVirtual");
+  const stageSelector = getUrl.getStageInfo()[0];
+  let fieldSet = props[0].filter((fields:any)=> fields.field_set_name === 'Basic Information');
+  const validationObj: ValidationObjModel = {
+    nonEditable: [],
+    hidden: [],
+    modifyVisibility: [],
+  };
+  let defaultVisiblity:any= []
+  //ibanking back nav issue fix
+  if (stageSelector.stageInfo.applicants['auth_mode_a_1'] === 'IX') {
+    const ibankingFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "account_currency_9",
+      "account_currency",
+      "contact_preference_casa"
     ];
-    
-    Rules_bd_2(partialProps, mockStageInfo);
-    const [filteredFieldsArg, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
-    
-    expect(filteredFieldsArg[0]).toEqual([
-      {
-        field_set_name: "Personal Details",
-        fields: [{ field_name: "nationality" }]
-      }
-    ]);
-    
-    // Validation rules should still be applied
-    expect(validationObj.nonEditable).toContainEqual(
-      expect.arrayContaining(["nationality"])
-    );
-  });
-});
+
+    validationObj.nonEditable.push(ibankingFields);
+
+    let hiddenFields: any[] = [];
+
+    fieldSet.forEach((field: KeyWithAnyModel) => {
+      field.fields.forEach((fieldName: KeyWithAnyModel) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        ibankingFields.indexOf(fieldName["logical_field_name"]) === -1
+          ? hiddenFields.push(fieldName["logical_field_name"])
+          : "";
+      });
+    });
+
+    validationObj.hidden!.push(hiddenFields);
+  }
+
+  //Adding resume here, incase of manual flow this condition has to be modified.
+  else if (
+    application.application.source_system_name === "3" &&
+    (auth === "myinfo" || isMyInfoVirtual === "true" || auth === "resume")
+  ) {
+
+    let hiddenFields = [
+      "dsa_code",
+      "nationality",
+      "country_of_birth",
+      "contact_preference",
+      "gender",
+      "marital_status",
+      "nationality_add",
+      "other_name_or_alias",
+      "education_level"
+    ];
+    /*istanbul ignore else */
+    if (stageSelector.stageId === 'bd-1' && (stageSelector.stageInfo.applicants['account_currency_9_a_1'] === '' || stageSelector.stageInfo.applicants['account_currency_a_1'] === '')) {
+      hiddenFields.push('account_currency_9', 'account_currency');
+    }
+    validationObj.hidden!.push(hiddenFields);
+    const nonEditableFields = [
+      "full_name",
+      "email",
+      "date_of_birth",
+      "mobile_number",
+      "residency_status",
+      "NRIC",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+      "ownership_status",
+      "account_currency_9",
+      "account_currency"
+    ];
+    validationObj.nonEditable.push(nonEditableFields);
+  } else if (auth === "manual") {
+    const hiddenFields = [
+      "ownership_status",
+      "education_level",
+      "nationality",
+      "nationality_add",
+      "country_of_birth",
+      "contact_preference",
+      "other_name_or_alias",
+      "education_level",
+      "gender",
+      "marital_status",
+      "residential_address",
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+    ];
+    const nonEditableFields = [
+      "full_name",
+      "email",
+      "mobile_number",
+      "residential_status",
+      "account_currency_9",
+      "account_currency",
+      "residency_status",
+      "NRIC",
+      "passport_no"
+    ];
+    validationObj.nonEditable.push(nonEditableFields);
+    validationObj.hidden!.push(hiddenFields);
+  } 
+//   else if(auth === "myinfo") {
+//     const nonEditableFields = ["mobile_number"]
+//     validationObj.nonEditable.push(nonEditableFields)
+// } 
+else {
+    const hiddenFields = [
+      "see_other_myInfo_details",
+      "see_other_myInfo_details_consent",
+    ];
+    validationObj.hidden!.push(hiddenFields);
+  }
+  if (application.products[0].product_category==="CC" && application.products[1].product_category==="CA" && fieldSet[0].fields.filter((item: any) => item.logical_field_name === 'account_currency_9')) {
+    const innerArray = props[0];
+    const filterFields = fieldSet[0].fields.filter((item: any) => item.logical_field_name !== 'account_currency_9');
+    const moreCurrency = innerArray.filter((item: { field_set_name: string; }) => item.field_set_name === '   ');
+    fieldSet = [{field_set_name: 'Basic Information', fields: filterFields}]
+    fieldSet.push(moreCurrency[0]);
+  }
+  validationObj.modifyVisibility!.push(defaultVisiblity);
+  return rulesUtils([fieldSet], validationObj);
+};
+
+export default Rules_bd_1;
+Please write test cases using jest with RTL
