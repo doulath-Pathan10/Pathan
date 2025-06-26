@@ -1,31 +1,136 @@
-import { checkProductDetails } from '../../services/common-service';
-import { authenticateType, getUrl } from '../../utils/common/change.utils';
-import { KeyWithAnyModel, ValidationObjModel } from '../../utils/model/common-model';
+import Rules_bd_2 from './Rules_bd_2';
 import rulesUtils from './rules.utils';
 
-const Rules_bd_2 = (props: KeyWithAnyModel, stageInfo: KeyWithAnyModel): KeyWithAnyModel => {
-    const validationObj: ValidationObjModel = {
-        nonEditable: [],
-        hidden: [],
-        modifyVisibility:[]
-    };
-    let filteredFields = [];
-    let nonEditableFields: Array<string> = [];
-    let hiddenFields: Array<string> = [];
-    let defaultVisiblity:any= [];
-    filteredFields.push(props[0]?.filter((fields:any)=> fields.field_set_name === "Personal Details"));
-    const addressDetails = props[0].filter((fields:any)=> fields.field_set_name === "Residential Address In Singapore");
-    if(filteredFields[0].length > 0){
-      filteredFields[0].push({field_set_name: "Residential Address In Singapore", fields: addressDetails[0].fields});
-    }
-    defaultVisiblity.push("nationality", "residential_address");
-    hiddenFields.push("building_name", "block", "postal_code", "street_name", "unit_no");
-    nonEditableFields.push("marital_status", "residential_address", "nationality");
-    validationObj.modifyVisibility!.push(defaultVisiblity)
-    validationObj.nonEditable.push(nonEditableFields);
-    validationObj.hidden!.push(hiddenFields);
-    return rulesUtils(filteredFields, validationObj);
-}
+// Mock the rulesUtils function since we want to test Rules_bd_2 in isolation
+jest.mock('./rules.utils');
 
-export default Rules_bd_2;
-Please write test cases using jest with RTL
+describe('Rules_bd_2 Utility Function', () => {
+  const mockProps = [
+    [
+      {
+        field_set_name: "Personal Details",
+        fields: [
+          { field_name: "nationality" },
+          { field_name: "marital_status" },
+          { field_name: "residential_address" }
+        ]
+      },
+      {
+        field_set_name: "Residential Address In Singapore",
+        fields: [
+          { field_name: "building_name" },
+          { field_name: "block" },
+          { field_name: "postal_code" },
+          { field_name: "street_name" },
+          { field_name: "unit_no" }
+        ]
+      }
+    ]
+  ];
+
+  const mockStageInfo = {}; // Empty as it's not used in the function
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should correctly filter and structure the fields', () => {
+    Rules_bd_2(mockProps, mockStageInfo);
+
+    // Verify rulesUtils was called with the expected filteredFields
+    expect(rulesUtils).toHaveBeenCalled();
+    const [filteredFieldsArg] = (rulesUtils as jest.Mock).mock.calls[0];
+    
+    expect(filteredFieldsArg[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field_set_name: "Personal Details",
+          fields: expect.arrayContaining([
+            { field_name: "nationality" },
+            { field_name: "marital_status" },
+            { field_name: "residential_address" }
+          ])
+        }),
+        expect.objectContaining({
+          field_set_name: "Residential Address In Singapore",
+          fields: expect.arrayContaining([
+            { field_name: "building_name" },
+            { field_name: "block" },
+            { field_name: "postal_code" },
+            { field_name: "street_name" },
+            { field_name: "unit_no" }
+          ])
+        })
+      ])
+    );
+  });
+
+  it('should create correct validation object with nonEditable fields', () => {
+    Rules_bd_2(mockProps, mockStageInfo);
+    const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
+    
+    expect(validationObj.nonEditable).toContainEqual(
+      expect.arrayContaining(["marital_status", "residential_address", "nationality"])
+    );
+  });
+
+  it('should create correct validation object with hidden fields', () => {
+    Rules_bd_2(mockProps, mockStageInfo);
+    const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
+    
+    expect(validationObj.hidden).toContainEqual(
+      expect.arrayContaining([
+        "building_name", 
+        "block", 
+        "postal_code", 
+        "street_name", 
+        "unit_no"
+      ])
+    );
+  });
+
+  it('should create correct validation object with modifyVisibility fields', () => {
+    Rules_bd_2(mockProps, mockStageInfo);
+    const [_, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
+    
+    expect(validationObj.modifyVisibility).toContainEqual(
+      expect.arrayContaining(["nationality", "residential_address"])
+    );
+  });
+
+  it('should handle empty input props gracefully', () => {
+    const emptyProps = [[]];
+    Rules_bd_2(emptyProps, mockStageInfo);
+    
+    // Should still call rulesUtils with empty arrays
+    expect(rulesUtils).toHaveBeenCalledWith([[]], expect.any(Object));
+  });
+
+  it('should maintain the structure when field sets are missing', () => {
+    const partialProps = [
+      [
+        {
+          field_set_name: "Personal Details",
+          fields: [
+            { field_name: "nationality" }
+          ]
+        }
+      ]
+    ];
+    
+    Rules_bd_2(partialProps, mockStageInfo);
+    const [filteredFieldsArg, validationObj] = (rulesUtils as jest.Mock).mock.calls[0];
+    
+    expect(filteredFieldsArg[0]).toEqual([
+      {
+        field_set_name: "Personal Details",
+        fields: [{ field_name: "nationality" }]
+      }
+    ]);
+    
+    // Validation rules should still be applied
+    expect(validationObj.nonEditable).toContainEqual(
+      expect.arrayContaining(["nationality"])
+    );
+  });
+});
