@@ -1,343 +1,169 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import ButtonGroup from './ButtonGroup';
-import LoanDetailsInfo from '../loan-details-info/loan-details-info';
+import configureMockStore from 'redux-mock-store';
+import Display from './Display';
+import { isFieldUpdate } from '../../../utils/common/change.utils';
+import { act } from 'react-dom/test-utils';
 
-// Mock the LoanDetailsInfo component
-jest.mock('../loan-details-info/loan-details-info', () => () => <div>Mocked LoanDetailsInfo</div>);
-
-// Mock other dependencies
-jest.mock('../../../services/validation-service', () => ({
-  formateCurrency: jest.fn((value) => value) // Simple mock, returns input as is
+// Mock the change utils
+jest.mock('../../../utils/common/change.utils', () => ({
+  isFieldUpdate: jest.fn().mockImplementation(() => ({ type: 'MOCK_ACTION' }))
 }));
 
-describe('ButtonGroup Component', () => {
-  const mockStore = configureStore([]);
-  const mockProps = {
+// Mock store setup
+const mockStore = configureMockStore([]);
+
+describe('Display Component', () => {
+  const mockHandleCallback = jest.fn();
+
+  const baseProps = {
     data: {
-      logical_field_name: 'loan_tenor',
-      rwb_label_name: 'Loan Tenor'
+      logical_field_name: 'mailing_address',
+      rwb_label_name: 'Mailing Address'
     },
-    handleCallback: jest.fn(),
-    handleFieldDispatch: jest.fn()
+    handleCallback: mockHandleCallback
   };
 
-  const initialState = {
-    stages: {
-      userInput: {
-        applicants: {
-          loan_tenor_a_1: '',
-          required_annual_income_a_1: '',
-          required_loan_amount_a_1: ''
-        }
-      },
-      updatedStageInputs: [],
-      stages: [{
-        stageId: 'ad-1',
-        stageInfo: {
-          products: [{ product_type: '280' }],
-          applicants: {
-            annual_income_a_1: '',
-            required_annual_income_a_1: ''
+  const createTestStore = (overrides = {}) => {
+    return mockStore({
+      stages: {
+        stages: [
+          {
+            stageInfo: {
+              application: {
+                journey_type: 'NTC'
+              },
+              products: [
+                {
+                  product_category: 'CC',
+                  product_type: '100'
+                }
+              ],
+              applicants: {
+                mailing_address_a_1: '123 Test Street',
+                res_address_a_1: '456 Residential Ave'
+              },
+              ...overrides
+            }
           }
-        }
-      }],
-      lastStageId: '',
-      journeyType: 'ETC'
-    },
-    loanTopUp: {
-      outstandingAmount: '',
-      existingLoanTopUp: false,
-      newLoanTopUp: false,
-      topupAmount: 0
-    }
+        ]
+      }
+    });
   };
-
-  let store;
 
   beforeEach(() => {
-    store = mockStore(initialState);
     jest.clearAllMocks();
   });
 
-  test('renders without crashing', () => {
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
+  it('should render mailing address for NTC journey with CC product', async () => {
+    const store = createTestStore();
     
-    expect(screen.getByText('Loan Tenor')).toBeInTheDocument();
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.getByText('Mailing Address')).toBeInTheDocument();
+    expect(screen.getByText('123 Test Street')).toBeInTheDocument();
+    expect(mockHandleCallback).toHaveBeenCalledWith(baseProps.data, '123 Test Street');
+    expect(isFieldUpdate).toHaveBeenCalledWith(baseProps, '123 Test Street', 'mailing_address');
   });
 
-  test('renders tenure buttons for product type 280', () => {
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('1 year')).toBeInTheDocument();
-    expect(screen.getByText('2 years')).toBeInTheDocument();
-    expect(screen.getByText('3 years')).toBeInTheDocument();
-    expect(screen.getByText('4 years')).toBeInTheDocument();
-    expect(screen.getByText('5 years')).toBeInTheDocument();
-  });
-
-  test('renders tenure buttons for product type CCFT', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        stages: [{
-          stageId: 'ad-1',
-          stageInfo: {
-            products: [{ product_type: 'CCFT' }],
-            applicants: {
-              annual_income_a_1: '',
-              required_annual_income_a_1: ''
-            }
-          }
-        }]
-      }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('1 year')).toBeInTheDocument();
-    expect(screen.getByText('2 years')).toBeInTheDocument();
-    expect(screen.getByText('3 years')).toBeInTheDocument();
-    expect(screen.getByText('4 years')).toBeInTheDocument();
-  });
-
-  test('handles button click and updates state', () => {
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    const button = screen.getByText('2 years');
-    fireEvent.click(button);
-    
-    expect(mockProps.handleCallback).toHaveBeenCalled();
-    expect(mockProps.handleFieldDispatch).toHaveBeenCalled();
-  });
-
-  test('shows active class for selected button', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            loan_tenor_a_1: '2',
-            required_annual_income_a_1: '',
-            required_loan_amount_a_1: ''
-          }
-        }
-      }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    const activeButton = screen.getByText('2 years');
-    expect(activeButton.parentElement).toHaveClass('active');
-  });
-
-  test('renders topup banner for existing CashOne loan', () => {
-    const customState = {
-      ...initialState,
-      loanTopUp: {
-        outstandingAmount: '1000',
-        existingLoanTopUp: true,
-        newLoanTopUp: false,
-        topupAmount: 0
-      },
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            loan_tenor_a_1: '',
-            required_annual_income_a_1: '',
-            required_loan_amount_a_1: '2000'
-          }
-        }
-      }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('Final Loan Amount')).toBeInTheDocument();
-    expect(screen.getByText('SGD 3000')).toBeInTheDocument();
-  });
-
-  test('does not render topup banner when not existing CashOne loan', () => {
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.queryByText('Final Loan Amount')).not.toBeInTheDocument();
-  });
-
-  test('renders LoanDetailsInfo when field is loan_tenor', () => {
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('Mocked LoanDetailsInfo')).toBeInTheDocument();
-  });
-
-  test('does not render LoanDetailsInfo when field is not loan_tenor', () => {
-    const customProps = {
-      ...mockProps,
+  it('should render residential address when logical_field_name is residential_address', async () => {
+    const store = createTestStore();
+    const residentialProps = {
+      ...baseProps,
       data: {
-        logical_field_name: 'other_field',
-        rwb_label_name: 'Other Field'
+        logical_field_name: 'residential_address',
+        rwb_label_name: 'Residential Address'
       }
     };
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...customProps} />
-      </Provider>
-    );
-    
-    expect(screen.queryByText('Mocked LoanDetailsInfo')).not.toBeInTheDocument();
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...residentialProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.getByText('Residential Address')).toBeInTheDocument();
+    expect(screen.getByText('456 Residential Ave')).toBeInTheDocument();
   });
 
-  test('sets default tenor when annual income changes', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            loan_tenor_a_1: '',
-            required_annual_income_a_1: '50000',
-            required_loan_amount_a_1: ''
-          }
-        }
+  it('should not render when journey type is not NTC', async () => {
+    const store = createTestStore({
+      application: {
+        journey_type: 'NTB'
       }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(mockProps.handleCallback).toHaveBeenCalledWith(
-      mockProps.data,
-      '1' // Default first option
-    );
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
   });
 
-  test('uses previously selected tenor when available', () => {
-    const customState = {
-      ...initialState,
-      stages: {
-        ...initialState.stages,
-        updatedStageInputs: [{
-          stageId: 'ad-1',
-          applicants: {
-            loan_tenor_a_1: '3'
-          }
-        }]
-      }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    const activeButton = screen.getByText('3 years');
-    expect(activeButton.parentElement).toHaveClass('active');
+  it('should not render when product is not CC or type 280', async () => {
+    const store = createTestStore({
+      products: [{
+        product_category: 'PL',
+        product_type: '100'
+      }]
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
   });
 
-  test('handles topup amount calculation correctly', () => {
-    const customState = {
-      ...initialState,
-      loanTopUp: {
-        outstandingAmount: '1,000',
-        existingLoanTopUp: true,
-        newLoanTopUp: false,
-        topupAmount: 0
-      },
-      stages: {
-        ...initialState.stages,
-        userInput: {
-          applicants: {
-            loan_tenor_a_1: '',
-            required_annual_income_a_1: '',
-            required_loan_amount_a_1: '2000'
-          }
-        }
+  it('should handle missing address data gracefully', async () => {
+    const store = createTestStore({
+      applicants: {
+        mailing_address_a_1: '',
+        res_address_a_1: ''
       }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    expect(screen.getByText('SGD 3000')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
   });
 
-  test('sets OSAValue when outstandingAmount changes', () => {
-    const customState = {
-      ...initialState,
-      loanTopUp: {
-        outstandingAmount: '5000',
-        existingLoanTopUp: true,
-        newLoanTopUp: false,
-        topupAmount: 0
-      }
-    };
-    
-    store = mockStore(customState);
-    
-    render(
-      <Provider store={store}>
-        <ButtonGroup {...mockProps} />
-      </Provider>
-    );
-    
-    // This test is more about verifying the useEffect behavior
-    // We can check if the topup amount calculation reflects the new value
-    expect(screen.queryByText('SGD 5000')).not.toBeInTheDocument(); // Because loan amount is empty
+  it('should handle undefined applicants data', async () => {
+    const store = createTestStore({
+      applicants: undefined
+    });
+
+    await act(async () => {
+      render(
+        <Provider store={store}>
+          <Display {...baseProps} />
+        </Provider>
+      );
+    });
+
+    expect(screen.queryByText('Mailing Address')).not.toBeInTheDocument();
   });
 });
