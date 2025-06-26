@@ -1,163 +1,72 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import ThankYouCC from './ThankYouCC';
-import '@testing-library/jest-dom';
+import React, { useEffect, useState } from "react";
+import { KeyWithAnyModel } from "../../../utils/model/common-model";
+import "./checkbox.scss";
 
-// Mock child components
-jest.mock('./thankyou-banner', () => (props: any) => (
-  <div data-testid="thankyou-banner">
-    <h1>{props.banner_header}</h1>
-    <p>{props.productName}</p>
-    <p>{props.banner_body_2}</p>
-  </div>
-));
-
-jest.mock('./thankyou-timeline', () => (props: any) => (
-  <div data-testid="thankyou-timeline">
-    <h2>{props.title}</h2>
-    {props.data.map((item: any) => (
-      <div key={item.title} onClick={props.handleLink}>
-        {item.title} - {item.description}
-      </div>
-    ))}
-  </div>
-));
-
-jest.mock('./thankyou-survey', () => () => (
-  <div data-testid="thankyou-survey">Survey Component</div>
-));
-
-describe('ThankYouCC Component', () => {
-  const defaultProps = {
-    applicationDetails: {
-      isStp: false,
-      thankyouProp: 'standard',
-      thankyouText: 'standard',
-      productName: ['Credit Card'],
-      cardNumber: '1234 5678 9012 3456'
-    },
-    thankyou: {
-      standard: {
-        CCPL: {
-          banner_header: 'Thank you for your application!',
-          banner_body_2: 'We will process your application shortly.',
-          resumeUrl: '/resume',
-          title: 'What happens next?',
-          content: 'Here are the next steps in your application process.',
-          timeLine: [
-            { title: 'Step 1', description: 'Application received', completed: true },
-            { title: 'Step 2', description: 'Under review', completed: false }
-          ],
-          note_title: 'Important Notes',
-          note_content_1: 'Note content 1',
-          note_content_2: 'Note content 2',
-          note_content_3: 'Note content 3',
-          note_content_4: 'Click here for more info',
-          note_link: 'https://example.com/info',
-          refId_lbl: 'Reference Number:'
-        },
-        timeLine: 'Application Timeline'
-      },
-      STPCCBanner: {
-        banner_header: 'STP Application Complete',
-        banner_body_1: 'Your ',
-        banner_body_2: ' application is complete.'
-      },
-      CCPL: {
-        note_title: 'General Notes',
-        note_content_1: 'General note 1',
-        note_content_2: 'General note 2',
-        note_content_3: 'General note 3',
-        note_content_4: 'General link',
-        note_link: 'https://example.com/general'
-      }
-    },
-    applicationReferenceNo: 'APP12345678',
-    showOTPPopup: jest.fn(),
-    showContinuePopup: jest.fn(),
-    submitForm: jest.fn()
-  };
-
-  const stpProps = {
-    ...defaultProps,
-    applicationDetails: {
-      ...defaultProps.applicationDetails,
-      isStp: true
+const Checkbox = (props: KeyWithAnyModel) => {
+  const [currencyCheckBox, setCurrencyCheckBox] = useState(false);
+  function handleContentClick(event:any) {
+    if (event.target.tagName.toUpperCase() !== "A") {
+      props.setCheckedStatus(!props.checkedStatus);
     }
-  };
+  }
+  useEffect(()=>{
+    if(props.data.logical_field_name === "currency_sgd_eq" || 
+    props.data.logical_field_name === "currency_jpy_eq" ||
+    props.data.logical_field_name === "currency_hkd_eq" ||
+    props.data.logical_field_name === "currency_aud_eq" ||
+    props.data.logical_field_name === "currency_eur_eq" ||
+    props.data.logical_field_name === "currency_gbp_eq" ||
+    props.data.logical_field_name === "currency_usd_eq" ||
+    props.data.logical_field_name === "currency_chf" ||
+    props.data.logical_field_name === "bs_currency_aud" ||
+    props.data.logical_field_name === "bs_currency_eur" ||
+    props.data.logical_field_name === "bs_currency_gbp" ||
+    props.data.logical_field_name === "bs_currency_hkd" ||
+    props.data.logical_field_name === "bs_currency_jpy" ||
+    props.data.logical_field_name === "bs_currency_nzd" ||
+    props.data.logical_field_name === "bs_currency_sgd" ||
+    props.data.logical_field_name === "bs_currency_usd"){
+      setCurrencyCheckBox(true);
+    }else{
+      setCurrencyCheckBox(false);
+    }
+  },[]);
+  console.log(props.data.logical_field_name)
+  return (
+    <div data-testid='checkbox'>
+      {currencyCheckBox ? <><div className="multi-select__item">
+                        <input
+                          type="checkbox"
+                          //checked={item.checked}
+                          //onChange={(event) => addUserInput(item, event)}
+                          value={props.data.logical_field_name}
+                          id={props.data.logical_field_name}
+                        />
+                        <label htmlFor={props.data.logical_field_name}>
+                          {props.data.lov_field_name}
+                        </label>
+                      </div></>:<><label>{props.reviewHeader}</label>
+      <div className="review__check__body" onClick={handleContentClick}>
+        <div className="review__checkbox__input">
+          
+          <div>
+            {props.reviewDescp1}
+            <a target="_blank" rel="noreferrer" href={props.reviewDescp2}>
+              link
+            </a>
+            {props.reviewDescp3}
+          </div>
+        </div>
+        <div className="review__check__points">{props.reviewDescpoint1}</div>
+        <div className="review__check__points">
+          {props.reviewDescpoint2}         
+        </div>
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+        <div>{props.reviewDescp4} </div>
+      </div></>}
+    </div>
+  );
+};
 
-  it('renders without crashing', () => {
-    render(<ThankYouCC {...defaultProps} />);
-    expect(screen.getByTestId('thankyou-banner')).toBeInTheDocument();
-  });
-
-  describe('Non-STP Application', () => {
-    it('displays the correct banner content', () => {
-      render(<ThankYouCC {...defaultProps} />);
-      expect(screen.getByText('Thank you for your application!')).toBeInTheDocument();
-      expect(screen.getByText('Credit Card')).toBeInTheDocument();
-      expect(screen.getByText('We will process your application shortly.')).toBeInTheDocument();
-    });
-
-    it('displays the timeline section', () => {
-      render(<ThankYouCC {...defaultProps} />);
-      expect(screen.getByText('Application Timeline')).toBeInTheDocument();
-      expect(screen.getByText('Step 1 - Application received')).toBeInTheDocument();
-    });
-
-    it('displays the notes section', () => {
-      render(<ThankYouCC {...defaultProps} />);
-      expect(screen.getByText('Important Notes')).toBeInTheDocument();
-      expect(screen.getByText('Note content 1')).toBeInTheDocument();
-      expect(screen.getByText('Click here for more info')).toBeInTheDocument();
-    });
-
-    it('displays the reference number', () => {
-      render(<ThankYouCC {...defaultProps} />);
-      expect(screen.getByText('Reference Number:')).toBeInTheDocument();
-      expect(screen.getByText('APP12345678')).toBeInTheDocument();
-    });
-
-    it('shows the Done button and handles click', () => {
-      render(<ThankYouCC {...defaultProps} />);
-      const button = screen.getByRole('button', { name: /done/i });
-      fireEvent.click(button);
-      expect(defaultProps.submitForm).toHaveBeenCalled();
-    });
-  });
-
-  describe('STP Application', () => {
-    it('displays the STP banner content', () => {
-      render(<ThankYouCC {...stpProps} />);
-      expect(screen.getByText('STP Application Complete')).toBeInTheDocument();
-    });
-
-    it('shows the Continue button and handles click', () => {
-      render(<ThankYouCC {...stpProps} />);
-      const button = screen.getByRole('button', { name: /continue/i });
-      fireEvent.click(button);
-      expect(stpProps.showContinuePopup).toHaveBeenCalled();
-    });
-
-    it('does not display the notes section', () => {
-      render(<ThankYouCC {...stpProps} />);
-      expect(screen.queryByText('Important Notes')).not.toBeInTheDocument();
-    });
-  });
-
-  it('renders the ThankYouSurvey component', () => {
-    render(<ThankYouCC {...defaultProps} />);
-    expect(screen.getByTestId('thankyou-survey')).toBeInTheDocument();
-  });
-
-  it('handles timeline item clicks', () => {
-    render(<ThankYouCC {...defaultProps} />);
-    const timelineItem = screen.getByText('Step 1 - Application received');
-    fireEvent.click(timelineItem);
-    expect(defaultProps.showOTPPopup).toHaveBeenCalled();
-  });
-});
+export default Checkbox;
+Please write test cases using jest with RTL
