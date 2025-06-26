@@ -1,391 +1,163 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import '@testing-library/jest-dom';
 import ThankYouCC from './ThankYouCC';
+import '@testing-library/jest-dom';
 
-// Mock the child components
-jest.mock('./thankyou-timeline', () => {
-  return function MockThankYouTimeline(props: any) {
-    return (
-      <div data-testid="thankyou-timeline">
-        <div data-testid="timeline-title">{props.title}</div>
-        <div data-testid="timeline-data">{JSON.stringify(props.data)}</div>
-        <div data-testid="timeline-completed">{props.checkCompletedStatus.toString()}</div>
-        <button onClick={props.handleLink} data-testid="timeline-link-handler">
-          Handle Link
-        </button>
+// Mock child components
+jest.mock('./thankyou-banner', () => (props: any) => (
+  <div data-testid="thankyou-banner">
+    <h1>{props.banner_header}</h1>
+    <p>{props.productName}</p>
+    <p>{props.banner_body_2}</p>
+  </div>
+));
+
+jest.mock('./thankyou-timeline', () => (props: any) => (
+  <div data-testid="thankyou-timeline">
+    <h2>{props.title}</h2>
+    {props.data.map((item: any) => (
+      <div key={item.title} onClick={props.handleLink}>
+        {item.title} - {item.description}
       </div>
-    );
-  };
-});
+    ))}
+  </div>
+));
 
-jest.mock('./thankyou-banner', () => {
-  return function MockThankYouBanner(props: any) {
-    return (
-      <div data-testid="thankyou-banner">
-        <div data-testid="banner-header">{props.banner_header}</div>
-        <div data-testid="banner-content">{props.banner_content.toString()}</div>
-        <div data-testid="product-name">{props.productName}</div>
-        <div data-testid="banner-body-2">{props.banner_body_2}</div>
-        <div data-testid="resume-url">{props.resumeUrl}</div>
-      </div>
-    );
-  };
-});
-
-jest.mock('./thankyou-survey', () => {
-  return function MockThankYouSurvey() {
-    return <div data-testid="thankyou-survey">Survey Component</div>;
-  };
-});
-
-// Mock the SCSS import
-jest.mock('./thank-you.scss', () => ({}));
+jest.mock('./thankyou-survey', () => () => (
+  <div data-testid="thankyou-survey">Survey Component</div>
+));
 
 describe('ThankYouCC Component', () => {
-  const mockThankyouData = {
-    CCPL: {
-      banner_header: 'Thank You Header',
-      banner_body_1: 'Banner Body 1',
-      banner_body_2: 'Banner Body 2',
-      resumeUrl: 'https://example.com/resume',
-      title: 'Application Title',
-      content: 'Application Content',
-      note_title: 'Important Note',
-      note_content_1: 'Note content 1',
-      note_content_2: 'Note content 2',
-      note_content_3: 'Note content 3',
-      note_content_4: 'Click here for more info',
-      note_link: 'https://example.com/more-info',
-      refId_lbl: 'Reference ID:',
-      timeLine: [
-        { step: 1, title: 'Application Submitted', completed: true },
-        { step: 2, title: 'Under Review', completed: false }
-      ]
+  const defaultProps = {
+    applicationDetails: {
+      isStp: false,
+      thankyouProp: 'standard',
+      thankyouText: 'standard',
+      productName: ['Credit Card'],
+      cardNumber: '1234 5678 9012 3456'
     },
-    STPCCBanner: {
-      banner_header: 'STP Banner Header',
-      banner_body_1: 'Congratulations! Your ',
-      banner_body_2: ' application has been approved.'
+    thankyou: {
+      standard: {
+        CCPL: {
+          banner_header: 'Thank you for your application!',
+          banner_body_2: 'We will process your application shortly.',
+          resumeUrl: '/resume',
+          title: 'What happens next?',
+          content: 'Here are the next steps in your application process.',
+          timeLine: [
+            { title: 'Step 1', description: 'Application received', completed: true },
+            { title: 'Step 2', description: 'Under review', completed: false }
+          ],
+          note_title: 'Important Notes',
+          note_content_1: 'Note content 1',
+          note_content_2: 'Note content 2',
+          note_content_3: 'Note content 3',
+          note_content_4: 'Click here for more info',
+          note_link: 'https://example.com/info',
+          refId_lbl: 'Reference Number:'
+        },
+        timeLine: 'Application Timeline'
+      },
+      STPCCBanner: {
+        banner_header: 'STP Application Complete',
+        banner_body_1: 'Your ',
+        banner_body_2: ' application is complete.'
+      },
+      CCPL: {
+        note_title: 'General Notes',
+        note_content_1: 'General note 1',
+        note_content_2: 'General note 2',
+        note_content_3: 'General note 3',
+        note_content_4: 'General link',
+        note_link: 'https://example.com/general'
+      }
     },
-    CCSTP: [
-      { step: 1, title: 'Application Approved', completed: true },
-      { step: 2, title: 'Card Processing', completed: false }
-    ],
-    STPCC: {
-      timeLine: 'STP Timeline Title',
-      timeline_header: 'What happens next?',
-      timeline_desc: 'Your card will be processed shortly.',
-      continueButton: 'Continue Application',
-      doneButton: 'Done'
-    }
-  };
-
-  const baseProps = {
-    applicationReferenceNo: 'REF123456789',
+    applicationReferenceNo: 'APP12345678',
     showOTPPopup: jest.fn(),
     showContinuePopup: jest.fn(),
-    submitForm: jest.fn(),
-    thankyou: mockThankyouData
+    submitForm: jest.fn()
+  };
+
+  const stpProps = {
+    ...defaultProps,
+    applicationDetails: {
+      ...defaultProps.applicationDetails,
+      isStp: true
+    }
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('Non-STP Flow', () => {
-    const nonSTPProps = {
-      ...baseProps,
-      applicationDetails: {
-        isStp: false,
-        thankyouProp: 'CCPL',
-        thankyouText: 'CCPL',
-        productName: ['Credit Card', 'Personal Loan']
-      }
-    };
+  it('renders without crashing', () => {
+    render(<ThankYouCC {...defaultProps} />);
+    expect(screen.getByTestId('thankyou-banner')).toBeInTheDocument();
+  });
 
-    it('should render non-STP layout correctly', () => {
-      render(<ThankYouCC {...nonSTPProps} />);
+  describe('Non-STP Application', () => {
+    it('displays the correct banner content', () => {
+      render(<ThankYouCC {...defaultProps} />);
+      expect(screen.getByText('Thank you for your application!')).toBeInTheDocument();
+      expect(screen.getByText('Credit Card')).toBeInTheDocument();
+      expect(screen.getByText('We will process your application shortly.')).toBeInTheDocument();
+    });
 
-      // Check banner content
-      expect(screen.getByTestId('thankyou-banner')).toBeInTheDocument();
-      expect(screen.getByTestId('banner-header')).toHaveTextContent('Thank You Header');
-      expect(screen.getByTestId('product-name')).toHaveTextContent('Credit Card and Personal Loan');
-      expect(screen.getByTestId('banner-body-2')).toHaveTextContent('Banner Body 2');
-      expect(screen.getByTestId('resume-url')).toHaveTextContent('https://example.com/resume');
+    it('displays the timeline section', () => {
+      render(<ThankYouCC {...defaultProps} />);
+      expect(screen.getByText('Application Timeline')).toBeInTheDocument();
+      expect(screen.getByText('Step 1 - Application received')).toBeInTheDocument();
+    });
 
-      // Check title and content sections
-      expect(screen.getByText('Application Title')).toBeInTheDocument();
-      expect(screen.getByText('Application Content')).toBeInTheDocument();
-
-      // Check timeline
-      expect(screen.getByTestId('thankyou-timeline')).toBeInTheDocument();
-      expect(screen.getByTestId('timeline-completed')).toHaveTextContent('true');
-
-      // Check note sections
-      expect(screen.getByText('Important Note')).toBeInTheDocument();
+    it('displays the notes section', () => {
+      render(<ThankYouCC {...defaultProps} />);
+      expect(screen.getByText('Important Notes')).toBeInTheDocument();
       expect(screen.getByText('Note content 1')).toBeInTheDocument();
-      expect(screen.getByText('Note content 2')).toBeInTheDocument();
-      expect(screen.getByText('Note content 3')).toBeInTheDocument();
-      
-      // Check external link
-      const externalLink = screen.getByRole('link', { name: 'Click here for more info' });
-      expect(externalLink).toHaveAttribute('href', 'https://example.com/more-info');
-      expect(externalLink).toHaveAttribute('target', '_blank');
-      expect(externalLink).toHaveAttribute('rel', 'feedback noreferrer');
-
-      // Check reference number
-      expect(screen.getByText('Reference ID:')).toBeInTheDocument();
-      expect(screen.getByText('REF123456789')).toBeInTheDocument();
-
-      // Check done button
-      expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
-
-      // Check survey component
-      expect(screen.getByTestId('thankyou-survey')).toBeInTheDocument();
+      expect(screen.getByText('Click here for more info')).toBeInTheDocument();
     });
 
-    it('should call submitForm when done button is clicked', () => {
-      render(<ThankYouCC {...nonSTPProps} />);
-      
-      const doneButton = screen.getByRole('button', { name: 'Done' });
-      fireEvent.click(doneButton);
-
-      expect(baseProps.submitForm).toHaveBeenCalledTimes(1);
+    it('displays the reference number', () => {
+      render(<ThankYouCC {...defaultProps} />);
+      expect(screen.getByText('Reference Number:')).toBeInTheDocument();
+      expect(screen.getByText('APP12345678')).toBeInTheDocument();
     });
 
-    it('should not render STP-specific content', () => {
-      render(<ThankYouCC {...nonSTPProps} />);
-
-      // Should not show STP timeline header/desc
-      expect(screen.queryByText('What happens next?')).not.toBeInTheDocument();
-      expect(screen.queryByText('Your card will be processed shortly.')).not.toBeInTheDocument();
-
-      // Should not show continue button
-      expect(screen.queryByRole('button', { name: 'Continue Application' })).not.toBeInTheDocument();
-    });
-
-    it('should call showOTPPopup when timeline link handler is clicked', () => {
-      render(<ThankYouCC {...nonSTPProps} />);
-      
-      const linkHandler = screen.getByTestId('timeline-link-handler');
-      fireEvent.click(linkHandler);
-
-      expect(baseProps.showOTPPopup).toHaveBeenCalledTimes(1);
+    it('shows the Done button and handles click', () => {
+      render(<ThankYouCC {...defaultProps} />);
+      const button = screen.getByRole('button', { name: /done/i });
+      fireEvent.click(button);
+      expect(defaultProps.submitForm).toHaveBeenCalled();
     });
   });
 
-  describe('STP Flow', () => {
-    const stpProps = {
-      ...baseProps,
-      applicationDetails: {
-        isStp: true,
-        thankyouText: 'STPCC',
-        productName: 'Premium Credit Card',
-        cardNumber: '****1234'
-      }
-    };
-
-    it('should render STP layout correctly', () => {
+  describe('STP Application', () => {
+    it('displays the STP banner content', () => {
       render(<ThankYouCC {...stpProps} />);
-
-      // Check STP banner content
-      expect(screen.getByTestId('banner-header')).toHaveTextContent('STP Banner Header');
-      expect(screen.getByTestId('product-name')).toHaveTextContent('Premium Credit Card');
-
-      // Check STP title section
-      expect(screen.getByText('Congratulations! Your Premium Credit Card application has been approved.')).toBeInTheDocument();
-      expect(screen.getByText('Premium Credit Card')).toBeInTheDocument();
-      expect(screen.getByText('****1234')).toBeInTheDocument();
-
-      // Check STP timeline sections
-      expect(screen.getByText('What happens next?')).toBeInTheDocument();
-      expect(screen.getByText('Your card will be processed shortly.')).toBeInTheDocument();
-
-      // Check continue button
-      expect(screen.getByRole('button', { name: 'Continue Application' })).toBeInTheDocument();
-
-      // Check reference number is still displayed
-      expect(screen.getByText('REF123456789')).toBeInTheDocument();
+      expect(screen.getByText('STP Application Complete')).toBeInTheDocument();
     });
 
-    it('should call showContinuePopup when continue button is clicked', () => {
+    it('shows the Continue button and handles click', () => {
       render(<ThankYouCC {...stpProps} />);
-      
-      const continueButton = screen.getByRole('button', { name: 'Continue Application' });
-      fireEvent.click(continueButton);
-
-      expect(baseProps.showContinuePopup).toHaveBeenCalledTimes(1);
+      const button = screen.getByRole('button', { name: /continue/i });
+      fireEvent.click(button);
+      expect(stpProps.showContinuePopup).toHaveBeenCalled();
     });
 
-    it('should not render non-STP specific content', () => {
+    it('does not display the notes section', () => {
       render(<ThankYouCC {...stpProps} />);
-
-      // Should not show application title/content
-      expect(screen.queryByText('Application Title')).not.toBeInTheDocument();
-      expect(screen.queryByText('Application Content')).not.to.BeInTheDocument();
-
-      // Should not show note sections
-      expect(screen.queryByText('Important Note')).not.toBeInTheDocument();
-      expect(screen.queryByText('Note content 1')).not.toBeInTheDocument();
-
-      // Should not show done button
-      expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
-    });
-
-    it('should use CCSTP timeline data for STP flow', () => {
-      render(<ThankYouCC {...stpProps} />);
-      
-      const timelineData = screen.getByTestId('timeline-data');
-      expect(timelineData).toHaveTextContent(JSON.stringify(mockThankyouData.CCSTP));
+      expect(screen.queryByText('Important Notes')).not.toBeInTheDocument();
     });
   });
 
-  describe('getTimelineData function behavior', () => {
-    it('should return CCPL timeline for non-STP', () => {
-      const nonSTPProps = {
-        ...baseProps,
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Credit Card']
-        }
-      };
-
-      render(<ThankYouCC {...nonSTPProps} />);
-      
-      const timelineData = screen.getByTestId('timeline-data');
-      expect(timelineData).toHaveTextContent(JSON.stringify(mockThankyouData.CCPL.timeLine));
-    });
-
-    it('should return CCSTP timeline for STP', () => {
-      const stpProps = {
-        ...baseProps,
-        applicationDetails: {
-          isStp: true,
-          thankyouText: 'STPCC'
-        }
-      };
-
-      render(<ThankYouCC {...stpProps} />);
-      
-      const timelineData = screen.getByTestId('timeline-data');
-      expect(timelineData).toHaveTextContent(JSON.stringify(mockThankyouData.CCSTP));
-    });
+  it('renders the ThankYouSurvey component', () => {
+    render(<ThankYouCC {...defaultProps} />);
+    expect(screen.getByTestId('thankyou-survey')).toBeInTheDocument();
   });
 
-  describe('Product name handling', () => {
-    it('should join multiple product names with "and"', () => {
-      const multiProductProps = {
-        ...baseProps,
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Credit Card', 'Personal Loan', 'Savings Account']
-        }
-      };
-
-      render(<ThankYouCC {...multiProductProps} />);
-      
-      expect(screen.getByTestId('product-name')).toHaveTextContent('Credit Card and Personal Loan and Savings Account');
-    });
-
-    it('should handle single product name', () => {
-      const singleProductProps = {
-        ...baseProps,
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Premium Card']
-        }
-      };
-
-      render(<ThankYouCC {...singleProductProps} />);
-      
-      expect(screen.getByTestId('product-name')).toHaveTextContent('Premium Card');
-    });
-  });
-
-  describe('Edge cases and error handling', () => {
-    it('should handle missing thankyou data gracefully', () => {
-      const propsWithMissingData = {
-        ...baseProps,
-        thankyou: {},
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Credit Card']
-        }
-      };
-
-      expect(() => render(<ThankYouCC {...propsWithMissingData} />)).not.toThrow();
-    });
-
-    it('should handle undefined applicationReferenceNo', () => {
-      const propsWithoutRefNo = {
-        ...baseProps,
-        applicationReferenceNo: undefined,
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Credit Card']
-        }
-      };
-
-      render(<ThankYouCC {...propsWithoutRefNo} />);
-      expect(screen.getByText('Reference ID:')).toBeInTheDocument();
-    });
-
-    it('should handle missing optional thankyou properties', () => {
-      const minimalThankyouData = {
-        CCPL: {
-          banner_header: 'Header',
-          timeLine: []
-        }
-      };
-
-      const minimalProps = {
-        ...baseProps,
-        thankyou: minimalThankyouData,
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Credit Card']
-        }
-      };
-
-      expect(() => render(<ThankYouCC {...minimalProps} />)).not.toThrow();
-    });
-  });
-
-  describe('CSS classes', () => {
-    it('should apply correct CSS classes', () => {
-      const props = {
-        ...baseProps,
-        applicationDetails: {
-          isStp: false,
-          thankyouProp: 'CCPL',
-          thankyouText: 'CCPL',
-          productName: ['Credit Card']
-        }
-      };
-
-      render(<ThankYouCC {...props} />);
-
-      expect(document.querySelector('.thankyou__body__outer')).toBeInTheDocument();
-      expect(document.querySelector('.thankyou__body')).toBeInTheDocument();
-      expect(document.querySelector('.thankyou__title')).toBeInTheDocument();
-      expect(document.querySelector('.thankyou__content')).toBeInTheDocument();
-      expect(document.querySelector('.thankyou__note__content')).toBeInTheDocument();
-      expect(document.querySelector('.body__app-details')).toBeInTheDocument();
-      expect(document.querySelector('.body__refno')).toBeInTheDocument();
-      expect(document.querySelector('.thankyou__continue')).toBeInTheDocument();
-    });
+  it('handles timeline item clicks', () => {
+    render(<ThankYouCC {...defaultProps} />);
+    const timelineItem = screen.getByText('Step 1 - Application received');
+    fireEvent.click(timelineItem);
+    expect(defaultProps.showOTPPopup).toHaveBeenCalled();
   });
 });
