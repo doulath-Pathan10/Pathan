@@ -1,72 +1,140 @@
-import React, { useEffect, useState } from "react";
-import { KeyWithAnyModel } from "../../../utils/model/common-model";
-import "./checkbox.scss";
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import Checkbox from './Checkbox';
+import '@testing-library/jest-dom';
 
-const Checkbox = (props: KeyWithAnyModel) => {
-  const [currencyCheckBox, setCurrencyCheckBox] = useState(false);
-  function handleContentClick(event:any) {
-    if (event.target.tagName.toUpperCase() !== "A") {
-      props.setCheckedStatus(!props.checkedStatus);
+describe('Checkbox Component', () => {
+  const mockProps = {
+    checkedStatus: false,
+    setCheckedStatus: jest.fn(),
+    data: {
+      logical_field_name: 'currency_sgd_eq',
+      lov_field_name: 'Singapore Dollar'
+    },
+    reviewHeader: 'Terms and Conditions',
+    reviewDescp1: 'I agree to the ',
+    reviewDescp2: 'https://example.com/terms',
+    reviewDescp3: ' and privacy policy',
+    reviewDescpoint1: 'Point 1: Lorem ipsum',
+    reviewDescpoint2: 'Point 2: Dolor sit amet',
+    reviewDescp4: 'Additional information'
+  };
+
+  const nonCurrencyProps = {
+    ...mockProps,
+    data: {
+      logical_field_name: 'other_field',
+      lov_field_name: 'Other Field'
     }
-  }
-  useEffect(()=>{
-    if(props.data.logical_field_name === "currency_sgd_eq" || 
-    props.data.logical_field_name === "currency_jpy_eq" ||
-    props.data.logical_field_name === "currency_hkd_eq" ||
-    props.data.logical_field_name === "currency_aud_eq" ||
-    props.data.logical_field_name === "currency_eur_eq" ||
-    props.data.logical_field_name === "currency_gbp_eq" ||
-    props.data.logical_field_name === "currency_usd_eq" ||
-    props.data.logical_field_name === "currency_chf" ||
-    props.data.logical_field_name === "bs_currency_aud" ||
-    props.data.logical_field_name === "bs_currency_eur" ||
-    props.data.logical_field_name === "bs_currency_gbp" ||
-    props.data.logical_field_name === "bs_currency_hkd" ||
-    props.data.logical_field_name === "bs_currency_jpy" ||
-    props.data.logical_field_name === "bs_currency_nzd" ||
-    props.data.logical_field_name === "bs_currency_sgd" ||
-    props.data.logical_field_name === "bs_currency_usd"){
-      setCurrencyCheckBox(true);
-    }else{
-      setCurrencyCheckBox(false);
-    }
-  },[]);
-  console.log(props.data.logical_field_name)
-  return (
-    <div data-testid='checkbox'>
-      {currencyCheckBox ? <><div className="multi-select__item">
-                        <input
-                          type="checkbox"
-                          //checked={item.checked}
-                          //onChange={(event) => addUserInput(item, event)}
-                          value={props.data.logical_field_name}
-                          id={props.data.logical_field_name}
-                        />
-                        <label htmlFor={props.data.logical_field_name}>
-                          {props.data.lov_field_name}
-                        </label>
-                      </div></>:<><label>{props.reviewHeader}</label>
-      <div className="review__check__body" onClick={handleContentClick}>
-        <div className="review__checkbox__input">
-          
-          <div>
-            {props.reviewDescp1}
-            <a target="_blank" rel="noreferrer" href={props.reviewDescp2}>
-              link
-            </a>
-            {props.reviewDescp3}
-          </div>
-        </div>
-        <div className="review__check__points">{props.reviewDescpoint1}</div>
-        <div className="review__check__points">
-          {props.reviewDescpoint2}         
-        </div>
+  };
 
-        <div>{props.reviewDescp4} </div>
-      </div></>}
-    </div>
-  );
-};
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-export default Checkbox;
-Please write test cases using jest with RTL
+  it('renders without crashing', () => {
+    render(<Checkbox {...mockProps} />);
+    expect(screen.getByTestId('checkbox')).toBeInTheDocument();
+  });
+
+  describe('Currency Checkbox Mode', () => {
+    it('renders currency checkbox when logical_field_name matches currency pattern', () => {
+      render(<Checkbox {...mockProps} />);
+      expect(screen.getByLabelText('Singapore Dollar')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    it('renders correct currency checkbox input', () => {
+      render(<Checkbox {...mockProps} />);
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).toHaveAttribute('id', 'currency_sgd_eq');
+      expect(checkbox).toHaveAttribute('value', 'currency_sgd_eq');
+    });
+
+    it('renders different currency types correctly', () => {
+      const testCases = [
+        'currency_jpy_eq',
+        'currency_usd_eq',
+        'bs_currency_eur',
+        'bs_currency_gbp'
+      ];
+
+      testCases.forEach(currency => {
+        const props = {
+          ...mockProps,
+          data: {
+            logical_field_name: currency,
+            lov_field_name: `${currency} Label`
+          }
+        };
+        render(<Checkbox {...props} />);
+        expect(screen.getByLabelText(`${currency} Label`)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Non-Currency Checkbox Mode', () => {
+    it('renders terms checkbox when logical_field_name does not match currency pattern', () => {
+      render(<Checkbox {...nonCurrencyProps} />);
+      expect(screen.getByText('Terms and Conditions')).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('renders all terms content sections', () => {
+      render(<Checkbox {...nonCurrencyProps} />);
+      expect(screen.getByText('I agree to the')).toBeInTheDocument();
+      expect(screen.getByText('link')).toBeInTheDocument();
+      expect(screen.getByText(' and privacy policy')).toBeInTheDocument();
+      expect(screen.getByText('Point 1: Lorem ipsum')).toBeInTheDocument();
+      expect(screen.getByText('Point 2: Dolor sit amet')).toBeInTheDocument();
+      expect(screen.getByText('Additional information')).toBeInTheDocument();
+    });
+
+    it('renders terms link with correct attributes', () => {
+      render(<Checkbox {...nonCurrencyProps} />);
+      const link = screen.getByText('link');
+      expect(link).toHaveAttribute('href', 'https://example.com/terms');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noreferrer');
+    });
+
+    it('calls setCheckedStatus when clicked (except on links)', () => {
+      render(<Checkbox {...nonCurrencyProps} />);
+      const contentDiv = screen.getByText('Point 1: Lorem ipsum').parentElement?.parentElement;
+      if (contentDiv) {
+        fireEvent.click(contentDiv);
+      }
+      expect(nonCurrencyProps.setCheckedStatus).toHaveBeenCalledWith(true);
+    });
+
+    it('does not call setCheckedStatus when clicking on links', () => {
+      render(<Checkbox {...nonCurrencyProps} />);
+      const link = screen.getByText('link');
+      fireEvent.click(link);
+      expect(nonCurrencyProps.setCheckedStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  it('sets currencyCheckBox state correctly based on logical_field_name', () => {
+    // Test for currency field
+    const { rerender } = render(<Checkbox {...mockProps} />);
+    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+
+    // Test for non-currency field
+    rerender(<Checkbox {...nonCurrencyProps} />);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('handles empty or missing props gracefully', () => {
+    const emptyProps = {
+      checkedStatus: false,
+      setCheckedStatus: jest.fn(),
+      data: {
+        logical_field_name: '',
+        lov_field_name: ''
+      }
+    };
+    render(<Checkbox {...emptyProps} />);
+    expect(screen.getByTestId('checkbox')).toBeInTheDocument();
+  });
+});
