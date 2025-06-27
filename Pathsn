@@ -1,1 +1,52 @@
+import SignatureCanvas from 'react-signature-canvas';
+import { useEffect, useRef} from 'react';
+import { getBase64IntArray, getIntArrayfromBase64 } from '../../../services/common-service';
 
+const SignaturePreview = (props:any) => {
+  const {viewSignature, show, handleSignatureEnd, clear } = props;
+  const sigRef = useRef<any>(); 
+
+  useEffect(() => {
+    if(clear) {
+      sigRef.current.clear();
+    }
+  }, [clear]);
+
+  useEffect(() => {
+    if(show !== true) {
+      sigRef.current.off();
+    }
+  }, [])
+
+  
+  useEffect(() => {
+    if ((viewSignature && show) || show) {
+      const arrayPoint = getIntArrayfromBase64(viewSignature);
+      sigRef.current.fromData(arrayPoint);
+      sigRef.current.on();
+    } else if (viewSignature && !show) {
+      const arrayPoint = getIntArrayfromBase64(viewSignature);
+      sigRef.current.fromData(arrayPoint);
+    }
+  }, [viewSignature, show]);
+
+
+  const handleSignatureEndFun = async () => {
+    const base64String = getBase64IntArray(sigRef.current.toData());
+    handleSignatureEnd({array: base64String, jpeg: sigRef.current.toDataURL("image/jpeg").split(',')[1]});
+  };
+
+  return (
+    <div className='sign-preview'>
+        <SignatureCanvas
+              penColor="black"
+              canvasProps={{ className: 'signature__canvans' }}
+              ref={sigRef}
+              onEnd={handleSignatureEndFun}
+            />
+    </div>
+  )
+}
+
+export default SignaturePreview
+Please write test cases using jest with RTL
